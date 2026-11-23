@@ -4,9 +4,9 @@
 
 <h1>Jarvis</h1>
 
-<p><strong>Your second brain, with a voice and a cursor.</strong></p>
+<p><strong>Talk to your computer like Jarvis.</strong></p>
 
-<p>Point it at your notes. Hold a key. Ask.</p>
+<p>It sees your screen, points, draws, clicks and calls tools, all grounded in your second brain.</p>
 
 <p>
 <img alt="Platforms" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-desktop-1f883d?style=flat-square">
