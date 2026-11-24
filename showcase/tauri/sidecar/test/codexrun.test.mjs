@@ -92,6 +92,11 @@ assert.deepEqual(await probeCodex({ bin: process.execPath, args: [fake] }), { ok
 delete process.env.FAKE_CODEX_SIGNED_OUT;
 assert.deepEqual(await probeCodex({ bin: process.execPath, args: [fake] }), { ok: true, version: '0.155.1' });
 
+// sidekick.mjs runs at import, so it is read as text: the check runs once at startup too, not only when the panel
+// opens, so a crew slot set to Codex still runs after a restart.
+const side = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+assert.match(side, /^refreshCodex\(\);/m, 'Codex is checked at startup');
+
 mgr.stopAll();
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('codex run tests: passed');

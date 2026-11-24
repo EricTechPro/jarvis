@@ -3093,6 +3093,7 @@ midnightClean();
 setTimeout(() => checkUpdates(), 20_000);
 setInterval(() => checkUpdates(), 6 * 3600_000);
 voiceConfig();
+refreshCodex(); // the crew's Codex slots count only once the CLI is checked, so check now, not just when the panel opens
 // First run (or setup never finished): open the guide.
 // v2 added the "Control apps" (Accessibility) permission: people who finished setup before that
 // get the guide once more, on the permissions step.
