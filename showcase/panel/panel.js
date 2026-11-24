@@ -769,6 +769,9 @@
     // Gemini can speak with the key the AI already has (the Model page), until the voice gets one of its own.
     const shared = tts === 'gemini' && hasKey && !!state.geminiShared;
     return [
+      group('Voice mode', 'How I talk with you.', null,
+        picks('Voice mode', [['classic', 'Classic'], ['live', 'Live']], state.voiceMode ?? 'classic', (x) => act(`voicemode_${x}`), 'voicemode',
+          { classic: 'I listen, think, then speak, one sentence at a time.', live: 'A hands-free Gemini Live call: talk over me any time.' })),
       group('Spoken replies', 'Hear me as well as read me.', null,
         picks('Replies', [['text', 'Text only'], ['voice', 'Voice and text']], state.replies, (x) => {
           if (x === 'voice' && !hasKey) { ui.key = tts; render(`key-${tts}`); note(`Add a ${T} key to hear me talk.`); return; }
