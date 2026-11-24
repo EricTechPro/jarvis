@@ -39,7 +39,7 @@ import { createLiveCall } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
-import { copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
+import { SLOW_TOOLS, copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
 import { describeMarks } from './marks.mjs';
 import { faviconFor } from './draw.mjs';
 import { QUESTIONS, openNote, answerTurn, wantsSkip, endsChat, splitTurn, plain, stripNote, tourBeats, goalFrom, showcaseBeats } from './intro.mjs';
@@ -65,7 +65,7 @@ import { detailsText, explain } from './errors.mjs';
 import { aboutRoamies } from './about.mjs';
 import { whatsNewOnStart } from './whatsnew.mjs';
 import { createMcp, createMcpTools } from './mcp.mjs';
-import { SLOW_TOOLS, createLiveBrain } from './livebrain.mjs'; // tools that take long enough to need a spoken beat first
+import { createLiveBrain } from './livebrain.mjs';
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
 import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';

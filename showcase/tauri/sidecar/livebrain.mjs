@@ -10,9 +10,7 @@
 import { resolveToolSchema } from '@kenkaiiii/gg-ai';
 import { unknownToolMessage } from '@kenkaiiii/gg-agent';
 import { createLive, val } from './live.mjs';
-
-/** Tools slow enough to want a spoken beat first. In Live they don't block the call: she says a beat and stays free. */
-export const SLOW_TOOLS = new Set(['web_search', 'web_fetch', 'see_photo', 'take_screenshot', 'read_window', 'act_in_app', 'run_command', 'search_files', 'list_windows']);
+import { SLOW_TOOLS } from './tools.mjs';
 
 export const LIVE_GUIDANCE = `You're in a live voice call: everything you say is heard out loud, the moment you say it, and they can cut in any time. Talk like on the phone: one to three short sentences, plain words, contractions. No markdown, lists, emoji, links, code, file paths, bracketed cues or tags like [happy]: they'd be read aloud. Name the site, file or app instead. Before anything slow (the web, a page, the screen, an app, a command), say a short beat like "On it, one sec." and keep talking with them while it runs. When a result comes back, tell them briefly.`;
 

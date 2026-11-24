@@ -17,6 +17,10 @@ import { snoozeTarget, snoozeUntil } from './snooze.mjs';
 import { addJob, getJob, jobsText, removeJob, updateJob } from './jobs.mjs';
 import { deleteSkill, fetchSkills, installSkill, listSkills, readSkill, readSkillFile, saveSkill, screenSkill, skillFiles } from './skills.mjs';
 
+/** Tools slow enough to want a spoken beat first ("One sec."). In a Live call they also don't block it: she says the
+ *  beat and stays free (livebrain.mjs). */
+export const SLOW_TOOLS = new Set(['web_search', 'web_fetch', 'see_photo', 'take_screenshot', 'read_window', 'act_in_app', 'run_command', 'search_files', 'list_windows']);
+
 const HOME = os.homedir();
 export const expand = (p) => path.resolve(String(p).replace(/^~(?=$|\/|\\)/, HOME));
 /** A tool's path → itself when it's full (or starts with ~), else joined to dir. */

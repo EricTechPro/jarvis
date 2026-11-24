@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { createTools } from '../tools.mjs';
-import { createLiveBrain, liveDeclarations, SLOW_TOOLS } from '../livebrain.mjs';
+import { createLiveBrain, liveDeclarations } from '../livebrain.mjs';
+import { SLOW_TOOLS } from '../tools.mjs';
 
 const noop = async () => {};
 const base = { allowActions: () => true, ui: () => {}, openUrl: noop, onCommitments: noop, showList: noop, fmtWhen: String, commitmentsText: () => '', userName: 'Test' };
