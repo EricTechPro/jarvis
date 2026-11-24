@@ -167,6 +167,66 @@ const setup = ({ tools = [], key = 'k', answer = null } = {}) => {
   assert.equal(call.busy(), false);
 }
 
+{ // A crop (look) goes into the open call, or opens one and goes in once it is listening, never lost while it connects.
+  const img = Buffer.from([7, 8]);
+  const frames = (s) => s.sent.filter((m) => m.realtime?.video);
+  { // open call: straight in
+    const { t, call } = setup();
+    await call.toggle();
+    await until(() => t.calls.length === 1);
+    await call.look(img, 'image/png');
+    assert.deepEqual(frames(t.calls[0]), [{ realtime: { video: { data: img.toString('base64'), mimeType: 'image/png' } } }]);
+  }
+  { // no call: opens one, then sends once
+    const { t, call } = setup();
+    await call.look(img, 'image/png');
+    assert.equal(call.open, true);
+    assert.equal(frames(t.calls[0]).length, 1);
+  }
+  { // still connecting: held, then sent when listening
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const t = fakeTransport();
+    const call = createLiveCall({
+      makeBrain: async (emit) => createLiveBrain({ emit, connect: async (p) => { await gate; return t.connect(p); }, key: 'k', tools: [], system: () => 'x' }),
+      ui: () => {}, send: () => {}, ask: async () => null, toClassic: () => {},
+    });
+    const opening = call.toggle();
+    await until(() => call.open);
+    const crop = call.look(img, 'image/png');
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(t.calls.length, 0);
+    release();
+    await Promise.all([opening, crop]);
+    assert.equal(frames(t.calls[0]).length, 1);
+  }
+  { // hung up while it waited: nothing is sent to a later call
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const t = fakeTransport();
+    const call = createLiveCall({
+      makeBrain: async (emit) => createLiveBrain({ emit, connect: async (p) => { await gate; return t.connect(p); }, key: 'k', tools: [], system: () => 'x' }),
+      ui: () => {}, send: () => {}, ask: async () => null, toClassic: () => {},
+    });
+    const opening = call.toggle();
+    await until(() => call.open);
+    call.look(img, 'image/png');
+    call.hangUp('tap');
+    release();
+    await opening;
+    await call.toggle();
+    await until(() => t.calls.length >= 1);
+    assert.equal(t.calls.flatMap(frames).length, 0);
+    call.hangUp('tap');
+  }
+}
+
+{ // sidekick.mjs: in Live the crop goes through liveCall.look and skips the Classic listen/ask; Escape returns before it.
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  const fn = src.slice(src.indexOf('async function areaSnap()'), src.indexOf('let snapping = false'));
+  assert.match(fn, /if \(res\.cancelled\) return;[^]*voiceModeOf\(config\) === 'live'[^]*liveCall\.look\(/);
+}
+
 { // sidekick.mjs wires it up: a mode switch, sleep and quit hang up; the helper hears the mode with its settings.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
   const menuBranch = src.slice(src.indexOf('/^voicemode_(classic|live)$/'), src.indexOf('/^voicemode_(classic|live)$/') + 300);

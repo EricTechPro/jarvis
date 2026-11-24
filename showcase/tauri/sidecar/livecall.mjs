@@ -24,6 +24,7 @@ export const SWITCH_TO_CLASSIC = 'Switch to Classic';
  */
 export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', log = () => {} }) {
   let brain = null, call = 0, capturing = false, opening = false;
+  let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
   let speechId = null; // the reply audio playing now
 
@@ -40,6 +41,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     turn = null;
   };
   const closed = () => {
+    ready = false; pending = [];
     capture(false);
     ui({ kind: 'speech', stop: true });
     endTurn();
@@ -52,6 +54,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     switch (e.type) {
       case 'state':
         if (e.state === 'closed') return; // closed() runs once, from hangUp or the error
+        if (e.state !== 'connecting') { ready = true; for (const [d, m] of pending.splice(0)) brain?.pushImage(d, m); }
         if (e.state === 'listening') { capture(true); if (turn && !speechId) endTurn(); }
         if (e.state !== 'speaking') ui({ kind: 'live', state: e.state, hint: e.state === 'listening' ? `Live · Listening… ${typeof hangUpHint === 'function' ? hangUpHint() : hangUpHint}`.trim() : undefined });
         return;
@@ -91,7 +94,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
   }
 
   function hangUp(why = 'tap') {
-    if (opening) { opening = false; call++; ui({ kind: 'live', state: 'closed' }); return true; }
+    if (opening) { opening = false; call++; pending = []; ui({ kind: 'live', state: 'closed' }); return true; }
     if (!brain) return false;
     const b = brain;
     brain = null; call++;
@@ -119,7 +122,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       let b;
       try { b = await makeBrain((e) => onEvent(me, e)); } catch (err) {
         if (me !== call) return;
-        opening = false; call++;
+        opening = false; call++; pending = [];
         ui({ kind: 'live', state: 'closed' });
         return fail('network', err?.message);
       }
@@ -134,6 +137,12 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     fail,
     pcm(data) { brain?.pushAudio(data); },
     pushImage(data, mimeType) { brain?.pushImage(data, mimeType); },
+    /** A crop for the call: straight in when it is up, held until it is listening while it connects, and it opens a call when there is none. */
+    async look(data, mimeType) {
+      pending.push([data, mimeType]);
+      if (!brain && !opening) await this.toggle();
+      if (brain && ready) for (const [d, m] of pending.splice(0)) brain.pushImage(d, m);
+    },
     /** Busy: a call is open and something is going on in it (she's talking or thinking, or a tool runs). */
     busy: () => !!brain && !brain.quiet(),
     /** A background agent's news for the open call; false when there's no call to take it. */

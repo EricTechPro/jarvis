@@ -2670,6 +2670,10 @@ async function areaSnap() {
     const res = await hands('select', file);
     if (res.cancelled) return;
     await fitImage(file);
+    if (voiceModeOf(config) === 'live') { // into the open call, or opens one; she's already listening, so no Classic listen or ask
+      await liveCall.look(await fs.readFile(file), 'image/png');
+      return;
+    }
     snap = { image: await imageBlock(file, 'image/png'), at: Date.now() };
     if (VOICE_OK && config.voice) {
       // Snap, then just talk: start listening straight away (hands-free, ends when you pause).
