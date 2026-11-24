@@ -262,7 +262,7 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
 
 { // sidekick.mjs wires it up: a mode switch, sleep and quit hang up; the helper hears the mode with its settings.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
-  const menuBranch = src.slice(src.indexOf('/^voicemode_(classic|live)$/'), src.indexOf('/^voicemode_(classic|live)$/') + 300);
+  const menuBranch = src.slice(src.indexOf('function switchVoiceMode(mode)'), src.indexOf('function switchVoiceMode(mode)') + 400);
   assert.match(menuBranch, /liveCall\.hangUp\('switch'\)[^]*saveConfig\(\)/, 'hangs up before saving the new mode');
   assert.match(menuBranch, /voiceConfig\(\)/);
   assert.match(src, /m\.type === 'system_sleep'\) liveCall\.hangUp\('sleep'\)/);
@@ -284,6 +284,7 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(lp, /const livePrompt = \(context = '', \{ live = false \} = \{\}\) => \{/);
   assert.match(lp, /if \(!live\) lastFactIds = facts\.map/);
   assert.match(lp, /\$\{live \? LIVE_VOICE_LINE\(\) : VOICE_OK \? `- Voice: /, 'Live has its own Voice line');
+  assert.match(src, /toClassic: \(\) => switchVoiceMode\('classic'\),/, "the error card's Switch to Classic is the same switch");
   // One path starts a request in both modes: Classic per message, Live per turn of theirs in the call.
   assert.match(src, /const startRequest = \(\) => \(requestNo = nextTurn\(\)\);/);
   assert.match(src, /const turn = startRequest\(\);/, 'Classic starts its request through it');

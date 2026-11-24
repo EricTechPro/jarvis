@@ -1403,7 +1403,7 @@ const liveCall = createLiveCall({
     return createLiveBrain({ emit, key, model: config.liveModel || DEFAULT_LIVE_MODEL, voice: liveVoiceOf(config, geminiVoice()), tools, system: liveSystem });
   },
   ui, send, ask, anim: (name) => anim(name),
-  toClassic: () => onMenu('voicemode_classic').catch((e) => console.error('menu', e)),
+  toClassic: () => switchVoiceMode('classic'),
   hangUpHint: () => (HOTKEYS_OK ? `tap ${talkWords()} to hang up` : ''),
   newTurn: startRequest,
   log: logLine,
@@ -2451,6 +2451,14 @@ function onWriteTap() {
   else typeToAsk({ interrupt: true }).catch((e) => console.error('ask', e));
 }
 
+// The voice mode, from Settings or the Live error card's Switch to Classic. A switch hangs up an open call.
+function switchVoiceMode(mode) {
+  const was = voiceModeOf(config);
+  if (!setVoiceMode(config, mode)) return;
+  if (voiceModeOf(config) !== was) liveCall.hangUp('switch');
+  saveConfig(); voiceConfig(); menu();
+}
+
 async function onMenu(id, via) {
   if (id === 'show') ui({ kind: 'summon', show: true });
   else if (id === 'ask') await typeToAsk();
@@ -2539,7 +2547,7 @@ async function onMenu(id, via) {
   else if (id.startsWith('local:remove:')) removeServer(id.slice(13));
   else if (id.startsWith('size:') && SIZES.some(([s]) => s === id.slice(5))) { config.size = id.slice(5); saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (id.startsWith('look:')) setLook(id.slice(5));
-  else if (/^voicemode_(classic|live)$/.test(id)) { const was = voiceModeOf(config); if (setVoiceMode(config, id.slice(10))) { if (voiceModeOf(config) !== was) liveCall.hangUp('switch'); saveConfig(); voiceConfig(); menu(); } } // a switch hangs up an open call
+  else if (/^voicemode_(classic|live)$/.test(id)) switchVoiceMode(id.slice(10));
   else if (id === 'replies:text') setReplies('text');
   else if (id === 'replies:voice') setReplies('voice');
   else if (id.startsWith('fishmodel:') && FISH_CHOICES.some((c) => c.id === id.slice(10))) {
