@@ -63,6 +63,7 @@ import { detailsText, explain } from './errors.mjs';
 import { aboutRoamies } from './about.mjs';
 import { whatsNewOnStart } from './whatsnew.mjs';
 import { createMcp, createMcpTools } from './mcp.mjs';
+import { SLOW_TOOLS } from './livebrain.mjs'; // tools that take long enough to need a spoken beat first
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
 import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
@@ -787,8 +788,6 @@ function anim(name, args = {}) {
 // newest copy still in the history. Providers cache a prefix (tools → system → messages), so putting LIVE in the
 // system prompt would re-bill the whole conversation every time memory changed; at the end, only the new message
 // is fresh. The live block is never saved.
-// Tools that take long enough to need a spoken beat first.
-const SLOW_TOOLS = new Set(['web_search', 'web_fetch', 'see_photo', 'take_screenshot', 'read_window', 'act_in_app', 'run_command', 'search_files', 'list_windows']);
 // How replies are written: for bubbles (text only), or for the ear (spoken with Fish Audio or Gemini, details on screen).
 const VOICE_ON = () => config.replies === 'voice' && speech.on;
 // VoiceStudio's engines would read voice cues out, so its prompt has no cue paragraph (and any cue left is removed).
