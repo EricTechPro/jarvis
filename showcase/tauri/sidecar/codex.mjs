@@ -24,7 +24,9 @@ export const CODEX_MODELS = [
 ];
 const STDERR_TAIL_CHARS = 4_000;
 const KILL_GRACE_MS = 3_000;
-// Codex built-ins that would reach files, commands, the web or other apps without safety.mjs.
+// Codex built-ins that would reach files, commands, the web or other apps without safety.mjs. apply_patch has no
+// feature key at rust-v0.155.1 (apply_patch_freeform is a removed, ignored flag; the tool comes with the model's
+// apply_patch_tool_type), so its writes are left to the read-only sandbox.
 const FEATURES_OFF = ['shell_tool', 'unified_exec', 'view_image', 'multi_agent', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'tool_search_always_defer_mcp_tools'];
 // CommonJS for `node -e`; argv's last entry is the socket.
 const RELAY = 'const s=require("net").connect(process.argv.at(-1));process.stdin.pipe(s);s.pipe(process.stdout);s.on("error",()=>process.exit(1));s.on("close",()=>process.exit(0))';
@@ -145,6 +147,7 @@ function eventQueue() {
 }
 
 /** Codex events → gg-agent events. Tool calls to our server are reported by the bridge itself. */
+// Codex's own command, file-change and web-search items are only shown as tool tags here; nothing here runs them.
 const TOOL_OF_ITEM = { command_execution: 'run_command', file_change: 'write_file', web_search: 'web_search' };
 function mapEvent(e, push) {
   if (e.type === 'item.started' && TOOL_OF_ITEM[e.item?.type]) push({ type: 'tool_call_start', toolCallId: e.item.id, name: TOOL_OF_ITEM[e.item.type], args: {} });

@@ -51,7 +51,12 @@ assert.equal(argv[argv.indexOf('-m') + 1], 'gpt-5.5');
 assert.equal(argv[argv.indexOf('-C') + 1], a.dir);
 assert.equal(argv[argv.indexOf('--sandbox') + 1], 'read-only');
 assert.ok(argv.includes('--skip-git-repo-check'));
-assert.ok(argv.includes('features.shell_tool=false'));
+// Every Codex built-in that could reach files, commands, the web or other apps is switched off, and only those.
+assert.deepEqual(argv.filter((x) => x.startsWith('features.')).sort(), [
+  'features.apps=false', 'features.browser_use=false', 'features.computer_use=false', 'features.image_generation=false',
+  'features.multi_agent=false', 'features.plugins=false', 'features.shell_tool=false',
+  'features.tool_search_always_defer_mcp_tools=false', 'features.unified_exec=false', 'features.view_image=false',
+]);
 assert.ok(argv.includes('web_search="disabled"'));
 assert.deepEqual([...log[1].tools].sort(), ['finish', 'list_files', 'plan', 'read_file', 'run_command', 'search_files', 'web_fetch', 'web_search', 'write_file'], 'only its own tools, plus plan and finish');
 assert.match(log[1].input, /Brief from Ken:\nWrite a short note\./);
