@@ -277,6 +277,13 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.doesNotMatch(src, /type: 'live_mode'/);
   const rust = fs.readFileSync(new URL('../../src-tauri/src/main.rs', import.meta.url), 'utf8');
   assert.doesNotMatch(rust, /Some\("live_mode"\)/, 'Rust has no separate live_mode message');
+  // The Live prompt: Classic's live state without its Voice line (hold to talk, a pause sends), and making it leaves
+  // the facts the last Classic request used alone (touchFacts marks those after the reply).
+  assert.match(src, /const liveSystem = \(\) => \{ const l = livePrompt\('', \{ live: true \}\);/);
+  const lp = src.slice(src.indexOf('const livePrompt = '), src.indexOf('return { turn, memory };', src.indexOf('const livePrompt = ')));
+  assert.match(lp, /const livePrompt = \(context = '', \{ live = false \} = \{\}\) => \{/);
+  assert.match(lp, /if \(!live\) lastFactIds = facts\.map/);
+  assert.match(lp, /\$\{live \? LIVE_VOICE_LINE\(\) : VOICE_OK \? `- Voice: /, 'Live has its own Voice line');
   // One path starts a request in both modes: Classic per message, Live per turn of theirs in the call.
   assert.match(src, /const startRequest = \(\) => \(requestNo = nextTurn\(\)\);/);
   assert.match(src, /const turn = startRequest\(\);/, 'Classic starts its request through it');
