@@ -512,7 +512,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     if (!a) throw new Error(`No agent ${id}. The ids are in the Agents part of the live state.`);
     if (p && (a.state === 'working' || a.state === 'waiting')) {
       p.child.send({ t: 'steer', text: withWords(message, userName, config.userWords?.()) });
-      return `Passed on to ${a.id}. It takes it into account ${a.model?.route === 'claude-code' ? 'after its current turn' : 'right away'}.`;
+      return `Passed on to ${a.id}. It takes it into account ${a.model?.route === 'claude-code' || a.model?.route === 'codex' ? 'after its current turn' : 'right away'}.`;
     }
     const b = await start({ type: a.type, title: a.title, brief: String(message), continue: a.id });
     return `${b.id} is working again in the same folder. Don't add anything: the launch is your reply.`;
