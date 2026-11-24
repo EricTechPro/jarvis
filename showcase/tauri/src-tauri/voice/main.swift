@@ -744,9 +744,6 @@ final class Voice {
         extra || !now.subtracting(heldAtArm).isEmpty
     }
 
-    /// Live mode: a quick press-and-release of the chord opens or hangs up the call; part of a shortcut (⌃⌥A) never does.
-    static func liveTap(released: Bool, shortcut: Bool) -> Bool { released && !shortcut }
-
     // ---------- Live mode ----------
     // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
     // instead of starting a take, so there's no recogniser, no pause that ends a turn, no muted output and no wake word.
@@ -830,8 +827,9 @@ final class Voice {
             // Only the first moment decides shortcut vs. talk: ⌃⌥ plus a key pressed since, ⇧ or ⌘ is a shortcut.
             if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: ⌃⌥ was part of a shortcut"); cancel(); blocked = true; return }
             if liveMode {
-                // A shortcut was already caught above, so a release here is a tap; holding just waits for the release.
-                if Self.liveTap(released: released, shortcut: false) { phase = .idle; ink.clear(); emit(["type": "live_toggle"]) }
+                // A shortcut (⌃⌥A) was already caught above, so a release here is a tap that opens or hangs up the call;
+                // holding just waits for the release.
+                if released { phase = .idle; ink.clear(); emit(["type": "live_toggle"]) }
                 return
             }
             if released { phase = .handsFree; showListening("handsfree", now); return }
@@ -1443,9 +1441,6 @@ if args.contains("--test-livemic") {
     let msg = LivePCM.message(Data([1, 0, 2, 0]))
     check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
     check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))
-    check("a tap in Live toggles the call", Voice.liveTap(released: true, shortcut: false))
-    check("the crop chord in Live doesn't", !Voice.liveTap(released: true, shortcut: true))
-    check("still held isn't a tap yet", !Voice.liveTap(released: false, shortcut: false))
     exit(bad == 0 ? 0 : 1)
 }
 // --test-mics: which mics a take tries when the first won't open; exits 1 on a failure.
