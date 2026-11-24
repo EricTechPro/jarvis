@@ -20,9 +20,10 @@ export const LIVE_OUT_RATE = 24000;
 const RETRIES = 3; // reconnects in a row with nothing heard back before giving up
 
 // The real socket, loaded only when a call is made.
-export const geminiConnect = (key) => async (params) => {
-  const { GoogleGenAI } = await import('@google/genai');
-  return new GoogleGenAI({ apiKey: key }).live.connect(params);
+export const geminiConnect = (key, load = () => import('@google/genai')) => async (params) => {
+  const { GoogleGenAI } = await load();
+  // v1alpha on purpose: @google/genai 3.0.0 defaults to v1, which has no Live endpoint (websocket handshake 404s).
+  return new GoogleGenAI({ apiKey: key, httpOptions: { apiVersion: 'v1alpha' } }).live.connect(params);
 };
 
 export function reasonFor(text) {
