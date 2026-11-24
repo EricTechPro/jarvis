@@ -9,6 +9,7 @@ import { pointScale, registerRuntimeModels } from '@kenkaiiii/gg-core';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { ClaudeCodeAgent } from './claudecode.mjs';
+import { CodexAgent } from './codex.mjs';
 import { agentEvents } from './agentstream.mjs';
 import { createTools } from './tools.mjs';
 import { agentSystem, checkFinish, toolsFor } from './agents.mjs';
@@ -34,7 +35,7 @@ let allow = true, agent = null, route = 'api', started = false;
 const queued = [];
 function steer(text) {
   const t = `(Message from the user while you work: ${text})`;
-  // The API route takes it mid-run; Claude Code gets it as the next turn.
+  // The API route takes it mid-run; Claude Code and Codex get it as the next turn.
   if (route === 'api' && agent?.running) agent.steer({ role: 'user', content: t });
   else queued.push(t);
 }
@@ -65,7 +66,7 @@ export function trimRun(msgs, budgetChars) {
 
 async function run({ agent: a, model: md, content }) {
   allow = a.allow !== false;
-  route = md.route === 'claude-code' ? 'claude-code' : 'api';
+  route = md.route === 'claude-code' || md.route === 'codex' ? md.route : 'api';
   let result = null;
   const { tools: all } = createTools({
     allowActions: () => allow, ui: () => {}, openUrl: () => {}, onCommitments: () => {}, showList: () => {}, fmtWhen: (ms) => new Date(ms).toLocaleString(),
@@ -108,6 +109,8 @@ async function run({ agent: a, model: md, content }) {
   const Fake = process.env.ROAMIES_FAKE_AGENT ? (await import(pathToFileURL(process.env.ROAMIES_FAKE_AGENT).href)).default : null;
   if (Fake) agent = new Fake({ ...common, provider: md.provider });
   else if (route === 'claude-code') agent = new ClaudeCodeAgent({ ...common, executable: md.cc.executable, env: md.cc.env, cwd: a.dir });
+  // Codex runs headless with our tools served to it over MCP (codex.mjs); md.codex is the CLI to run.
+  else if (route === 'codex') agent = new CodexAgent({ ...common, codex: md.codex, cwd: a.dir });
   else {
     agent = new Agent({
       ...common, provider: md.provider, maxTurnExtensions: 0, baseUrl: md.baseUrl, transportSessionId: a.id ? `roamies-agent-${a.id}` : undefined,
@@ -133,7 +136,7 @@ async function run({ agent: a, model: md, content }) {
     }
   };
   await once(content);
-  // Claude Code has no mid-run steering: what was said meanwhile is the next turn.
+  // Claude Code and Codex have no mid-run steering: what was said meanwhile is the next turn.
   while (queued.length && !outOfTurns) await once(queued.splice(0).join('\n'));
   if (!result && !outOfTurns) await once('(You stopped without calling finish. Call finish now with what you made. If you couldn\'t make it, finish with an outcome that says so in plain words.)');
   if (result) return end(true);

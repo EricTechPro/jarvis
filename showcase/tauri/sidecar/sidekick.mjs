@@ -7,6 +7,7 @@
 import { CONFIG_PATH, DATA_DIR, ROAMIES_DIR } from './datadir.mjs';
 import { Agent } from '@kenkaiiii/gg-agent';
 import { ClaudeCodeAgent, claudeCodeInstaller, closeSpare } from './claudecode.mjs';
+import { CODEX_MODELS, probeCodex, resolveCodex } from './codex.mjs';
 import { SAFE, checkDrawAction, checkLink, checkMcpCall, checkOpen, checkRead, checkWrite, isYes, redactArgs } from './safety.mjs';
 import { agentsRoot, createAgents, holdAfterLaunch, newsDesk, wantsAgent } from './agents.mjs';
 import { agentEvents, stallWatch } from './agentstream.mjs';
@@ -539,7 +540,11 @@ let turnNamed = null; // the model they named this turn: a background agent star
 let retryInfo = null; // a request being retried on the next model after a limit: { sent, from, untilText, count }
 let retryNext = null;
 // The subagents that can be handed work now: the models picked for them, else hybrid's for their kind of job.
-const crewNow = () => (config.subagents ? activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null) : []);
+const crewNow = () => (config.subagents ? activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null) : []);
+// Codex (headless) is an engine for subagents only, never the chat's model: checked once per panel open.
+let codexState = { ok: false, reason: 'Checking for the Codex CLI…' };
+const refreshCodex = () => probeCodex(resolveCodex()).then((st) => { const was = JSON.stringify(codexState); codexState = st; if (JSON.stringify(st) !== was) panel(); }, () => {});
+const crewRunnable = (p, id) => (p === 'codex' ? codexState.ok && CODEX_MODELS.some((m) => m.id === id) : runnableSpec(p, id));
 const hybridActive = () => !!config.hybrid && hybridOn(config.heavy);
 const runnableSpec = (p, id) => canRun(p, id) || (p === 'local' && !!signedIn.get('local') && !!parseLocalModelId(id ?? ''));
 const modelName = (id) => getModel(id)?.name ?? id;
@@ -938,6 +943,11 @@ async function agentModel(override) {
   const gp = given ? parseSpec(given.spec) : null;
   // Their own words win: a model they named this turn beats the one picked for the specialist.
   const want = named ? pickOf(named.provider, named.model, null) : turnNamed ?? (gp ? pickOf(gp.provider, gp.model, given.slot) : null) ?? (h ? pickOf(h.provider, h.model, 'agents') : null);
+  // A subagent set to Codex runs on the Codex CLI with its own sign-in (codex.mjs): nothing to look up here, no backups.
+  if (want?.provider === 'codex') {
+    if (!codexState.ok) throw new Error(`${codexState.reason} (Codex is picked for this subagent on the Subagents page in ${PANEL}.)`);
+    return { provider: 'codex', model: want.model, route: 'codex', codex: resolveCodex(), budget: 400_000 };
+  }
   // The first model in line that can actually start: one whose route fails (Claude Code missing, say) is skipped, so a
   // background agent still starts on the next model instead of failing the launch.
   const order = [want, ...chainOrder()];
@@ -2283,7 +2293,7 @@ function panelState() {
       mics: mics.list, mic: config.mic ?? '', micAuto: mics.list.find((x) => x.id === mics.auto)?.name ?? '',
       download: NEEDS_MODEL && config.voice && !voiceReady() ? { status: voiceModel.status, pct: voiceModel.total ? Math.floor((voiceModel.done / voiceModel.total) * 100) : 0, size: sizeLabel() } : null,
     } : null,
-    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
+    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', codex: { ...codexState, models: CODEX_MODELS }, crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
     login: login.supported ? { on: login.on } : null,
     update: { available: update.available, installing: update.installing, checking: update.checking, result: update.result, page: update.page, done: update.done },
     intro: !!intro,
@@ -2471,7 +2481,7 @@ async function onMenu(id, via) {
   // A specialist's model ('' = none: it follows hybrid models for its kind of job, or is not on the crew).
   else if (/^crew_(\w+):/.test(id)) {
     const [, who, spec] = id.match(/^crew_(\w+):(.*)$/s), h = parseSpec(spec);
-    if (!SUBAGENTS.some((x) => x.id === who) || (spec && !(h && runnableSpec(h.provider, h.model)))) return;
+    if (!SUBAGENTS.some((x) => x.id === who) || (spec && !(h && crewRunnable(h.provider, h.model)))) return;
     config.crew = { ...config.crew, [who]: spec }; saveConfig(); menu();
   }
   else if (id === 'backups') { config.backups = !config.backups; routeBack(); saveConfig(); menu(); }
@@ -2861,7 +2871,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   let m;
   try { m = JSON.parse(line); } catch { return; }
   if (m.type === 'menu') onMenu(m.id, m.via).catch((e) => console.error('menu', e));
-  else if (m.type === 'panel_open') { panelOpen = true; panelAt = Date.now(); logLine('panel_open', {}); if (VOICE_OK) send({ type: 'voice_mics' }); Promise.all([refreshAuth(), signedIn.get('local') && syncLocal(), tts().local && speech.checkLocal()]).catch(() => {}).finally(() => { panel(); refreshCatalogs(); }); }
+  else if (m.type === 'panel_open') { panelOpen = true; panelAt = Date.now(); logLine('panel_open', {}); if (VOICE_OK) send({ type: 'voice_mics' }); Promise.all([refreshAuth(), signedIn.get('local') && syncLocal(), tts().local && speech.checkLocal()]).catch(() => {}).finally(() => { panel(); refreshCatalogs(); }); refreshCodex(); }
   else if (m.type === 'diagnostics') { shellInfo?.(m); shellInfo = null; }
   else if (m.type === 'panel_closed') { panelOpen = false; logLine('panel_closed', { why: String(m.why ?? ''), ms: Date.now() - panelAt }); }
   else if (m.type === 'panel_key' && typeof m.provider === 'string' && typeof m.key === 'string') {
