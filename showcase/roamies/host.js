@@ -483,6 +483,25 @@
     }
   }
 
+  // ---------- Live mode (a Gemini Live call) ----------
+  // The call has its own listening bubble, never the voice helper's listening state, so an Allow that's open stays
+  // open (in Classic, starting to talk closes it as a no). Her words come through the agent stream, as in Classic.
+  // The bubble opens when the call does and again when they speak; between turns her reply stays up.
+  let liveHint = 'Live · Listening…', liveFresh = false; // fresh: the bubble still says Connecting
+  function onLive(m) {
+    const a = getAgent();
+    if (m.turn) { liveFresh = false; if (!notchOn()) { listen?.close(); listen = null; } return; }
+    if (m.state === 'closed') { liveFresh = false; listen?.close(); listen = null; if (notchOn() && !responding) N().close(); return; }
+    if (m.hint) liveHint = m.hint;
+    const open = () => { if (!listen && !ask) { endTalk(); listen = a.listen({ placeholder: liveHint }); } };
+    if (m.heard != null) { liveFresh = false; if (notchOn()) N().heard(m.heard); else { open(); listen?.set(m.heard); } return; }
+    if (m.state === 'connecting' || (m.state === 'listening' && liveFresh)) {
+      liveFresh = m.state === 'connecting';
+      if (notchOn()) { N().listen(); return; }
+      listen?.close(); listen = null; open();
+    } else if (m.state === 'thinking') { if (notchOn()) N().think(); else listen?.processing(); }
+  }
+
   // Moved to the screen the cursor is on: drop the sidekick from its old spot and hold messages until
   // the page has its new size and the cursor's new position, so it appears right beside the cursor.
   let held = null;
@@ -555,6 +574,7 @@
     else if (m.kind === 'cancel_ask') { if (ask?.id === m.id) { ask.id = null; finishAsk(null); } }
     else if (m.kind === 'agent') onAgent(m.e);
     else if (m.kind === 'voice') onVoice(m);
+    else if (m.kind === 'live') onLive(m);
     else if (m.kind === 'list') Roamie.ink?.reminders(m);
     else if (m.kind === 'front_window') Roamie.sidebar?.front(m);
   };

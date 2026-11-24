@@ -33,7 +33,8 @@ import { briefNote } from './brief.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
-import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, setVoiceMode, voiceModeOf } from './voicemode.mjs';
+import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setVoiceMode, voiceModeOf } from './voicemode.mjs';
+import { createLiveCall } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
@@ -63,7 +64,7 @@ import { detailsText, explain } from './errors.mjs';
 import { aboutRoamies } from './about.mjs';
 import { whatsNewOnStart } from './whatsnew.mjs';
 import { createMcp, createMcpTools } from './mcp.mjs';
-import { SLOW_TOOLS } from './livebrain.mjs'; // tools that take long enough to need a spoken beat first
+import { SLOW_TOOLS, createLiveBrain } from './livebrain.mjs'; // tools that take long enough to need a spoken beat first
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
 import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
@@ -1371,12 +1372,26 @@ const autoListenOn = () => VOICE_OK && !!config.voice && !!config.autoListen && 
 // typed out and said (reply_said, or 90 s), no field open, and none of that changing for 1.5 s.
 let voiceBusy = false, saidPending = false, saidCap = null;
 const desk = newsDesk({
-  gates: () => ({ busy, queued, barOpen: !!barAsk, voice: voiceBusy, saidPending, autoListen: !!autoTurn, asking: pending.size > 0, onboarding, intro: !!intro, loggingIn: !!loggingIn }),
+  gates: () => ({ busy, queued, barOpen: !!barAsk, voice: voiceBusy || liveCall.busy(), saidPending, autoListen: !!autoTurn, asking: pending.size > 0, onboarding, intro: !!intro, loggingIn: !!loggingIn }),
   news: () => agents.news(), markTold: (ids) => agents.markTold(ids), userName,
-  enqueue: (text, ids) => enqueue(text, { news: ids }), say: (text, mood) => say(text, mood),
+  // An open Live call takes the news itself (at its next quiet moment); otherwise it's a Classic system turn.
+  enqueue: (text, ids) => { if (liveCall.news(text)) desk.started(ids); else enqueue(text, { news: ids }); }, say: (text, mood) => say(text, mood),
   signedIn: () => signedIn.size > 0 && [...signedIn.values()].some(Boolean),
 });
 const stir = desk.stir;
+// Live mode (livecall.mjs): a tap of the talk chord opens a Gemini Live call with this same prompt and these same
+// tools; Classic never makes one. The key is the Gemini voice key (or the Model page's Gemini key).
+const liveSystem = () => { const l = livePrompt(''); return `${system()}\n\n${l.turn}\n${l.memory}`; };
+const liveCall = createLiveCall({
+  makeBrain: async (emit) => {
+    const [key] = await voiceKey('gemini').catch(() => [null]);
+    return createLiveBrain({ emit, key, model: config.liveModel || DEFAULT_LIVE_MODEL, voice: liveVoiceOf(config, geminiVoice()), tools, system: liveSystem });
+  },
+  ui, send, ask, anim: (name) => anim(name),
+  toClassic: () => onMenu('voicemode_classic').catch((e) => console.error('menu', e)),
+  hangUpHint: () => (HOTKEYS_OK ? `tap ${talkWords()} to hang up` : ''),
+  log: logLine,
+});
 // news: the agent ids this system turn passes on.
 const snoozeListenOn = () => VOICE_OK && !!config.voice && !!config.snoozeListen && voiceReady() && !intro;
 async function prompt(text, image = null, note = '', byVoice = false, news = null, listenAfter = false) {
@@ -2283,7 +2298,7 @@ const SPEECH_LANGS = ['auto', 'en-US', 'ar-SA', 'he-IL', 'es-ES', 'fr-FR', 'de-D
 const speechLangId = () => (SPEECH_LANGS.includes(config.speechLang) ? config.speechLang : 'auto');
 let langInfo = null; // what the voice helper settled on for it: { id, engine, online }
 const voiceConfig = () => {
-  send({ type: 'voice_config', enabled: VOICE_OK && config.voice && voiceReady(), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
+  send({ type: 'voice_config', enabled: VOICE_OK && config.voice && voiceReady(), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
   // The native listening pill beside the cursor stays hidden while the notch capsule is where I appear.
   send({ type: 'pill', on: notchMode() === 'off' });
 };
@@ -2337,10 +2352,15 @@ function onVoice(m) {
     onSpoken(m.text.trim(), m.area);
   }
   else if (m.type === 'voice_state' && m.state === 'idle' && snap?.waitingVoice) snap.waitingVoice = false;
-  else if (m.type === 'voice_ready') micPick();
+  else if (m.type === 'voice_ready') { micPick(); liveCall.hangUp('helper'); if (voiceModeOf(config) === 'live') send({ type: 'live_mode', on: true }); } // a restarted helper has no call mic
   else if (m.type === 'voice_mics') { mics = cleanMics(m); panel(); }
   else if (m.type === 'voice_lang') { langInfo = { id: String(m.id ?? ''), engine: String(m.engine ?? ''), online: !!m.online }; logLine('speech_lang', langInfo); panel(); }
   else if (m.type === 'voice_error') {
+    if (m.code === 'live_mic') {
+      if (m.reason === 'permission') openUrl(`x-apple.systempreferences:com.apple.preference.security?${PRIVACY.microphone}`);
+      if (m.message) problem('hearing', `live_mic: ${m.message}`);
+      return liveCall.fail('mic', m.reason);
+    }
     if (m.code === 'nothing_heard' && snap) { snap.waitingVoice = false; return; }
     if (m.code === 'model_missing') startVoiceDownload();
     else if (m.code === 'permission' && !MAC) {
@@ -2501,7 +2521,7 @@ async function onMenu(id, via) {
   else if (id.startsWith('local:remove:')) removeServer(id.slice(13));
   else if (id.startsWith('size:') && SIZES.some(([s]) => s === id.slice(5))) { config.size = id.slice(5); saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (id.startsWith('look:')) setLook(id.slice(5));
-  else if (/^voicemode_(classic|live)$/.test(id)) { if (setVoiceMode(config, id.slice(10))) { saveConfig(); menu(); } }
+  else if (/^voicemode_(classic|live)$/.test(id)) { const was = voiceModeOf(config); if (setVoiceMode(config, id.slice(10))) { if (voiceModeOf(config) !== was) liveCall.hangUp('switch'); saveConfig(); voiceConfig(); menu(); } } // a switch hangs up an open call
   else if (id === 'replies:text') setReplies('text');
   else if (id === 'replies:voice') setReplies('voice');
   else if (id.startsWith('fishmodel:') && FISH_CHOICES.some((c) => c.id === id.slice(10))) {
@@ -2865,6 +2885,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   } else if (m.type?.startsWith('ob_') || m.type?.startsWith('chat_') || m.type === 'set_keys' || m.type === 'set_actions' || m.type === 'set_login' || m.type === 'keybind_error') onGuide(m).catch((e) => console.error('guide', e));
   else if (m.type?.startsWith('voice')) onVoice(m);
   else if (m.type === 'snap') areaSnap();
+  // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
+  else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
+  else if (m.type === 'live_pcm' && typeof m.data === 'string') liveCall.pcm(m.data);
+  else if (m.type === 'system_sleep') liveCall.hangUp('sleep');
   else if (m.type === 'write_tap') onWriteTap();
   else if (m.type === 'auto_listen') {
     // Still the latest reply, nothing running since, and still switched on: listen once, hands-free.
@@ -2916,6 +2940,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 }).on('close', () => {
   // The app quit (or is restarting for an update): save a reply still running, let the last saves land, never hang.
   if (busy) syncSession();
+  liveCall.hangUp('quit');
   agents.stopAll();
   mcp.dispose();
   closeSpare();

@@ -1832,6 +1832,9 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
                 // The language takes are recognised in ("auto": the Mac's own language list). macOS helper only.
                 let lang = msg.get("lang").and_then(Value::as_str).unwrap_or("auto");
                 to_voice(app, &json!({ "cmd": "lang", "id": lang }));
+                // Live mode: the chord's tap opens or hangs up a Gemini Live call (macOS helper only).
+                let live = msg.get("live").and_then(Value::as_bool) == Some(true);
+                to_voice(app, &json!({ "cmd": "live_mode", "on": live }));
             } else {
                 stop_voice(app);
             }

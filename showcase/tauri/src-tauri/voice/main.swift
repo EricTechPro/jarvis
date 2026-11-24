@@ -1527,6 +1527,8 @@ let voice = Voice()
 if args.contains("--no-mute") { OutputMute.enabled = false }
 if let i = args.firstIndex(of: "--chord"), i + 1 < args.count { voice.setChord(args[i + 1].components(separatedBy: ",")) }
 if LiveTest.url != nil { OutputMute.enabled = false; voice.setWake(true); LiveTest.start() }
+// The Mac is going to sleep: the app hangs up a Live call, so no session keeps running (and costing) while it sleeps.
+NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in emit(["type": "sleep"]) }
 let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in voice.tick() }
 RunLoop.main.add(timer, forMode: .common)
 Thread.detachNewThread {
