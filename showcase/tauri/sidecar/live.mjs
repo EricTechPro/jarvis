@@ -5,6 +5,7 @@
 // ai.live.connect), so tests drive a fake one. Everything Jarvis-specific (prompt, tools, playback, the panel) stays
 // with the caller; this only reports what happened through emit():
 //   {type:'state', state}          connecting | listening | thinking | speaking | closed
+//   {type:'turn'}                  their new turn: the first words heard after her last turn ended (before its caption)
 //   {type:'audio', id, rate, pcm}  a chunk of her voice (base64 PCM16 mono); one id per reply
 //   {type:'audioEnd', id}          that reply's audio is all here
 //   {type:'caption', who, text, done}  who: user | jarvis; text is the whole turn so far; done at the turn's end
@@ -40,6 +41,7 @@ const val = (x) => (typeof x === 'function' ? x() : x);
 export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruction = '', tools, connect }) {
   let session = null, gen = 0, handle = null, stopped = true, tries = 0;
   let turn = 0, audioOut = false, heard = '', said = '';
+  let userTurn = true; // the next words heard start a new turn of theirs
   const live = { state: 'closed' };
   const setState = (s) => { if (live.state !== s) { live.state = s; emit({ type: 'state', state: s }); } };
   const fail = (reason, message) => {
@@ -53,7 +55,7 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
     if (heard) emit({ type: 'caption', who: 'user', text: heard, done: true });
     if (said) emit({ type: 'caption', who: 'jarvis', text: said, done: true });
     if (audioOut) emit({ type: 'audioEnd', id: `live-${turn}` });
-    heard = said = ''; audioOut = false; turn++;
+    heard = said = ''; audioOut = false; turn++; userTurn = true;
   };
 
   const config = () => ({
@@ -72,6 +74,7 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
     tries = 0;
     if (m.sessionResumptionUpdate?.resumable && m.sessionResumptionUpdate.newHandle) handle = m.sessionResumptionUpdate.newHandle;
     if (m.goAway) { if (handle) open(true); return; }
+    if (userTurn && m.serverContent?.inputTranscription?.text) { userTurn = false; emit({ type: 'turn' }); }
     if (m.toolCall) {
       setState('thinking');
       emit({ type: 'toolCall', calls: (m.toolCall.functionCalls ?? []).map(({ id, name, args }) => ({ id, name, args: args ?? {} })) });
@@ -87,7 +90,6 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
     if (c.inputTranscription?.text) {
       heard += c.inputTranscription.text;
       emit({ type: 'caption', who: 'user', text: heard, done: false });
-      if (live.state === 'listening') setState('thinking');
     }
     for (const p of c.modelTurn?.parts ?? []) {
       const d = p.inlineData;
@@ -96,6 +98,8 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
       setState('speaking');
       emit({ type: 'audio', id: `live-${turn}`, rate: Number(d.mimeType.match(/rate=(\d+)/)?.[1]) || LIVE_OUT_RATE, pcm: d.data });
     }
+    // Thinking starts with her first output that isn't already her voice (or a tool call), never while they still talk.
+    if (live.state === 'listening' && (c.modelTurn?.parts?.length || c.outputTranscription?.text)) setState('thinking');
     if (c.outputTranscription?.text) {
       said += c.outputTranscription.text;
       emit({ type: 'caption', who: 'jarvis', text: said, done: false });
@@ -143,7 +147,7 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
   return Object.assign(live, {
     async start() {
       if (!stopped) return;
-      stopped = false; handle = null; tries = 0;
+      stopped = false; handle = null; tries = 0; userTurn = true;
       await open(false);
     },
     stop() {

@@ -20,9 +20,10 @@ export const SWITCH_TO_CLASSIC = 'Switch to Classic';
 /**
  * makeBrain(emit): a Live brain for one call (async: the key is looked up first). ask: the app's yes/no card.
  * toClassic: switches the voice mode to Classic. anim(name): a tool's tag, as Classic shows it. hangUpHint: how to hang
- * up, for the listening bubble (a value or a function).
+ * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
+ * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent).
  */
-export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', log = () => {} }) {
+export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {} }) {
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
@@ -52,6 +53,9 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
   function onEvent(me, e) {
     if (me !== call) return; // a call already hung up
     switch (e.type) {
+      case 'turn':
+        newTurn();
+        return;
       case 'state':
         if (e.state === 'closed') return; // closed() runs once, from hangUp or the error
         if (e.state !== 'connecting') { ready = true; for (const [d, m] of pending.splice(0)) brain?.pushImage(d, m); }

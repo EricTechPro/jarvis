@@ -106,8 +106,9 @@ const audio = (data) => ({ serverContent: { modelTurn: { parts: [{ inlineData: {
   const s = t.calls[0];
   s.server({ serverContent: { inputTranscription: { text: 'Open the ' } } });
   s.server({ serverContent: { inputTranscription: { text: 'repo.' } } });
-  assert.equal(live.state, 'thinking', 'once she has heard you, she is thinking');
+  assert.equal(live.state, 'listening', 'still listening while you talk: your words are not her answer');
   s.server({ serverContent: { outputTranscription: { text: 'On it.' } } });
+  assert.equal(live.state, 'thinking', 'her first output (before any audio) is when she is thinking');
   s.server({ serverContent: { turnComplete: true } });
   const caps = out.filter((e) => e.type === 'caption');
   assert.deepEqual(caps, [
@@ -119,12 +120,31 @@ const audio = (data) => ({ serverContent: { modelTurn: { parts: [{ inlineData: {
   ]);
 }
 
+{ // Each user turn starts once, at the first words heard after her last turn ended; her reply never starts one.
+  const { t, out, live } = setup();
+  await live.start();
+  const s = t.calls[0];
+  const turns = () => out.filter((e) => e.type === 'turn').length;
+  s.server({ serverContent: { inputTranscription: { text: 'Send an ' } } });
+  s.server({ serverContent: { inputTranscription: { text: 'agent.' } } });
+  assert.equal(turns(), 1);
+  assert.ok(out.findIndex((e) => e.type === 'turn') < out.findIndex((e) => e.type === 'caption'), 'the turn starts before its words are passed on');
+  s.server({ toolCall: { functionCalls: [{ id: 'c1', name: 'send_agent', args: {} }] } });
+  s.server({ serverContent: { outputTranscription: { text: 'Sent.' } } });
+  assert.equal(turns(), 1);
+  s.server({ serverContent: { turnComplete: true } });
+  s.server({ serverContent: { inputTranscription: { text: 'Now open it.' } } });
+  s.server({ serverContent: { inputTranscription: { text: ' Please.' } } });
+  assert.equal(turns(), 2);
+}
+
 { // Cutting in: interrupted is passed on at once, her audio for that turn ends, and the next reply is a new id.
   const { t, out, live } = setup();
   await live.start();
   const s = t.calls[0];
   s.server(audio('AQID'));
   const first = out.at(-1).id;
+  assert.deepEqual(out.map((e) => e.state).filter(Boolean), ['connecting', 'listening', 'speaking'], 'her voice first: straight to speaking');
   s.server({ serverContent: { interrupted: true } });
   assert.ok(out.some((e) => e.type === 'interrupted'));
   assert.equal(live.state, 'listening');

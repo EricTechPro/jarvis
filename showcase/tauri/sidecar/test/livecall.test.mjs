@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createLiveBrain } from '../livebrain.mjs';
 import { createLiveCall, liveErrorText } from '../livecall.mjs';
+import { holdAfterLaunch } from '../agents.mjs';
 
 const fakeTransport = () => {
   const calls = [];
@@ -29,7 +30,7 @@ const until = async (fn, ms = 2000) => {
   while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 5)); }
 };
 
-const setup = ({ tools = [], key = 'k', answer = null } = {}) => {
+const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   const t = fakeTransport();
   const uis = [], sends = [], asks = [], switched = [];
   const call = createLiveCall({
@@ -40,6 +41,7 @@ const setup = ({ tools = [], key = 'k', answer = null } = {}) => {
     toClassic: () => switched.push('classic'),
     anim: (name) => ({ tool: 'read', label: name }),
     hangUpHint: 'tap ⌃⌥ to hang up',
+    newTurn,
   });
   return { t, call, uis, sends, asks, switched, agentEvents: () => uis.filter((m) => m.kind === 'agent').map((m) => m.e) };
 };
@@ -103,6 +105,37 @@ const setup = ({ tools = [], key = 'k', answer = null } = {}) => {
   const ev = agentEvents();
   assert.deepEqual(ev.find((e) => e.type === 'tool'), { type: 'tool', id: 'c1', anim: { tool: 'read', label: 'list_commitments' } });
   assert.deepEqual(ev.find((e) => e.type === 'tool_end'), { type: 'tool_end', id: 'c1', isError: false });
+}
+
+{ // Each of their turns in the call is a new request, as in Classic: after send_agent the rest of that turn is held,
+  // and a tool in their next turn runs.
+  const { z } = await import('zod');
+  let requestNo = 0;
+  const ran = [];
+  const tools = holdAfterLaunch([
+    { name: 'send_agent', description: 'Agent.', parameters: z.object({}), execute: async () => { ran.push('send_agent'); return 'launched'; } },
+    { name: 'list_commitments', description: 'List.', parameters: z.object({}), execute: async () => { ran.push('list'); return 'none'; } },
+  ], () => requestNo);
+  const { t, call } = setup({ tools, newTurn: () => { requestNo++; } });
+  await call.toggle();
+  await until(() => t.calls.length === 1);
+  const s = t.calls[0];
+  const answered = (id) => s.sent.find((m) => m.tool?.functionResponses[0].id === id)?.tool.functionResponses[0].response.output;
+  s.server({ serverContent: { inputTranscription: { text: 'Send an agent.' } } });
+  assert.equal(requestNo, 1);
+  s.server({ toolCall: { functionCalls: [{ id: 'a1', name: 'send_agent', args: {} }] } });
+  await until(() => answered('a1'));
+  s.server({ toolCall: { functionCalls: [{ id: 'a2', name: 'list_commitments', args: {} }] } });
+  await until(() => answered('a2'));
+  assert.match(answered('a2'), /^Not done: an agent just launched/);
+  s.server({ serverContent: { turnComplete: true } });
+  s.server({ serverContent: { inputTranscription: { text: 'What is on my list?' } } });
+  assert.equal(requestNo, 2);
+  s.server({ toolCall: { functionCalls: [{ id: 'a3', name: 'list_commitments', args: {} }] } });
+  await until(() => answered('a3'));
+  assert.equal(answered('a3'), 'none');
+  assert.deepEqual(ran, ['send_agent', 'list']);
+  call.hangUp('tap');
 }
 
 { // A bad key hangs up and shows one card: its words point to the key, and its first button switches to Classic.
@@ -236,6 +269,10 @@ const setup = ({ tools = [], key = 'k', answer = null } = {}) => {
   assert.match(src, /\.on\('close', \(\) => \{[^]{0,200}liveCall\.hangUp\('quit'\)/);
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
+  // One path starts a request in both modes: Classic per message, Live per turn of theirs in the call.
+  assert.match(src, /const startRequest = \(\) => \(requestNo = nextTurn\(\)\);/);
+  assert.match(src, /const turn = startRequest\(\);/, 'Classic starts its request through it');
+  assert.match(src.slice(src.indexOf('const liveCall = createLiveCall(')), /^[^]{0,900}newTurn: startRequest,/, 'Live starts each turn through it');
 }
 
 console.log('livecall tests passed');

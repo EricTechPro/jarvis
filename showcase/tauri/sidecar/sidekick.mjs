@@ -710,6 +710,9 @@ tools.push(...createMcpTools({
 }));
 let requestNo = 0; // the request being answered (nextTurn), for holdAfterLaunch
 holdAfterLaunch(tools, () => requestNo);
+// A new request: Classic starts one per message, a Live call one per turn of theirs. Per-turn Allows, screenshot and
+// window freshness, the ink and the hold after send_agent all go by it.
+const startRequest = () => (requestNo = nextTurn());
 
 // The step trail: plan_steps names the parts; a part marked "now" ticks off when the other tool calls of that
 // turn succeed, or shows the first error (in plain words) when one fails. No extra round trips for progress.
@@ -1400,6 +1403,7 @@ const liveCall = createLiveCall({
   ui, send, ask, anim: (name) => anim(name),
   toClassic: () => onMenu('voicemode_classic').catch((e) => console.error('menu', e)),
   hangUpHint: () => (HOTKEYS_OK ? `tap ${talkWords()} to hang up` : ''),
+  newTurn: startRequest,
   log: logLine,
 });
 // news: the agent ids this system turn passes on.
@@ -1463,8 +1467,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       beatText += ev.text;
       if (beatText.length > 40 || /\n/.test(beatText)) releaseBeat(false); // too long to be a beat
     });
-    const turn = nextTurn();
-    requestNo = turn;
+    const turn = startRequest();
     logLine('request', { turn, model: config.model, chars: text.length, image: !!image, session: session?.id });
     const use = { t: Date.now(), model: config.model, calls: 0, tools: 0, in: 0, cacheRead: 0, cacheWrite: 0, out: 0 };
     const learn = { ok: 0, bad: 0, saved: false }; // for the skill pass: tools that worked, ones that failed
