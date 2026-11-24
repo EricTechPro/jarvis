@@ -12,7 +12,7 @@ import { ClaudeCodeAgent } from './claudecode.mjs';
 import { CodexAgent } from './codex.mjs';
 import { agentEvents } from './agentstream.mjs';
 import { createTools } from './tools.mjs';
-import { agentSystem, checkFinish, toolsFor } from './agents.mjs';
+import { agentSystem, checkFinish, steersAfterTurn, toolsFor } from './agents.mjs';
 
 // stdout isn't the app's protocol here, but the sidecar only reads stderr from this process.
 console.log = console.info = (...a) => console.error(...a);
@@ -66,7 +66,7 @@ export function trimRun(msgs, budgetChars) {
 
 async function run({ agent: a, model: md, content }) {
   allow = a.allow !== false;
-  route = md.route === 'claude-code' || md.route === 'codex' ? md.route : 'api';
+  route = steersAfterTurn(md.route) ? md.route : 'api';
   let result = null;
   const { tools: all } = createTools({
     allowActions: () => allow, ui: () => {}, openUrl: () => {}, onCommitments: () => {}, showList: () => {}, fmtWhen: (ms) => new Date(ms).toLocaleString(),
