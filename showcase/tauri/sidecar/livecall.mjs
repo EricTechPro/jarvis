@@ -97,8 +97,11 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     }
   }
 
+  // A call still being made: dropped before it opens (whatever it makes is stopped), and its crops with it.
+  const dropOpening = () => { opening = false; call++; pending = []; ui({ kind: 'live', state: 'closed' }); };
+
   function hangUp(why = 'tap') {
-    if (opening) { opening = false; call++; pending = []; ui({ kind: 'live', state: 'closed' }); return true; }
+    if (opening) { dropOpening(); return true; }
     if (!brain) return false;
     const b = brain;
     brain = null; call++;
@@ -126,8 +129,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       let b;
       try { b = await makeBrain((e) => onEvent(me, e)); } catch (err) {
         if (me !== call) return;
-        opening = false; call++; pending = [];
-        ui({ kind: 'live', state: 'closed' });
+        dropOpening();
         return fail('network', err?.message);
       }
       if (me !== call) return b.stop(); // hung up (a mode switch, sleep) while it was being made

@@ -31,6 +31,23 @@ const FEATURES_OFF = ['shell_tool', 'unified_exec', 'view_image', 'multi_agent',
 // CommonJS for `node -e`; argv's last entry is the socket.
 const RELAY = 'const s=require("net").connect(process.argv.at(-1));process.stdin.pipe(s);s.pipe(process.stdout);s.on("error",()=>process.exit(1));s.on("close",()=>process.exit(0))';
 
+const NOT_FOUND = 'Codex CLI not found. Install it: npm i -g @openai/codex';
+const SIGNED_OUT = 'Codex is signed out. Run codex login in a terminal.';
+
+// Newline-delimited JSON from a stream's chunks: onMessage gets each line that parses, blank or broken lines are skipped.
+const ndjson = (onMessage) => {
+  let buf = '';
+  return (chunk) => {
+    buf += chunk;
+    for (let i; (i = buf.indexOf('\n')) >= 0;) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line) continue;
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      onMessage(m);
+    }
+  };
+};
+
 const toml = (v) => (Array.isArray(v) ? `[${v.map(toml).join(',')}]` : typeof v === 'string' ? JSON.stringify(v) : String(v));
 const run = (bin, args, timeout = 10_000) => new Promise((resolve) => {
   execFile(bin, args, { timeout, windowsHide: true }, (error, stdout, stderr) => resolve({ error, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }));
@@ -51,9 +68,9 @@ export function resolveCodex(env = process.env) {
 /** Whether Codex can run here: { ok: true, version } or { ok: false, reason } (shown on the disabled option). */
 export async function probeCodex({ bin, args = [] } = resolveCodex()) {
   const v = await run(bin, [...args, '--version']);
-  if (v.error?.code === 'ENOENT' || (v.error && !v.stdout)) return { ok: false, reason: 'Codex CLI not found. Install it: npm i -g @openai/codex' };
+  if (v.error?.code === 'ENOENT' || (v.error && !v.stdout)) return { ok: false, reason: NOT_FOUND };
   const s = await run(bin, [...args, 'login', 'status']);
-  if (s.error) return { ok: false, reason: 'Codex is signed out. Run codex login in a terminal.' };
+  if (s.error) return { ok: false, reason: SIGNED_OUT };
   return { ok: true, version: v.stdout.match(/\d+\.\d+\.\d+\S*/)?.[0] ?? v.stdout.trim() };
 }
 
@@ -63,7 +80,7 @@ export function codexError(text, model) {
   if (/model.{0,80}(not supported|isn't supported|not available|does not exist)|unknown model|model_not_found/i.test(t)) {
     return `Codex can't use the model ${model} on this account. Pick another Codex model on the Subagents page.`;
   }
-  if (/not logged in|not signed in|codex login|401|unauthori[sz]ed/i.test(t)) return 'Codex is signed out. Run codex login in a terminal.';
+  if (/not logged in|not signed in|codex login|401|unauthori[sz]ed/i.test(t)) return SIGNED_OUT;
   return `Codex stopped: ${t.slice(-300) || 'it exited without a reason'}`;
 }
 
@@ -87,21 +104,12 @@ async function listenBridge(bridge) {
   const sockets = new Set();
   const server = net.createServer((sock) => {
     sockets.add(sock);
-    let buf = '';
     const transport = {
       send: async (m) => { if (!sock.destroyed) sock.write(`${JSON.stringify(m)}\n`); },
       start: async () => {},
     };
     sock.setEncoding('utf8');
-    sock.on('data', (d) => {
-      buf += d;
-      for (let i; (i = buf.indexOf('\n')) >= 0;) {
-        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-        if (!line) continue;
-        let m; try { m = JSON.parse(line); } catch { continue; }
-        transport.onmessage?.(m);
-      }
-    });
+    sock.on('data', ndjson((m) => transport.onmessage?.(m)));
     sock.on('close', () => { sockets.delete(sock); transport.onclose?.(); });
     sock.on('error', () => {});
     void bridge.config.instance.connect(transport);
@@ -183,23 +191,18 @@ export class CodexAgent {
     hookExit();
     const child = spawn(bin, args, { cwd: o.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     children.add(child);
-    let stderr = '', failure = null, lastError = '', buf = '', exit = null;
+    let stderr = '', failure = null, lastError = '', exit = null;
     const fail = (msg) => { failure ??= codexError(msg, o.model); };
-    child.on('error', (e) => fail(e.code === 'ENOENT' ? 'Codex CLI not found. Install it: npm i -g @openai/codex' : String(e.message)));
+    child.on('error', (e) => fail(e.code === 'ENOENT' ? NOT_FOUND : String(e.message)));
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-STDERR_TAIL_CHARS); });
     child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (d) => {
-      buf += d;
-      for (let i; (i = buf.indexOf('\n')) >= 0;) {
-        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-        let e; try { e = JSON.parse(line); } catch { continue; }
-        if (e.type === 'thread.started' && e.thread_id) this.#threadId = e.thread_id;
-        else if (e.type === 'error') lastError = String(e.message ?? '');
-        else if (e.type === 'turn.failed') fail(e.error?.message ?? lastError);
-        mapEvent(e, q.push);
-      }
-    });
+    child.stdout.on('data', ndjson((e) => {
+      if (e.type === 'thread.started' && e.thread_id) this.#threadId = e.thread_id;
+      else if (e.type === 'error') lastError = String(e.message ?? '');
+      else if (e.type === 'turn.failed') fail(e.error?.message ?? lastError);
+      mapEvent(e, q.push);
+    }));
     child.on('close', (code, sig) => { exit = { code, sig }; children.delete(child); q.close(); });
     child.stdin.on('error', () => {});
     child.stdin.end(input);

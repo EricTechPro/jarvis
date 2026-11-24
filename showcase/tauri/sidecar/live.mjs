@@ -13,7 +13,8 @@
 //   {type:'toolCall', calls}       [{id, name, args}]; answer with respond()
 //   {type:'toolCancel', ids}       Gemini dropped those calls (you cut in): abort them
 //   {type:'error', reason, message}  reason: key | quota | network | dropped; the call is over
-export const LIVE_MODEL = 'gemini-3.8-live';
+import { DEFAULT_LIVE_MODEL } from './voicemode.mjs';
+
 export const LIVE_IN_RATE = 16000;
 export const LIVE_OUT_RATE = 24000;
 const RETRIES = 3; // reconnects in a row with nothing heard back before giving up
@@ -32,22 +33,27 @@ export function reasonFor(text) {
 }
 
 const b64 = (x) => (typeof x === 'string' ? x : Buffer.from(x.buffer ?? x, x.byteOffset ?? 0, x.byteLength ?? x.length).toString('base64'));
-const val = (x) => (typeof x === 'function' ? x() : x);
+/** A value, or a function returning it (read each time). */
+export const val = (x) => (typeof x === 'function' ? x() : x);
 
 /**
  * key, systemInstruction and tools may be values or functions (read again on every connect, so a reconnect gets
  * fresh context). connect defaults to the real Gemini socket for the key.
  */
-export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruction = '', tools, connect }) {
+export function createLive({ emit, key, model = DEFAULT_LIVE_MODEL, voice, systemInstruction = '', tools, connect }) {
   let session = null, gen = 0, handle = null, stopped = true, tries = 0;
   let turn = 0, audioOut = false, heard = '', said = '';
   let userTurn = true; // the next words heard start a new turn of theirs
   const live = { state: 'closed' };
   const setState = (s) => { if (live.state !== s) { live.state = s; emit({ type: 'state', state: s }); } };
-  const fail = (reason, message) => {
+  // Hangs up: the session is closed and anything still arriving from it is ignored.
+  const hangUp = () => {
     stopped = true; gen++;
     try { session?.close(); } catch {}
     session = null;
+  };
+  const fail = (reason, message) => {
+    hangUp();
     emit({ type: 'error', reason, message: String(message || reason) });
     setState('closed');
   };
@@ -152,9 +158,7 @@ export function createLive({ emit, key, model = LIVE_MODEL, voice, systemInstruc
     },
     stop() {
       if (stopped) return;
-      stopped = true; gen++;
-      try { session?.close(); } catch {}
-      session = null;
+      hangUp();
       setState('closed');
     },
     /** Mic audio: 16 kHz 16-bit mono PCM, as bytes or base64. */
