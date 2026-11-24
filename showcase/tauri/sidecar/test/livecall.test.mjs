@@ -269,6 +269,14 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /\.on\('close', \(\) => \{[^]{0,200}liveCall\.hangUp\('quit'\)/);
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
+  // Live mode starts the helper even with Classic talking off (macOS: the only helper with a Live mic).
+  assert.match(src, /const liveTalk = \(\) => MAC && voiceModeOf\(config\) === 'live';/);
+  assert.match(src, /type: 'voice_config', enabled: VOICE_OK && \(liveTalk\(\) \|\| \(config\.voice && voiceReady\(\)\)\),/);
+  // One source for the helper's live mode: voice_config. A restarted helper is sent the whole config again.
+  assert.match(src, /m\.type === 'voice_ready'\) \{[^\n]*voiceConfig\(\);/);
+  assert.doesNotMatch(src, /type: 'live_mode'/);
+  const rust = fs.readFileSync(new URL('../../src-tauri/src/main.rs', import.meta.url), 'utf8');
+  assert.doesNotMatch(rust, /Some\("live_mode"\)/, 'Rust has no separate live_mode message');
   // One path starts a request in both modes: Classic per message, Live per turn of theirs in the call.
   assert.match(src, /const startRequest = \(\) => \(requestNo = nextTurn\(\)\);/);
   assert.match(src, /const turn = startRequest\(\);/, 'Classic starts its request through it');

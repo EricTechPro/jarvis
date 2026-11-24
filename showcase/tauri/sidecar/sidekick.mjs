@@ -2310,8 +2310,11 @@ function panelState() {
 const SPEECH_LANGS = ['auto', 'en-US', 'ar-SA', 'he-IL', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR', 'ja-JP', 'ko-KR', 'zh-CN', 'hi-IN'];
 const speechLangId = () => (SPEECH_LANGS.includes(config.speechLang) ? config.speechLang : 'auto');
 let langInfo = null; // what the voice helper settled on for it: { id, engine, online }
+// Live mode on the Mac runs the helper even with Classic talking off: a call needs its chord and its mic, not the
+// speech model (in Live the helper has no takes and no wake word).
+const liveTalk = () => MAC && voiceModeOf(config) === 'live';
 const voiceConfig = () => {
-  send({ type: 'voice_config', enabled: VOICE_OK && config.voice && voiceReady(), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
+  send({ type: 'voice_config', enabled: VOICE_OK && (liveTalk() || (config.voice && voiceReady())), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
   // The native listening pill beside the cursor stays hidden while the notch capsule is where I appear.
   send({ type: 'pill', on: notchMode() === 'off' });
 };
@@ -2365,7 +2368,7 @@ function onVoice(m) {
     onSpoken(m.text.trim(), m.area);
   }
   else if (m.type === 'voice_state' && m.state === 'idle' && snap?.waitingVoice) snap.waitingVoice = false;
-  else if (m.type === 'voice_ready') { micPick(); liveCall.hangUp('helper'); if (voiceModeOf(config) === 'live') send({ type: 'live_mode', on: true }); } // a restarted helper has no call mic
+  else if (m.type === 'voice_ready') { micPick(); liveCall.hangUp('helper'); voiceConfig(); } // a restarted helper has no call mic and none of the settings (the live mode among them)
   else if (m.type === 'voice_mics') { mics = cleanMics(m); panel(); }
   else if (m.type === 'voice_lang') { langInfo = { id: String(m.id ?? ''), engine: String(m.engine ?? ''), online: !!m.online }; logLine('speech_lang', langInfo); panel(); }
   else if (m.type === 'voice_error') {

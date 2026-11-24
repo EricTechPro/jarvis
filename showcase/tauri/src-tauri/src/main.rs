@@ -1797,9 +1797,8 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
             }
             to_sidecar(app, &json!({ "type": "clipboard_done", "id": msg.get("id"), "ok": msg.get("text").is_some_and(Value::is_string) }));
         }
-        // Live mode (a Gemini Live call): the talk chord's tap opens or hangs up the call instead of starting a take,
-        // and live_capture streams the open call's mic (echo-cancelled 16 kHz PCM, back as live_pcm). macOS helper only.
-        Some("live_mode") => to_voice(app, &json!({ "cmd": "live_mode", "on": msg.get("on").and_then(Value::as_bool) == Some(true) })),
+        // Live mode (a Gemini Live call, switched on by voice_config's live): live_capture streams the open call's mic
+        // (echo-cancelled 16 kHz PCM, back as live_pcm). macOS helper only.
         Some("live_capture") => to_voice(app, &json!({ "cmd": "live_capture", "on": msg.get("on").and_then(Value::as_bool) == Some(true) })),
         // `roamies --talk` (Linux): start a take, or send the one under way.
         Some("talk_toggle") => to_voice(app, &json!({ "cmd": "toggle" })),
