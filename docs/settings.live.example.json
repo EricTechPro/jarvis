@@ -1,0 +1,7 @@
+{
+  "voiceMode": "live",
+  "liveModel": "gemini-3.8-live",
+  "liveVoice": "Charon",
+  "allowActions": false,
+  "secondBrain": { "root": "~/Notes" }
+}
