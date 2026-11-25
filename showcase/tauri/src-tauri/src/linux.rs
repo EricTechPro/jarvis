@@ -353,40 +353,71 @@ fn grab_root() -> Result<gtk::gdk_pixbuf::Pixbuf, String> {
 /// Wayland: only the desktop's own portal may read the screen. It writes a picture and answers with a link to
 /// it; some desktops ask the user first, each time or once.
 fn portal_screenshot() -> Result<PathBuf, String> {
+    // zbus has no blocking API: the connection runs on the thread inside block_on, so the whole exchange,
+    // the wait for the answer included, happens in this one call.
+    zbus::block_on(portal_screenshot_async())
+}
+
+async fn portal_screenshot_async() -> Result<PathBuf, String> {
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use zbus::blocking::{Connection, Proxy};
-    use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value as V};
+    use futures_core::Stream;
+    use zbus::{Connection, OwnedObjectPath, OwnedVariant, Proxy, Variant as V};
     static N: AtomicU32 = AtomicU32::new(0);
     const NO_PORTAL: &str = "This desktop has no screenshot portal (install xdg-desktop-portal and the one for your desktop, e.g. xdg-desktop-portal-gnome, -kde or -wlr).";
     let err = |e: zbus::Error| e.to_string();
-    let conn = Connection::session().map_err(err)?;
+    let conn = Connection::session().await.map_err(err)?;
     let token = format!("roamies_{}_{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed));
     let me = conn.unique_name().map(|n| n.to_string()).ok_or("no session bus name")?;
     // Listen for the answer before asking, so a quick one isn't missed.
-    let request = Proxy::new(&conn, "org.freedesktop.portal.Desktop", portal_request_path(&me, &token), "org.freedesktop.portal.Request").map_err(err)?;
-    let mut answers = request.receive_signal("Response").map_err(err)?;
-    let portal = Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Screenshot").map_err(err)?;
+    let request = Proxy::new(&conn, "org.freedesktop.portal.Desktop", portal_request_path(&me, &token), "org.freedesktop.portal.Request").await.map_err(err)?;
+    let answers = request.receive_signal("Response").await.map_err(err)?;
+    let mut answers = std::pin::pin!(answers);
+    let portal = Proxy::new(&conn, "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Screenshot").await.map_err(err)?;
     let mut options: HashMap<&str, V> = HashMap::new();
     options.insert("handle_token", V::from(token.as_str()));
     options.insert("interactive", V::from(false));
     options.insert("modal", V::from(false));
-    let _handle: OwnedObjectPath = portal.call("Screenshot", &("", options)).map_err(|e| match e {
+    let _handle: OwnedObjectPath = portal.call("Screenshot", &("", options)).await.map_err(|e| match e {
         zbus::Error::MethodError(..) | zbus::Error::InterfaceNotFound => NO_PORTAL.to_string(),
         e => format!("{NO_PORTAL} ({e})"),
     })?;
     // The answer can take as long as the user takes with the desktop's "allow this?" dialog.
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(answers.next());
-    });
-    let msg = rx.recv_timeout(Duration::from_secs(60)).map_err(|_| "The desktop didn't answer the screenshot request.".to_string())?.ok_or("The screenshot request was dropped.")?;
-    let (code, results): (u32, HashMap<String, OwnedValue>) = msg.body().deserialize().map_err(err)?;
+    let next = std::future::poll_fn(|cx| answers.as_mut().poll_next(cx));
+    let msg = within(Duration::from_secs(60), next).await.ok_or("The desktop didn't answer the screenshot request.")?.ok_or("The screenshot request was dropped.")?;
+    let (code, results): (u32, HashMap<String, OwnedVariant>) = msg.body().deserialize().map_err(err)?;
     if code != 0 {
         return Err(if code == 1 { "The screenshot wasn't allowed (the desktop asked, and the answer was no).".into() } else { "The desktop couldn't take the screenshot.".into() });
     }
     let uri = results.get("uri").and_then(|v| v.downcast_ref::<&str>().ok()).ok_or("the portal sent no picture")?;
     file_uri_path(uri).ok_or_else(|| "the portal sent a link that isn't a file".to_string())
+}
+
+/// Awaits `fut`, or gives up (None) once `limit` has passed. A plain thread keeps the time, as zbus's runtime
+/// timer isn't public.
+async fn within<T>(limit: Duration, fut: impl std::future::Future<Output = T>) -> Option<T> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::task::{Poll, Waker};
+    let alarm = Arc::new((AtomicBool::new(false), Mutex::new(None::<Waker>)));
+    let timer = alarm.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(limit);
+        timer.0.store(true, Ordering::Release);
+        if let Some(w) = timer.1.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            w.wake();
+        }
+    });
+    let mut fut = std::pin::pin!(fut);
+    std::future::poll_fn(|cx| {
+        if let Poll::Ready(v) = fut.as_mut().poll(cx) {
+            return Poll::Ready(Some(v));
+        }
+        // The waker goes in before the flag is read, so a timer that fires in between still wakes this.
+        *alarm.1.lock().unwrap_or_else(|e| e.into_inner()) = Some(cx.waker().clone());
+        if alarm.0.load(Ordering::Acquire) { Poll::Ready(None) } else { Poll::Pending }
+    })
+    .await
 }
 
 /// Overlays go clear for a moment so the Roamie isn't in its own screenshot (macOS and Windows leave them out of

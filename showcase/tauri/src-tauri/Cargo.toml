@@ -23,11 +23,13 @@ objc2 = "=0.6.5"
 objc2-service-management = { version = "=0.3.2", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation"] }
 
 # Linux: the overlay's input shape, clipboard and screenshots (GTK, the version Tauri uses), the pointer on X11,
-# and the desktop portal on Wayland. All three are already in Cargo.lock through Tauri and its plugins.
+# and the desktop portal on Wayland (zbus, with futures-core to wait on its signal stream). All are already in
+# Cargo.lock through Tauri and its plugins.
 [target.'cfg(target_os = "linux")'.dependencies]
+futures-core = "=0.3.34"
 gtk = "=0.18.2"
 x11rb = "=0.14.0"
-zbus = "=5.19.0"
+zbus = "=6.5.0"
 
 [profile.release]
 lto = true
