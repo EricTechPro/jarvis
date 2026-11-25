@@ -72,7 +72,7 @@ fs.mkdirSync(path.join(brain, '_context', 'Wiki'));
 lay = B.brainLayout(brain);
 assert.equal(lay.find((x) => x.key === 'wiki').path, path.join(brain, '_context', 'Wiki'), 'a wiki under _context');
 assert.deepEqual(B.layoutFound(lay), ['raw', 'context', 'wiki', 'research', 'projects', 'skills']);
-assert.match(B.secondBrainBlock(brain), /_context\/Wiki\/: the wiki/, 'seen again on the next look (each new chat)');
+assert.ok(B.secondBrainBlock(brain).includes(`- ${path.join(brain, '_context', 'Wiki')}/: the wiki`), 'seen again on the next look (each new chat)');
 
 fs.writeFileSync(path.join(brain, 'CLAUDE.md'), 'Claude rules here.');
 block = B.secondBrainBlock(brain);

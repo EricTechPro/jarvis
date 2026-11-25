@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn the_autostart_entry_quotes_the_program() {
         let e = autostart_entry("/home/kai/Apps/Roamies 0.1.33.AppImage").expect("an entry");
-        assert!(e.starts_with("[Desktop Entry]\nType=Application\nName=Roamies\n"));
+        assert!(e.starts_with("[Desktop Entry]\nType=Application\nName=Jarvis\n"));
         assert!(e.contains("\nExec=\"/home/kai/Apps/Roamies 0.1.33.AppImage\"\n"), "{e}");
         assert_eq!(exec_quoted("/usr/bin/roamies").as_deref(), Some("\"/usr/bin/roamies\""));
         // Characters a shell or the desktop would act on stay literal.
