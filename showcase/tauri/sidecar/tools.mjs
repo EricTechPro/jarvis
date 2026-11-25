@@ -639,6 +639,9 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     if (unseen) throw new Error(unseen);
     const t = String(args.target || 'front'), spec = t === 'front' ? 'front' : t === 'screen' ? 'screen' : `app:${t}`;
     const id = ctx.toolCallId, edits = args.edit ?? [], notes = [], said = [];
+    // speak() answers 'later' in a Live call: the lines aren't said as it draws but by her, after this result.
+    let later = false;
+    const voice = (line) => { const v = speak(line); if (v === 'later') later = true; return !!v; };
     // Clicks and hovers in other apps can't be seen here (Wayland): the beats play one after another instead.
     const beats = (args.beats ?? []).map((b) => (POINTER_OK || !b.wait ? b : { ...b, wait: undefined }));
     if (beats.some((b, i) => b !== (args.beats ?? [])[i])) notes.push("This desktop doesn't let Jarvis see clicks in other apps, so the beats played one after another instead of waiting for clicks.");
@@ -691,7 +694,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
         for (const b of seg) for (const m of b.marks) if (m.action && m.part) buttons.set(m.part, m.action);
         for (const b of seg) for (const m of b.marks) if (m.kind === 'quiz' && m.part) quizzes.set(m.part, m);
         for (const b of seg) for (const m of b.marks) if (m.kind === 'list' && m.part) lists.set(m.part, m);
-        const out = seg.map((b, j) => ({ ...b, n: sg.from + j + 1, caption: plain(b.say), voiced: !!speak(b.say) }));
+        const out = seg.map((b, j) => ({ ...b, n: sg.from + j + 1, caption: plain(b.say), voiced: voice(b.say) }));
         said.push(...out.map((b) => b.caption));
         ui({ kind: 'agent', e: { type: 'draw', id, seg: k, beats: out, edits: k ? [] : edits, last: k === segs.length - 1, win, busy: k ? [] : busy, ...(opts.fade ? { fade: opts.fade } : {}), ...(args.deep ? { deep: true } : {}) } });
         // The first beat must show; later ones queue behind it on the overlay without holding this up.
@@ -717,7 +720,8 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     // The lines were already said (and captioned) as it drew. Said here, right before the reply is written, so the
     // reply doesn't say them again: models restated each step after a walkthrough even with the rule in the prompt.
     const spoken = said.filter(Boolean);
-    const heard = spoken.length ? `Already said out loud as it drew: ${spoken.map((s) => `"${s}"`).join(' ')} Don't repeat or rephrase any of that in your reply: add nothing, or one short sentence they haven't heard yet (a question, or what comes after).` : '';
+    const heard = !spoken.length ? '' : later ? `Say these lines out loud now, word for word and in this order, as your reply (the drawing plays as you say them): ${spoken.map((s) => `"${s}"`).join(' ')} Then add nothing, or one short sentence they haven't heard yet.`
+      : `Already said out loud as it drew: ${spoken.map((s) => `"${s}"`).join(' ')} Don't repeat or rephrase any of that in your reply: add nothing, or one short sentence they haven't heard yet (a question, or what comes after).`;
     // A quiz is answered on screen: without this, models asked the user to report their score.
     if (beats.some((b) => b.marks.some((m) => m.kind === 'quiz'))) notes.push(`${userName} answers the quiz by clicking and sees right or wrong on the card; how they did reaches you with their next message, so don't ask for their answers or score.`);
     return [drawn.length ? `Drew ${list}.` : edits.length ? 'Edited the drawing.' : 'Done.', ...notes, edits.length || drawn.length ? `On screen now: ${parts.describe() || 'nothing'}.` : '', heard].filter(Boolean).join(' ');

@@ -16,6 +16,9 @@ const ERRORS = {
 };
 export const liveErrorText = (reason) => ERRORS[reason] ?? ERRORS.dropped;
 export const SWITCH_TO_CLASSIC = 'Switch to Classic';
+// ponytail: how long held draw marks wait for her voice before drawing anyway (a walkthrough step waiting for a click
+// gets no voice until after it). A guess: needs a calibration pass on a real call, with a real mic and speakers.
+export const DRAW_HOLD_MS = 5000;
 
 /**
  * makeBrain(emit): a Live brain for one call (async: the key is looked up first). ask: the app's yes/no card.
@@ -23,11 +26,22 @@ export const SWITCH_TO_CLASSIC = 'Switch to Classic';
  * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
  * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent).
  */
-export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {} }) {
+export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS }) {
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
   let speechId = null; // the reply audio playing now
+  // draw in the call: its lines are said by her after the tool answers, so its overlay segments are held here (by
+  // tool call id) and released when her voice after that answer starts. answered: the answer went out.
+  const held = new Map(); // id → { segs: [ui message], answered, timer }
+  const release = (id, voiced) => {
+    const h = held.get(id);
+    if (!h) return;
+    held.delete(id); clearTimeout(h.timer);
+    for (const m of h.segs) ui(voiced ? m : { ...m, e: { ...m.e, beats: m.e.beats.map((b) => ({ ...b, voiced: false })) } });
+  };
+  const flushDraws = () => { for (const id of [...held.keys()]) release(id, false); };
+  const holdTimer = (id) => { const h = held.get(id); clearTimeout(h.timer); h.timer = setTimeout(() => release(id, false), holdMs); };
 
   const capture = (on) => { if (capturing !== on) { capturing = on; send({ type: 'live_capture', on }); } };
   const startTurn = () => {
@@ -42,6 +56,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     turn = null;
   };
   const closed = () => {
+    flushDraws();
     ready = false; pending = [];
     capture(false);
     ui({ kind: 'speech', stop: true });
@@ -59,19 +74,22 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       case 'state':
         if (e.state === 'closed') return; // closed() runs once, from hangUp or the error
         if (e.state !== 'connecting') { ready = true; for (const [d, m] of pending.splice(0)) brain?.pushImage(d, m); }
-        if (e.state === 'listening') { capture(true); if (turn && !speechId) endTurn(); }
+        if (e.state === 'listening') { capture(true); flushDraws(); if (turn && !speechId) endTurn(); }
         if (e.state !== 'speaking') ui({ kind: 'live', state: e.state, hint: e.state === 'listening' ? `Live · Listening… ${typeof hangUpHint === 'function' ? hangUpHint() : hangUpHint}`.trim() : undefined });
         return;
       case 'audio':
+        for (const [id, h] of [...held]) if (h.answered) release(id, true);
         speechId = e.id;
         if (turn) turn.speech ??= e.id;
         ui({ kind: 'speech', id: e.id, rate: e.rate, pcm: e.pcm });
         return;
       case 'audioEnd':
+        flushDraws();
         ui({ kind: 'speech', id: e.id, end: true });
         if (speechId === e.id) speechId = null;
         return;
       case 'interrupted':
+        flushDraws();
         ui({ kind: 'speech', stop: true });
         speechId = null;
         endTurn();
@@ -90,6 +108,8 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         ui({ kind: 'agent', e: { type: 'tool', id: e.id, anim: anim(e.name) } });
         return;
       case 'toolEnd':
+        // Cancelled or failed: what it held never draws (a cancelled drawing is taken off the overlay).
+        if (held.has(e.id)) { if (e.ok) { held.get(e.id).answered = true; holdTimer(e.id); } else { clearTimeout(held.get(e.id).timer); held.delete(e.id); } }
         ui({ kind: 'agent', e: { type: 'tool_end', id: e.id, isError: !e.ok } });
         return;
       case 'error':
@@ -148,6 +168,21 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       pending.push([data, mimeType]);
       if (!brain && !opening) await this.toggle();
       if (brain && ready) for (const [d, m] of pending.splice(0)) brain.pushImage(d, m);
+    },
+    /** draw's speak() while the call is open: the line is said by her after the tool answers ('later'). */
+    say: () => (brain ? 'later' : false),
+    /**
+     * draw's overlay messages while the call is open: a segment is held until her voice for it (true: held). The tool
+     * is told it started, so it answers and she can say the lines.
+     */
+    holdDraw(m) {
+      if (!brain || m?.kind !== 'agent' || m.e?.type !== 'draw') return false;
+      const { id, seg } = m.e;
+      if (!held.has(id)) held.set(id, { segs: [], answered: false, timer: null });
+      held.get(id).segs.push(m);
+      holdTimer(id);
+      setImmediate(() => inkStarted(id, seg)); // after draw starts waiting for it
+      return true;
     },
     /** Busy: a call is open and something is going on in it (she's talking or thinking, or a tool runs). */
     busy: () => !!brain && !brain.quiet(),
