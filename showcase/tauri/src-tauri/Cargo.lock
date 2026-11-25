@@ -2977,6 +2977,7 @@ dependencies = [
 name = "roamies"
 version = "0.1.45"
 dependencies = [
+ "futures-core",
  "global-hotkey",
  "gtk",
  "objc2",
