@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /showcase/tauri/sidecar
+    schedule:
+      interval: weekly
+    groups:
+      # The SDK must match the Claude Code version gg-core pins (test/claudecode.test.mjs): they move together.
+      claude-code:
+        patterns: ["@anthropic-ai/claude-agent-sdk", "@kenkaiiii/*"]
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: cargo
+    directory: /showcase/tauri/src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
