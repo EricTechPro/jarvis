@@ -18,7 +18,7 @@
     "test:live": "node bench/memory.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.330",
+    "@anthropic-ai/claude-agent-sdk": "0.3.321",
     "@google/genai": "3.6.1",
     "@kenkaiiii/gg-agent": "5.108.0",
     "@kenkaiiii/gg-ai": "5.108.0",
