@@ -28,10 +28,25 @@ cd .. && ./build.sh dev                 # web files + sidecar + debug `cargo bui
 
 There is no linter configured yet.
 
-Releases: push a `v*` tag (or run `.github/workflows/release.yml` by hand). It builds a signed, notarized
-macOS DMG (Apple silicon and Intel), an unsigned Windows installer and the Linux beta (AppImage, .deb, .rpm, built on
-Ubuntu 24.04 because ONNX Runtime needs glibc 2.38) into a draft GitHub release. The Linux leg may fail without
-stopping the release; `latest.json` lists Linux only when its AppImage is there.
+Releases: bump the version in `tauri.conf.json`, `Cargo.toml` and `Cargo.lock`, then push a matching `v*` tag (or run
+`.github/workflows/release.yml` by hand). It builds a macOS DMG (Apple silicon and Intel), an unsigned Windows installer
+and the Linux beta (AppImage, .deb, .rpm, built on Ubuntu 24.04 because ONNX Runtime needs glibc 2.38) into a draft
+GitHub release. Mac builds are signed and notarized only when the Apple secrets are set, and ad-hoc signed otherwise.
+The Linux leg may fail without stopping the release. Asset names carry no version (`Jarvis-macos-arm64.dmg`,
+`Jarvis-windows-x64-setup.exe`, ...) because the one-line installers `get.sh` (macOS, Linux) and `get.ps1` (Windows,
+stock PowerShell 5.1) download `releases/latest/download/<name>`. Keep the names in those scripts and in release.yml
+in step. `latest.json` is written only when the updater signing key is set.
+
+## Commits
+
+Subject: `<emoji> [type] scope: subject`, then short bullets in the body, for example `✨ [feat] install: one-line
+curl installers`. Types: ✨ feat · 🐛 fix · 🔧 chore · ♻️ refactor · 🧪 test · ⚡ perf · 📝 docs · 👷 ci · 💄 ui ·
+🔒 security · ⏪ revert · 🚧 wip.
+
+- `.githooks/commit-msg` rejects other subjects (git's own Merge, Revert and fixup! subjects pass). Enable it once
+  per clone: `git config core.hooksPath .githooks`.
+- Squash merges use the pull request title, so the title follows the same format; `.github/workflows/pr-title.yml`
+  checks it with the same hook.
 
 ## Rules
 

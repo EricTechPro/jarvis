@@ -2975,7 +2975,7 @@ dependencies = [
 
 [[package]]
 name = "roamies"
-version = "0.1.45"
+version = "0.2.0"
 dependencies = [
  "futures-core",
  "global-hotkey",

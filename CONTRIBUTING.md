@@ -22,6 +22,8 @@ Command Prompt: `build.sh` is a Bash script, and Windows PowerShell 5 doesn't ac
 
 - Run `npm test` in `showcase/tauri/sidecar`.
 - Run `shellcheck` on any shell script you changed.
+- Write commit subjects and the pull request title as `<emoji> [type] scope: subject` (see the Commits section of
+  [AGENTS.md](AGENTS.md)); `git config core.hooksPath .githooks` checks them for you.
 - Keep CI (`.github/workflows/ci.yml`) green.
 - Keep pull requests small and focused on one thing.
 

@@ -22,6 +22,20 @@
 
 ## Install
 
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EricTechPro/jarvis/main/get.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+curl.exe -fsSL https://raw.githubusercontent.com/EricTechPro/jarvis/main/get.ps1 | powershell -NoProfile -ExecutionPolicy Bypass -Command -
+```
+
+Build from source instead:
+
 ```bash
 git clone https://github.com/EricTechPro/jarvis.git
 cd jarvis/showcase/tauri
@@ -30,7 +44,6 @@ cd jarvis/showcase/tauri
 ```
 
 - Needs Rust, Node.js 22+, [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-- No prebuilt downloads yet
 
 ## How it works
 

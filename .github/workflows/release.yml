@@ -1,15 +1,24 @@
-# Release: tag a version (e.g. `git tag v0.1.0 && git push origin v0.1.0`) or run it by hand.
-# Builds a signed + notarized macOS DMG (Apple silicon and Intel), a Windows installer and the Linux beta (AppImage,
-# .deb and .rpm), then attaches them to a draft GitHub release for you to review and publish. The Linux leg is allowed
-# to fail: the release goes out for macOS and Windows either way, just without Linux files. CI (ci.yml) builds and tests on Linux,
-# macOS and Windows for every push and pull request, without signing.
-# Each build also uploads a signed update bundle; the manifest job writes latest.json, the feed the
-# in-app updater reads from the newest published release.
+# Release: tag a version (e.g. `git tag v0.2.0 && git push origin v0.2.0`) or run it by hand.
+# Builds a macOS DMG (Apple silicon and Intel), a Windows installer and the Linux beta (AppImage, .deb and .rpm), then
+# attaches them to a draft GitHub release for you to review and publish. The Linux leg is allowed to fail: the release
+# goes out for macOS and Windows either way, just without Linux files. CI (ci.yml) builds and tests on Linux, macOS and
+# Windows for every push and pull request.
+#
+# Signing is optional. With the Apple secrets (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD, and
+# APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID for notarizing) the Mac builds are signed and notarized; without them they're
+# ad-hoc signed, which get.sh installs fine (curl downloads carry no quarantine flag). With TAURI_SIGNING_PRIVATE_KEY
+# and createUpdaterArtifacts on, each build also uploads a signed update bundle and the manifest job writes latest.json;
+# without them there's no latest.json.
+#
+# Asset names are stable (no version in them) so https://github.com/EricTechPro/jarvis/releases/latest/download/<name>
+# always points at the newest published release. get.sh and get.ps1 download these names:
+#   Jarvis-macos-arm64.dmg  Jarvis-macos-x64.dmg  Jarvis-windows-x64-setup.exe
+#   Jarvis-linux-x64.AppImage  Jarvis-linux-x64.deb  Jarvis-linux-x64.rpm
 name: Release
 
-# Neutralized for Jarvis: manual runs only, and it needs your own signing secrets (Apple certificate, notarization,
-# TAURI_SIGNING_PRIVATE_KEY). In-app updates are off, so the updater bundles and latest.json it makes go unused.
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -43,6 +52,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.beta == true }}
     timeout-minutes: 60
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_ID != '' }}
     defaults:
       run:
         shell: bash
@@ -89,7 +101,7 @@ jobs:
 
       # Developer ID certificate into a throwaway keychain (removed at the end of the job).
       - name: Import Apple signing certificate
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -137,8 +149,10 @@ jobs:
           } catch { Write-Host "Couldn't prefetch NSIS ($_); the bundler will download it itself." }
 
       # build.sh copies the web files, bundles the sidecar, then runs `cargo tauri build`. On macOS, Tauri
-      # signs with APPLE_SIGNING_IDENTITY and notarizes with APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID.
-      - name: Build, sign and notarize
+      # signs with APPLE_SIGNING_IDENTITY (ad-hoc when there's no certificate) and notarizes with
+      # APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID. A missing secret arrives as an empty variable, which Tauri would still
+      # try to use, so those are unset.
+      - name: Build (signed and notarized when the secrets are there)
         env:
           TAURI_BUNDLES: ${{ matrix.bundles }}
           # Tauri skips the Finder layout step (background, icon spots) when CI=true; Actions runners can run it.
@@ -149,7 +163,10 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: ./build.sh release --target ${{ matrix.target }}
+        run: |
+          [ "$HAS_NOTARY" = true ] || unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || unset TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          ./build.sh release --target ${{ matrix.target }}
 
       # CI only runs the debug build; this installs the real installer the way users do (silently, per user) and checks
       # every part landed, the helpers start from where they were installed, and the app starts its sidecar.
@@ -161,7 +178,7 @@ jobs:
           if (-not $setup) { throw 'No installer was built' }
           $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode) { throw "The installer failed (exit code $($p.ExitCode))" }
-          $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Roamies'), (Join-Path $env:ProgramFiles 'Roamies') -Filter roamies.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Jarvis'), (Join-Path $env:ProgramFiles 'Jarvis') -Filter roamies.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $app) { throw 'roamies.exe is not where the installer puts it' }
           $dir = $app.DirectoryName
           "Installed in $dir"
@@ -194,7 +211,7 @@ jobs:
 
       # Tauri notarizes the app inside; the DMG around it is a download of its own that macOS checks too.
       - name: Notarize the DMG
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.HAS_NOTARY == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -205,16 +222,23 @@ jobs:
           xcrun stapler staple "$DMG"
 
       - name: Check the signature and notarization
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && env.HAS_NOTARY == 'true'
         run: |
           APP=$(ls -d src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app | head -1)
           codesign --verify --deep --strict --verbose=2 "$APP"
           xcrun stapler validate "$APP"
           spctl --assess --type execute --verbose "$APP"
-          # The installer window layout lives in .DS_Store; without it the DMG opens as a plain folder.
           DMG=$(ls src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg | head -1)
           xcrun stapler validate "$DMG"
           spctl -a -t open --context context:primary-signature -v "$DMG"
+
+      - name: Check the app signature and DMG layout
+        if: runner.os == 'macOS'
+        run: |
+          APP=$(ls -d src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app | head -1)
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          # The installer window layout lives in .DS_Store; without it the DMG opens as a plain folder.
+          DMG=$(ls src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg | head -1)
           MNT=$(mktemp -d)
           hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$MNT" "$DMG" >/dev/null
           ls -la "$MNT"
@@ -224,38 +248,47 @@ jobs:
           [ $ok -eq 1 ]
 
       - name: Remove the signing keychain
-        if: always() && runner.os == 'macOS'
+        if: always() && runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
 
       - name: Attach to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="${GITHUB_REF_NAME}"
-          [[ "$TAG" == v* ]] || TAG="v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [[ "$TAG" == v* ]]; then
+            [ "$TAG" = "v$VER" ] || { echo "::error::Tag $TAG doesn't match the version in tauri.conf.json ($VER)"; exit 1; }
+          else
+            TAG="v$VER"
+          fi
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "Jarvis $TAG" --generate-notes || true
           shopt -s nullglob
           B=src-tauri/target/${{ matrix.target }}/release/bundle
-          files=($B/dmg/*.dmg $B/nsis/*-setup.exe $B/appimage/*.AppImage $B/deb/*.deb $B/rpm/*.rpm)
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) P=macos-arm64 ;;
+            x86_64-apple-darwin) P=macos-x64 ;;
+            x86_64-pc-windows-msvc) P=windows-x64 ;;
+            x86_64-unknown-linux-gnu) P=linux-x64 ;;
+            *) echo "::error::No asset name for ${{ matrix.target }}"; exit 1 ;;
+          esac
+          # Stable names (see the top of this file): copy the first match to its name, with its update signature if
+          # there is one (only when updater signing is on).
+          files=()
+          stage() {
+            local name="$1"; shift
+            [ $# -gt 0 ] || return 0
+            cp "$1" "$name"; files+=("$name")
+            if [ -f "$1.sig" ]; then cp "$1.sig" "$name.sig"; files+=("$name.sig"); fi
+          }
+          stage "Jarvis-$P.dmg" $B/dmg/*.dmg
+          stage "Jarvis-$P.app.tar.gz" $B/macos/*.app.tar.gz
+          stage "Jarvis-$P-setup.exe" $B/nsis/*-setup.exe
+          stage "Jarvis-$P.AppImage" $B/appimage/*.AppImage
+          stage "Jarvis-$P.deb" $B/deb/*.deb
+          stage "Jarvis-$P.rpm" $B/rpm/*.rpm
           [ ${#files[@]} -gt 0 ] || { echo "No installers were built"; exit 1; }
-          # Update bundles: both Macs produce Roamies.app.tar.gz, so name them per architecture.
-          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "$RUNNER_OS" = macOS ]; then
-            ARCH=$([ "${{ matrix.target }}" = aarch64-apple-darwin ] && echo aarch64 || echo x64)
-            [ -f $B/macos/Roamies.app.tar.gz.sig ] || { echo "::error::No signed update bundle was built"; exit 1; }
-            cp $B/macos/Roamies.app.tar.gz "Roamies_${VER}_${ARCH}.app.tar.gz"
-            cp $B/macos/Roamies.app.tar.gz.sig "Roamies_${VER}_${ARCH}.app.tar.gz.sig"
-            files+=("Roamies_${VER}_${ARCH}.app.tar.gz" "Roamies_${VER}_${ARCH}.app.tar.gz.sig")
-          elif [ "$RUNNER_OS" = Linux ]; then
-            # In-app updates on Linux replace the AppImage; .deb and .rpm copies are pointed to the release page.
-            sigs=($B/appimage/*.AppImage.sig)
-            [ ${#sigs[@]} -gt 0 ] || { echo "::error::No signed update AppImage was built"; exit 1; }
-            files+=("${sigs[@]}")
-          else
-            sigs=($B/nsis/*-setup.exe.sig)
-            [ ${#sigs[@]} -gt 0 ] || { echo "::error::No signed update installer was built"; exit 1; }
-            files+=("${sigs[@]}")
-          fi
+          printf 'Uploading %s\n' "${files[@]}"
           gh release upload "$TAG" "${files[@]}" --clobber
 
   manifest:
@@ -270,7 +303,12 @@ jobs:
         run: |
           VER=$(node -p "require('./showcase/tauri/src-tauri/tauri.conf.json').version")
           TAG="${GITHUB_REF_NAME}"; [[ "$TAG" == v* ]] || TAG="v$VER"
-          mkdir -p sigs && gh release download "$TAG" -p '*.sig' -D sigs
+          mkdir -p sigs
+          gh release download "$TAG" -p '*.sig' -D sigs 2>/dev/null || true
+          if [ -z "$(ls sigs)" ]; then
+            echo "No update signatures on $TAG (no TAURI_SIGNING_PRIVATE_KEY, or updater bundles are off): no latest.json."
+            exit 0
+          fi
           # Download links go through the API (the updater asks for the file itself): GitHub's public release links
           # (github.com/…/releases/download/…) have timed out (504) for hours while the API kept working.
           gh release view "$TAG" --json assets > assets.json
@@ -280,15 +318,15 @@ jobs:
             const api = Object.fromEntries(JSON.parse(fs.readFileSync("assets.json", "utf8")).assets.map((a) => [a.name, a.apiUrl]));
             const link = (f) => { if (!api[f]) throw new Error(`${f} is not on the release`); return api[f]; };
             const platforms = {
-              "darwin-aarch64": `Roamies_${VER}_aarch64.app.tar.gz`,
-              "darwin-x86_64": `Roamies_${VER}_x64.app.tar.gz`,
-              "windows-x86_64": `Roamies_${VER}_x64-setup.exe`,
+              "darwin-aarch64": "Jarvis-macos-arm64.app.tar.gz",
+              "darwin-x86_64": "Jarvis-macos-x64.app.tar.gz",
+              "windows-x86_64": "Jarvis-windows-x64-setup.exe",
             };
             // The Linux beta leg may have failed: its AppImage is listed only when it and its signature are there.
-            const linux = `Roamies_${VER}_amd64.AppImage`;
+            const linux = "Jarvis-linux-x64.AppImage";
             if (api[linux] && fs.existsSync("sigs/" + linux + ".sig")) platforms["linux-x86_64"] = linux;
             else console.log("No Linux AppImage on this release: latest.json leaves Linux out.");
-            const out = { version: VER, notes: `Roamies ${VER}`, pub_date: new Date().toISOString(), platforms: {} };
+            const out = { version: VER, notes: `Jarvis ${VER}`, pub_date: new Date().toISOString(), platforms: {} };
             for (const [k, f] of Object.entries(platforms)) out.platforms[k] = { signature: sig(f + ".sig"), url: link(f) };
             fs.writeFileSync("latest.json", JSON.stringify(out, null, 2));
           '
