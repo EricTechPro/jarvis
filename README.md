@@ -124,6 +124,10 @@ Risky things start off. Defaults:
 
 - Data goes only to the model you pick ([PRIVACY.md](PRIVACY.md))
 
+## Settings
+
+- Starters to copy into `~/Roamies/Data/settings.json` (keys stay in the keychain): [Classic](docs/settings.classic.example.json), [Live](docs/settings.live.example.json)
+
 ---
 
 ## Credits
