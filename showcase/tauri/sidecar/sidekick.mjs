@@ -651,13 +651,15 @@ const userName = (() => {
 })();
 
 // ---------- tools ----------
-// The open request's voice, if replies are spoken: draw's beat lines are said on it, in order with the reply.
+// The open request's voice, if replies are spoken: draw's beat lines are said on it, in order with the reply. In a
+// Live call, she says them after draw answers, and draw's overlay messages wait in the call for her voice (livecall.mjs).
 let turnVoice = null;
 const { tools, hands, whereNow, frontNow: frontData, frontBounds, ink, nextTurn } = createTools({
   focus: HANDS_OK ? { start: (m, t) => startFocus(m, t), stop: () => stopFocus() } : null,
   firedReminders: () => firedReminders,
-  allowActions: () => config.allowActions, skipAllow: () => !!config.allowActions && !!config.skipAllow, ui, ask, openUrl, userName,
-  speak: (line) => { if (!turnVoice) return false; turnVoice.say(line); return true; },
+  allowActions: () => config.allowActions, skipAllow: () => !!config.allowActions && !!config.skipAllow, ask, openUrl, userName,
+  ui: (m) => { if (!liveCall.holdDraw(m)) ui(m); },
+  speak: (line) => { if (liveCall.open) return liveCall.say(); if (!turnVoice) return false; turnVoice.say(line); return true; },
   onHandoff: (task) => { activity.handoff(task); panel(); },
   commitmentsText: () => [commitmentsText(), doneTodayText() && `Done today:\n${doneTodayText()}`].filter(Boolean).join('\n'),
   onCommitments: (c) => { menu(); scheduleReminders(); showList({ flash: c?.id, seconds: 6 }); syncSoon(); },
@@ -1407,6 +1409,7 @@ const liveCall = createLiveCall({
   hangUpHint: () => (HOTKEYS_OK ? `tap ${talkWords()} to hang up` : ''),
   newTurn: startRequest,
   log: logLine,
+  inkStarted: (id, seg) => ink.started(id, seg),
 });
 // news: the agent ids this system turn passes on.
 const snoozeListenOn = () => VOICE_OK && !!config.voice && !!config.snoozeListen && voiceReady() && !intro;
