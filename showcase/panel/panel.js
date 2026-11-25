@@ -654,9 +654,19 @@
   }
   // Subagents: specialists the chat hands background work to. Each runs on the model picked here; one with no model
   // follows the model hybrid models set for its kind of job (when those are on), else it is not on the crew.
+  // The Codex (headless) engine for a subagent: its models, or one disabled option that says why it can't run here.
+  const codexOptgroup = (cx, current) => el('optgroup', { label: 'Codex (headless)' }, cx?.ok
+    ? cx.models.map((m) => el('option', { value: `codex:${m.id}`, textContent: `${m.name} (Codex)`, selected: `codex:${m.id}` === current }))
+    : [el('option', { value: '', disabled: true, textContent: `Codex unavailable: ${cx?.reason ?? 'not checked yet.'}` })]);
+  // A subagent's engine and model in one pick: a signed-in provider's model (API or Claude Code), or Codex.
+  const crewSelect = (c, first, cx) => {
+    const sel = modelSelect(`${c.label} engine and model`, `crew_${c.id}`, c.value, first, (x) => act(`crew_${c.id}:${x.value}`));
+    sel.querySelector('select').append(codexOptgroup(cx, c.value));
+    return sel;
+  };
   function subagentGroup() {
     const sa = state.subagents;
-    if (!sa || !state.providers.some((p) => p.on)) return null;
+    if (!sa || (!state.providers.some((p) => p.on) && !sa.codex?.ok)) return null;
     const on = !!sa.on, hybridOn = !!(state.hybrid && state.hybrid.on);
     return el('div', { className: 'group' },
       el('div', { className: 'ghead' }, el('p', { className: 'wrap', textContent: 'Specialists I hand background work to.' })),
@@ -668,7 +678,7 @@
       on ? sa.crew.map((c) => el('div', { className: 'slot' },
         el('div', { className: 'setting' },
           el('span', { id: `lbl-crew-${c.id}` }, c.label, el('small', { className: 'wrap', textContent: c.via === 'hybrid' ? `${c.hint} Uses ${modelName(c.uses)}.` : c.hint })),
-          modelSelect(`${c.label} model`, `crew_${c.id}`, c.value, hybridOn ? 'Follow hybrid' : 'Off', (sel) => act(`crew_${c.id}:${sel.value}`))),
+          crewSelect(c, hybridOn ? 'Follow hybrid' : 'Off', sa.codex)),
         c.value ? effortRow(`sub_${c.id}`, c.value) : null)) : null);
   }
   // A local server: connected (a lit dot) or not, its address if it was added, and why its models aren't in the
@@ -769,6 +779,9 @@
     // Gemini can speak with the key the AI already has (the Model page), until the voice gets one of its own.
     const shared = tts === 'gemini' && hasKey && !!state.geminiShared;
     return [
+      group('Voice mode', 'How I talk with you.', null,
+        picks('Voice mode', [['classic', 'Classic'], ['live', 'Live']], state.voiceMode ?? 'classic', (x) => act(`voicemode_${x}`), 'voicemode',
+          { classic: 'I listen, think, then speak, one sentence at a time.', live: 'A hands-free Gemini Live call: talk over me any time.' })),
       group('Spoken replies', 'Hear me as well as read me.', null,
         picks('Replies', [['text', 'Text only'], ['voice', 'Voice and text']], state.replies, (x) => {
           if (x === 'voice' && !hasKey) { ui.key = tts; render(`key-${tts}`); note(`Add a ${T} key to hear me talk.`); return; }

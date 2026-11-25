@@ -32,6 +32,11 @@ const walk = (name, node, at) => {
   }
 };
 for (const t of tools) walk(t.name, resolveToolSchema(t), '');
+// Live mode declares the same tools to Gemini Live: every one converts, none is left out.
+{
+  const { liveDeclarations } = await import('../livebrain.mjs');
+  assert.deepEqual(liveDeclarations(tools)[0].functionDeclarations.map((d) => d.name), tools.map((t) => t.name), 'every tool is a Live declaration');
+}
 assert.deepEqual(formats, [], 'no tool uses a string format');
 // draw replaced point_at, on every platform (pixels from a screenshot work everywhere).
 assert.ok(tools.some((t) => t.name === 'draw') && !tools.some((t) => t.name === 'point_at'), 'draw, not point_at');

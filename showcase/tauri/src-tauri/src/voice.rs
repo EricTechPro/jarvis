@@ -59,6 +59,12 @@ pub(crate) fn start_voice(app: &AppHandle) {
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
+            // Live mode: mic frames (25-50 a second) and the call's tap go straight to the sidecar from this thread,
+            // not through the main thread or the setup guide.
+            if let Some(m) = live_line(&msg) {
+                to_sidecar(&app, &m);
+                continue;
+            }
             let app2 = app.clone();
             let _ = app.run_on_main_thread(move || handle_voice(&app2, msg));
         }
@@ -234,6 +240,19 @@ pub(crate) fn set_esc(app: &AppHandle, label: &str, on: bool) {
     });
 }
 
+/// Live mode lines from the helper, as the sidecar takes them: `pcm` (16 kHz 16-bit mono, base64) becomes
+/// `live_pcm`, `live_toggle` (a tap of the talk chord: open or hang up the call) passes as is, and `sleep` (the Mac
+/// is going to sleep) becomes `system_sleep`.
+fn live_line(msg: &Value) -> Option<Value> {
+    match msg.get("type").and_then(Value::as_str) {
+        Some("pcm") => Some(json!({ "type": "live_pcm", "data": msg.get("data") })),
+        Some("live_toggle") => Some(json!({ "type": "live_toggle" })),
+        // The Mac is going to sleep: the sidecar hangs up an open Live call.
+        Some("sleep") => Some(json!({ "type": "system_sleep" })),
+        _ => None,
+    }
+}
+
 fn handle_voice(app: &AppHandle, msg: Value) {
     let mut ui = msg.clone();
     ui["kind"] = json!("voice");
@@ -297,5 +316,31 @@ fn handle_voice(app: &AppHandle, msg: Value) {
             to_sidecar(app, &m);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn live_mic_frames_go_to_the_sidecar_as_live_pcm() {
+        let msg = json!({ "type": "pcm", "data": "AQACAA==" });
+        assert_eq!(live_line(&msg), Some(json!({ "type": "live_pcm", "data": "AQACAA==" })));
+    }
+
+    #[test]
+    fn sleep_goes_to_the_sidecar_as_system_sleep() {
+        assert_eq!(live_line(&json!({ "type": "sleep" })), Some(json!({ "type": "system_sleep" })));
+    }
+
+    #[test]
+    fn a_live_tap_goes_to_the_sidecar() {
+        assert_eq!(live_line(&json!({ "type": "live_toggle" })), Some(json!({ "type": "live_toggle" })));
+    }
+
+    #[test]
+    fn other_helper_lines_take_the_usual_path() {
+        assert_eq!(live_line(&json!({ "type": "final", "text": "hi" })), None);
     }
 }

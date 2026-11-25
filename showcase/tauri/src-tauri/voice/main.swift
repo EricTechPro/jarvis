@@ -744,6 +744,29 @@ final class Voice {
         extra || !now.subtracting(heldAtArm).isEmpty
     }
 
+    // ---------- Live mode ----------
+    // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
+    // instead of starting a take, so there's no recogniser, no pause that ends a turn, no muted output and no wake word.
+    // {"cmd":"live_capture"}: the open call's mic stream (livemic.swift).
+    private(set) var liveMode = false
+    private let liveMic = LiveMic()
+
+    func setLiveMode(_ on: Bool) {
+        guard on != liveMode else { return }
+        if phase == .wake { stopWake() } else if phase != .idle { cancel() }
+        if !on { setLiveCapture(false) }
+        liveMode = on
+        if on { stopAudio(close: true) }
+        log("live mode \(on ? "on" : "off")")
+    }
+
+    func setLiveCapture(_ on: Bool) {
+        if !on { return liveMic.stop() }
+        guard liveMode else { return log("live capture refused: not in live mode") }
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return emit(["type": "error", "code": "live_mic", "reason": "permission"]) }
+        if let problem = liveMic.start() { emit(["type": "error", "code": "live_mic", "reason": "failed", "message": problem]) }
+    }
+
     let ink = Ink()
     let wave = Wave()
     let buddy = Buddy()
@@ -803,6 +826,12 @@ final class Voice {
         case .armed:
             // Only the first moment decides shortcut vs. talk: ⌃⌥ plus a key pressed since, ⇧ or ⌘ is a shortcut.
             if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: ⌃⌥ was part of a shortcut"); cancel(); blocked = true; return }
+            if liveMode {
+                // A shortcut (⌃⌥A) was already caught above, so a release here is a tap that opens or hangs up the call;
+                // holding just waits for the release.
+                if released { phase = .idle; ink.clear(); emit(["type": "live_toggle"]) }
+                return
+            }
             if released { phase = .handsFree; showListening("handsfree", now); return }
             if down && now - chordAt >= Self.tapLimit { phase = .holding; showListening("hold", now) }
         case .holding:
@@ -838,6 +867,7 @@ final class Voice {
         ink.setArmed(true)
         // ROAMIES_VOICE_DRYRUN_TEXT: what a dry run "hears", to test what goes out with the words (like pen marks).
         if dryRun { best = ProcessInfo.processInfo.environment["ROAMIES_VOICE_DRYRUN_TEXT"] ?? ""; return }
+        if liveMode { return } // the call's mic is opened by live_capture, not by the chord
         // Already allowed: start the mic now so the first word isn't lost. Otherwise wait until
         // the press is clearly a talk (hold or tap), so shortcuts like ⌃⌥S never trigger a prompt.
         if authorized() { startAudio(device: InputDevice.picked()) }
@@ -942,7 +972,7 @@ final class Voice {
     /// Start listening hands-free without a key press (after an area snap). Ends on a pause or a tap.
     func listenNow(wait: Double? = nil) {
         if phase == .wake { stopWake() }
-        guard phase == .idle else { return }
+        guard phase == .idle, !liveMode else { return }
         arm(uptime())
         nothingWait = min(15, max(3, wait ?? 8))
         phase = .handsFree
@@ -967,7 +997,7 @@ final class Voice {
 
     // Never asks for permission: wake listening starts only once talking has been allowed.
     private func wakeAllowed(_ now: Double) -> Bool {
-        wakeOn && !wakeHold && !dryRun && now >= wakeCooldownUntil && now >= wakeRetryAt && authorized(wake: true)
+        wakeOn && !wakeHold && !dryRun && !liveMode && now >= wakeCooldownUntil && now >= wakeRetryAt && authorized(wake: true)
     }
 
     private func startWake(_ now: Double) {
@@ -1389,6 +1419,30 @@ if args.contains("--test-chord") {
     check("an extra ⇧ or ⌘ still counts with a key held", Voice.isShortcut(extra: true, heldAtArm: [0x00], now: [0x00]))
     exit(bad == 0 ? 0 : 1)
 }
+// --test-livemic: the Live call's mic frames (16 kHz 16-bit mono PCM) from a 48 kHz float mic, and the crop chord
+// (⌃⌥A) never counting as a tap that opens or hangs up the call; exits 1 on a failure.
+if args.contains("--test-livemic") {
+    var bad = 0
+    func check(_ name: String, _ ok: Bool) { print("\(ok ? "ok" : "FAIL") \(name)"); if !ok { bad += 1 } }
+    let mic = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+    let pcm = LivePCM(from: mic)!
+    var out = Data(), peak: Int16 = 0
+    // One second of a 440 Hz tone at half scale, in 10 ms buffers like a mic tap.
+    for k in 0 ..< 100 {
+        let buf = AVAudioPCMBuffer(pcmFormat: mic, frameCapacity: 480)!
+        buf.frameLength = 480
+        for c in 0 ..< 2 { for i in 0 ..< 480 { buf.floatChannelData![c][i] = 0.5 * sin(2 * .pi * 440 * Float(k * 480 + i) / 48000) } }
+        out.append(pcm.convert(buf))
+    }
+    out.withUnsafeBytes { raw in for v in raw.bindMemory(to: Int16.self) { peak = max(peak, Int16(littleEndian: v)) } }
+    check("whole 16-bit samples", out.count % 2 == 0)
+    check("16 kHz: one second is about 16000 samples (got \(out.count / 2))", abs(out.count / 2 - 16000) <= 160)
+    check("mono, half scale stays half scale (peak \(peak))", abs(Int(peak) - 16384) < 1200)
+    let msg = LivePCM.message(Data([1, 0, 2, 0]))
+    check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
+    check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))
+    exit(bad == 0 ? 0 : 1)
+}
 // --test-mics: which mics a take tries when the first won't open; exits 1 on a failure.
 if args.contains("--test-mics") {
     var bad = 0
@@ -1468,6 +1522,8 @@ let voice = Voice()
 if args.contains("--no-mute") { OutputMute.enabled = false }
 if let i = args.firstIndex(of: "--chord"), i + 1 < args.count { voice.setChord(args[i + 1].components(separatedBy: ",")) }
 if LiveTest.url != nil { OutputMute.enabled = false; voice.setWake(true); LiveTest.start() }
+// The Mac is going to sleep: the app hangs up a Live call, so no session keeps running (and costing) while it sleeps.
+NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in emit(["type": "sleep"]) }
 let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in voice.tick() }
 RunLoop.main.add(timer, forMode: .common)
 Thread.detachNewThread {
@@ -1498,6 +1554,9 @@ Thread.detachNewThread {
         case "lang": let id = msg["id"] as? String ?? ""; DispatchQueue.main.async { voice.setSpeechLang(id) }
         // The panel's mic picker: the list, and a pick (a UID from it; none or "" is automatic).
         case "mics": DispatchQueue.main.async { emit(InputDevice.list()) }
+        // Live mode on or off, and the open call's mic stream (livemic.swift).
+        case "live_mode": let on = msg["on"] as? Bool == true; DispatchQueue.main.async { voice.setLiveMode(on) }
+        case "live_capture": let on = msg["on"] as? Bool == true; DispatchQueue.main.async { voice.setLiveCapture(on) }
         case "mic":
             let id = (msg["id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             DispatchQueue.main.async { if InputDevice.chosen != id { InputDevice.chosen = id; log("mic: \(id ?? "automatic")"); voice.micChanged() } }

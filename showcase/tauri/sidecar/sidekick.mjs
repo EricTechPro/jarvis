@@ -7,6 +7,7 @@
 import { CONFIG_PATH, DATA_DIR, ROAMIES_DIR } from './datadir.mjs';
 import { Agent } from '@kenkaiiii/gg-agent';
 import { ClaudeCodeAgent, claudeCodeInstaller, closeSpare } from './claudecode.mjs';
+import { CODEX_MODELS, probeCodex, resolveCodex } from './codex.mjs';
 import { SAFE, checkDrawAction, checkLink, checkMcpCall, checkOpen, checkRead, checkWrite, isYes, redactArgs } from './safety.mjs';
 import { agentsRoot, createAgents, holdAfterLaunch, newsDesk, wantsAgent } from './agents.mjs';
 import { agentEvents, stallWatch } from './agentstream.mjs';
@@ -33,10 +34,12 @@ import { briefNote } from './brief.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
+import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setVoiceMode, voiceModeOf } from './voicemode.mjs';
+import { createLiveCall } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
-import { copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
+import { SLOW_TOOLS, copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
 import { describeMarks } from './marks.mjs';
 import { faviconFor } from './draw.mjs';
 import { QUESTIONS, openNote, answerTurn, wantsSkip, endsChat, splitTurn, plain, stripNote, tourBeats, goalFrom, showcaseBeats } from './intro.mjs';
@@ -62,6 +65,7 @@ import { detailsText, explain } from './errors.mjs';
 import { aboutRoamies } from './about.mjs';
 import { whatsNewOnStart } from './whatsnew.mjs';
 import { createMcp, createMcpTools } from './mcp.mjs';
+import { createLiveBrain } from './livebrain.mjs';
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
 import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
@@ -130,6 +134,9 @@ const DEFAULTS = {
   efforts: {}, // how hard each model slot thinks: default, each heavy job, backup1, backup2 ('' = automatic, 'off', or a level)
   notch: 'off', // where I appear: 'off' (beside the cursor, default), 'drop' (the capsule) or 'spread' (a Mac's notch; see notchMode)
   onboarded: false, onboardStep: 0, filesAsked: false, keys: DEFAULT_KEYS, muteWhileTalking: true, autoListen: false, listenEvery: false, listenSecs: 8, lite: false, wakeWord: false, setupVersion: 0, size: 'default', look: 'classic', introDone: false,
+  voiceMode: DEFAULT_VOICE_MODE, // how I talk: 'classic' (speech to text, the brain, text to speech) or 'live' (a Gemini Live call)
+  liveVoice: null, // the Gemini Live voice (a prebuilt one); null follows the look's Gemini voice
+  liveModel: DEFAULT_LIVE_MODEL, // the Gemini Live model
   replies: 'text', // 'voice': spoken (with Fish Audio or Gemini) as well as shown
   speechLang: 'auto', // the language talking is recognised in (macOS): 'auto' follows the Mac's language list, or a locale like 'ar-SA'
   tts: 'fish', // which one speaks: 'fish' (Fish Audio), 'gemini' or 'voicestudio' (the VoiceStudio app on this computer)
@@ -533,7 +540,11 @@ let turnNamed = null; // the model they named this turn: a background agent star
 let retryInfo = null; // a request being retried on the next model after a limit: { sent, from, untilText, count }
 let retryNext = null;
 // The subagents that can be handed work now: the models picked for them, else hybrid's for their kind of job.
-const crewNow = () => (config.subagents ? activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null) : []);
+const crewNow = () => (config.subagents ? activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null) : []);
+// Codex (headless) is an engine for subagents only, never the chat's model: checked once per panel open.
+let codexState = { ok: false, reason: 'Checking for the Codex CLI…' };
+const refreshCodex = () => probeCodex(resolveCodex()).then((st) => { const was = JSON.stringify(codexState); codexState = st; if (JSON.stringify(st) !== was) panel(); }, () => {});
+const crewRunnable = (p, id) => (p === 'codex' ? codexState.ok && CODEX_MODELS.some((m) => m.id === id) : runnableSpec(p, id));
 const hybridActive = () => !!config.hybrid && hybridOn(config.heavy);
 const runnableSpec = (p, id) => canRun(p, id) || (p === 'local' && !!signedIn.get('local') && !!parseLocalModelId(id ?? ''));
 const modelName = (id) => getModel(id)?.name ?? id;
@@ -699,6 +710,9 @@ tools.push(...createMcpTools({
 }));
 let requestNo = 0; // the request being answered (nextTurn), for holdAfterLaunch
 holdAfterLaunch(tools, () => requestNo);
+// A new request: Classic starts one per message, a Live call one per turn of theirs. Per-turn Allows, screenshot and
+// window freshness, the ink and the hold after send_agent all go by it.
+const startRequest = () => (requestNo = nextTurn());
 
 // The step trail: plan_steps names the parts; a part marked "now" ticks off when the other tool calls of that
 // turn succeed, or shows the first error (in plain words) when one fails. No extra round trips for progress.
@@ -783,8 +797,6 @@ function anim(name, args = {}) {
 // newest copy still in the history. Providers cache a prefix (tools → system → messages), so putting LIVE in the
 // system prompt would re-bill the whole conversation every time memory changed; at the end, only the new message
 // is fresh. The live block is never saved.
-// Tools that take long enough to need a spoken beat first.
-const SLOW_TOOLS = new Set(['web_search', 'web_fetch', 'see_photo', 'take_screenshot', 'read_window', 'act_in_app', 'run_command', 'search_files', 'list_windows']);
 // How replies are written: for bubbles (text only), or for the ear (spoken with Fish Audio or Gemini, details on screen).
 const VOICE_ON = () => config.replies === 'voice' && speech.on;
 // VoiceStudio's engines would read voice cues out, so its prompt has no cue paragraph (and any cue left is removed).
@@ -824,13 +836,15 @@ The <live-state> block at the top of the user's newest message is the current st
 let lastFactIds = [];
 let frontNow = ''; // set just before each request (whereNow)
 const crewLine = () => { const t = crewText(crewNow(), (sp) => modelName(sp.model), config.delegate); return t ? `${t}\n` : ''; };
-const livePrompt = (context = '') => {
+// live: for a Live call, with its own Voice line, and the facts the last Classic request used are left alone.
+const LIVE_VOICE_LINE = () => `- Voice: this is a Live call: ${userName} just talks, with nothing to hold, and you hear when they stop${HOTKEYS_OK ? `; a tap of ${talkWords()} hangs up` : ''}.`;
+const livePrompt = (context = '', { live = false } = {}) => {
   const facts = pickFacts(context, 40), total = listFacts().length;
-  lastFactIds = facts.map((f) => f.id);
+  if (!live) lastFactIds = facts.map((f) => f.id);
   const open = commitmentsText(), done = doneTodayText(), working = agents.liveText(), scheduled = jobsText(fmtWhen), learned = skillIndex(), linked = mcp.liveText();
   const turn = `Live state (current as of this moment):
 ${frontNow ? `${frontNow}\n` : ''}${focusLine()}${crewLine()}${linked ? `- Connections (connection_tools shows a server's tools, use_connection calls one):\n${linked}\n` : ''}- Editing files, running commands and controlling other apps: ${config.allowActions ? 'ALLOWED' : `switched OFF (tell the user to turn on "Allow File Edits & Commands" on the General page in ${PANEL} if they want it)`}.${config.allowActions && config.skipAllow ? ' Allow prompts are skipped: confirmations go ahead automatically, so be extra careful.' : ''}
-${VOICE_OK ? `- Voice: ${!config.voice ? 'off' : voiceReady() ? `on; ${HOTKEYS_OK ? `${userName} holds ${talkWords()} to talk` : `${userName} presses the key they bound to ${BIND.talk} to start talking and again to send (a pause sends too)`}${config.autoListen ? (config.listenEvery ? `. Auto-listen is on for every reply: after each spoken reply the mic opens by itself for ${listenSecs()} seconds, so they can just keep talking` : '. Auto-listen is on: when your reply to a spoken question ends with a question, the mic opens by itself for their answer') : ''}${!WAKE_OK ? '. There is no wake word on this computer: to talk they use the talk keys' : ''}${WAKE_OK && config.wakeWord ? `. Wake word is on: ${userName} can also say "Hey ${wakeName(config)}" to start talking hands-free, and what they say right after it is the request (a request that still starts with "Hey ${wakeName(config)}" is them waking you, not calling you by another name: never correct it)${config.wakeName ? ` (they chose "${config.wakeName}" as the wake word; your own name is unchanged)` : ''}` : ''}` : `on, but the speech model isn't downloaded yet (${voiceModel.status === 'downloading' ? 'downloading now' : `the Listening page in ${PANEL}`})`}.` : ''}
+${live ? LIVE_VOICE_LINE() : VOICE_OK ? `- Voice: ${!config.voice ? 'off' : voiceReady() ? `on; ${HOTKEYS_OK ? `${userName} holds ${talkWords()} to talk` : `${userName} presses the key they bound to ${BIND.talk} to start talking and again to send (a pause sends too)`}${config.autoListen ? (config.listenEvery ? `. Auto-listen is on for every reply: after each spoken reply the mic opens by itself for ${listenSecs()} seconds, so they can just keep talking` : '. Auto-listen is on: when your reply to a spoken question ends with a question, the mic opens by itself for their answer') : ''}${!WAKE_OK ? '. There is no wake word on this computer: to talk they use the talk keys' : ''}${WAKE_OK && config.wakeWord ? `. Wake word is on: ${userName} can also say "Hey ${wakeName(config)}" to start talking hands-free, and what they say right after it is the request (a request that still starts with "Hey ${wakeName(config)}" is them waking you, not calling you by another name: never correct it)${config.wakeName ? ` (they chose "${config.wakeName}" as the wake word; your own name is unchanged)` : ''}` : ''}` : `on, but the speech model isn't downloaded yet (${voiceModel.status === 'downloading' ? 'downloading now' : `the Listening page in ${PANEL}`})`}.` : ''}
 - Shortcuts: ${HOTKEYS_OK ? `${keys().write ? `type a question to you: a quick tap of ${writeWords()} (press both and let go), which opens a text field beside the cursor (Enter sends, Shift+Enter adds a line, Esc or another tap closes it)` : `the tap that opens a text field to type a question is turned off (the Ask button in ${PANEL} still opens it; the Shortcuts page there turns the tap back on)`}; show or hide you ${keyWords(keys().summon)}` : `on this Wayland desktop no app can have global shortcuts, so ${userName} binds keys to these commands in their desktop's keyboard settings: ${BIND.summon} (show or hide you), ${BIND.ask} (ask you), ${BIND.list} (the list), ${BIND.talk} (talk) and ${BIND.panel} (the panel)`}${SNAP_OK ? `; ask about an area ${keyWords(keys().snap)}` : ''}${CIRCLE_OK ? "; while holding the talk keys, moving the cursor round something circles it (no clicking; it snaps shut with a click when the circle closes, and loose lines don't count) and you'll see what they circled" : ''}${HOTKEYS_OK ? `; show the list ${keyWords(keys().list)}` : ''}.${HANDS_OK ? '' : ' Asking about an area, reading app windows, finding things on screen by their words and working other apps need the Jarvis app, which isn\'t running here; draw there with x, y from a screenshot.'}`;
   const memory = `${open ? `Open commitments:\n${open}` : 'No open commitments.'}${done ? `\nDone today (ticked off on the list or by you; still shown struck through until midnight):\n${done}` : ''}
 ${facts.length ? `What you know about ${userName}${total > facts.length ? ` (${facts.length} most relevant of ${total})` : ''}:\n${facts.map((f) => `- ${f.id}: ${f.text}`).join('\n')}` : `You don't know anything lasting about ${userName} yet.`}${working ? `\n${working}` : ''}${scheduled ? `\nScheduled jobs (update_job changes them):\n${scheduled}` : ''}${learned ? `\nSkills you've learned (use_skill reads the steps):\n${learned}` : ''}`;
@@ -934,6 +948,11 @@ async function agentModel(override) {
   const gp = given ? parseSpec(given.spec) : null;
   // Their own words win: a model they named this turn beats the one picked for the specialist.
   const want = named ? pickOf(named.provider, named.model, null) : turnNamed ?? (gp ? pickOf(gp.provider, gp.model, given.slot) : null) ?? (h ? pickOf(h.provider, h.model, 'agents') : null);
+  // A subagent set to Codex runs on the Codex CLI with its own sign-in (codex.mjs): nothing to look up here, no backups.
+  if (want?.provider === 'codex') {
+    if (!codexState.ok) throw new Error(`${codexState.reason} (Codex is picked for this subagent on the Subagents page in ${PANEL}.)`);
+    return { provider: 'codex', model: want.model, route: 'codex', codex: resolveCodex(), budget: 400_000 };
+  }
   // The first model in line that can actually start: one whose route fails (Claude Code missing, say) is skipped, so a
   // background agent still starts on the next model instead of failing the launch.
   const order = [want, ...chainOrder()];
@@ -1368,12 +1387,27 @@ const autoListenOn = () => VOICE_OK && !!config.voice && !!config.autoListen && 
 // typed out and said (reply_said, or 90 s), no field open, and none of that changing for 1.5 s.
 let voiceBusy = false, saidPending = false, saidCap = null;
 const desk = newsDesk({
-  gates: () => ({ busy, queued, barOpen: !!barAsk, voice: voiceBusy, saidPending, autoListen: !!autoTurn, asking: pending.size > 0, onboarding, intro: !!intro, loggingIn: !!loggingIn }),
+  gates: () => ({ busy, queued, barOpen: !!barAsk, voice: voiceBusy || liveCall.busy(), saidPending, autoListen: !!autoTurn, asking: pending.size > 0, onboarding, intro: !!intro, loggingIn: !!loggingIn }),
   news: () => agents.news(), markTold: (ids) => agents.markTold(ids), userName,
-  enqueue: (text, ids) => enqueue(text, { news: ids }), say: (text, mood) => say(text, mood),
+  // An open Live call takes the news itself (at its next quiet moment); otherwise it's a Classic system turn.
+  enqueue: (text, ids) => { if (liveCall.news(text)) desk.started(ids); else enqueue(text, { news: ids }); }, say: (text, mood) => say(text, mood),
   signedIn: () => signedIn.size > 0 && [...signedIn.values()].some(Boolean),
 });
 const stir = desk.stir;
+// Live mode (livecall.mjs): a tap of the talk chord opens a Gemini Live call with this same prompt and these same
+// tools; Classic never makes one. The key is the Gemini voice key (or the Model page's Gemini key).
+const liveSystem = () => { const l = livePrompt('', { live: true }); return `${system()}\n\n${l.turn}\n${l.memory}`; };
+const liveCall = createLiveCall({
+  makeBrain: async (emit) => {
+    const [key] = await voiceKey('gemini').catch(() => [null]);
+    return createLiveBrain({ emit, key, model: config.liveModel || DEFAULT_LIVE_MODEL, voice: liveVoiceOf(config, geminiVoice()), tools, system: liveSystem });
+  },
+  ui, send, ask, anim: (name) => anim(name),
+  toClassic: () => switchVoiceMode('classic'),
+  hangUpHint: () => (HOTKEYS_OK ? `tap ${talkWords()} to hang up` : ''),
+  newTurn: startRequest,
+  log: logLine,
+});
 // news: the agent ids this system turn passes on.
 const snoozeListenOn = () => VOICE_OK && !!config.voice && !!config.snoozeListen && voiceReady() && !intro;
 async function prompt(text, image = null, note = '', byVoice = false, news = null, listenAfter = false) {
@@ -1435,8 +1469,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       beatText += ev.text;
       if (beatText.length > 40 || /\n/.test(beatText)) releaseBeat(false); // too long to be a beat
     });
-    const turn = nextTurn();
-    requestNo = turn;
+    const turn = startRequest();
     logLine('request', { turn, model: config.model, chars: text.length, image: !!image, session: session?.id });
     const use = { t: Date.now(), model: config.model, calls: 0, tools: 0, in: 0, cacheRead: 0, cacheWrite: 0, out: 0 };
     const learn = { ok: 0, bad: 0, saved: false }; // for the skill pass: tools that worked, ones that failed
@@ -2254,7 +2287,7 @@ function panelState() {
     commitments: openCommitments().map((c) => ({ id: c.id, text: c.text, due: c.due ?? null, when: c.due ? `${fmtWhen(c.due)}${c.repeat ? ` · repeats ${repeatLabel(c.repeat)}` : ''}` : '', overdue: !!(c.due && c.due < Date.now()), repeat: c.repeat ?? null })),
     look: config.look ?? 'classic', looks: LOOKS.map(([id, label]) => [id, label]), name: lookName(),
     size: sizeNow(), sizes: SIZES,
-    replies: VOICE_ON() ? 'voice' : 'text', tts: tts().id, fishKey: hasVoiceKey('fish'), geminiKey: hasVoiceKey('gemini'),
+    voiceMode: voiceModeOf(config), replies: VOICE_ON() ? 'voice' : 'text', tts: tts().id, fishKey: hasVoiceKey('fish'), geminiKey: hasVoiceKey('gemini'),
     fishModel: config.fishModel, fishModels: FISH_CHOICES, fishFree: tts().id === 'fish' && speech.on && speech.model.endsWith('-free'),
     geminiVoice: geminiVoice(), geminiVoices: GEMINI_VOICES, geminiShared: ttsKeys.gemini === 'shared',
     geminiModel: config.geminiModel, geminiModels: GEMINI_CHOICES,
@@ -2265,7 +2298,7 @@ function panelState() {
       mics: mics.list, mic: config.mic ?? '', micAuto: mics.list.find((x) => x.id === mics.auto)?.name ?? '',
       download: NEEDS_MODEL && config.voice && !voiceReady() ? { status: voiceModel.status, pct: voiceModel.total ? Math.floor((voiceModel.done / voiceModel.total) * 100) : 0, size: sizeLabel() } : null,
     } : null,
-    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, runnableSpec, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
+    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', codex: { ...codexState, models: CODEX_MODELS }, crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
     login: login.supported ? { on: login.on } : null,
     update: { available: update.available, installing: update.installing, checking: update.checking, result: update.result, page: update.page, done: update.done },
     intro: !!intro,
@@ -2279,8 +2312,11 @@ function panelState() {
 const SPEECH_LANGS = ['auto', 'en-US', 'ar-SA', 'he-IL', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR', 'ja-JP', 'ko-KR', 'zh-CN', 'hi-IN'];
 const speechLangId = () => (SPEECH_LANGS.includes(config.speechLang) ? config.speechLang : 'auto');
 let langInfo = null; // what the voice helper settled on for it: { id, engine, online }
+// Live mode on the Mac runs the helper even with Classic talking off: a call needs its chord and its mic, not the
+// speech model (in Live the helper has no takes and no wake word).
+const liveTalk = () => MAC && voiceModeOf(config) === 'live';
 const voiceConfig = () => {
-  send({ type: 'voice_config', enabled: VOICE_OK && config.voice && voiceReady(), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
+  send({ type: 'voice_config', enabled: VOICE_OK && (liveTalk() || (config.voice && voiceReady())), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
   // The native listening pill beside the cursor stays hidden while the notch capsule is where I appear.
   send({ type: 'pill', on: notchMode() === 'off' });
 };
@@ -2334,10 +2370,15 @@ function onVoice(m) {
     onSpoken(m.text.trim(), m.area);
   }
   else if (m.type === 'voice_state' && m.state === 'idle' && snap?.waitingVoice) snap.waitingVoice = false;
-  else if (m.type === 'voice_ready') micPick();
+  else if (m.type === 'voice_ready') { micPick(); liveCall.hangUp('helper'); voiceConfig(); } // a restarted helper has no call mic and none of the settings (the live mode among them)
   else if (m.type === 'voice_mics') { mics = cleanMics(m); panel(); }
   else if (m.type === 'voice_lang') { langInfo = { id: String(m.id ?? ''), engine: String(m.engine ?? ''), online: !!m.online }; logLine('speech_lang', langInfo); panel(); }
   else if (m.type === 'voice_error') {
+    if (m.code === 'live_mic') {
+      if (m.reason === 'permission') openUrl(`x-apple.systempreferences:com.apple.preference.security?${PRIVACY.microphone}`);
+      if (m.message) problem('hearing', `live_mic: ${m.message}`);
+      return liveCall.fail('mic', m.reason);
+    }
     if (m.code === 'nothing_heard' && snap) { snap.waitingVoice = false; return; }
     if (m.code === 'model_missing') startVoiceDownload();
     else if (m.code === 'permission' && !MAC) {
@@ -2410,6 +2451,14 @@ function onWriteTap() {
   else typeToAsk({ interrupt: true }).catch((e) => console.error('ask', e));
 }
 
+// The voice mode, from Settings or the Live error card's Switch to Classic. A switch hangs up an open call.
+function switchVoiceMode(mode) {
+  const was = voiceModeOf(config);
+  if (!setVoiceMode(config, mode)) return;
+  if (voiceModeOf(config) !== was) liveCall.hangUp('switch');
+  saveConfig(); voiceConfig(); menu();
+}
+
 async function onMenu(id, via) {
   if (id === 'show') ui({ kind: 'summon', show: true });
   else if (id === 'ask') await typeToAsk();
@@ -2448,7 +2497,7 @@ async function onMenu(id, via) {
   // A specialist's model ('' = none: it follows hybrid models for its kind of job, or is not on the crew).
   else if (/^crew_(\w+):/.test(id)) {
     const [, who, spec] = id.match(/^crew_(\w+):(.*)$/s), h = parseSpec(spec);
-    if (!SUBAGENTS.some((x) => x.id === who) || (spec && !(h && runnableSpec(h.provider, h.model)))) return;
+    if (!SUBAGENTS.some((x) => x.id === who) || (spec && !(h && crewRunnable(h.provider, h.model)))) return;
     config.crew = { ...config.crew, [who]: spec }; saveConfig(); menu();
   }
   else if (id === 'backups') { config.backups = !config.backups; routeBack(); saveConfig(); menu(); }
@@ -2498,6 +2547,7 @@ async function onMenu(id, via) {
   else if (id.startsWith('local:remove:')) removeServer(id.slice(13));
   else if (id.startsWith('size:') && SIZES.some(([s]) => s === id.slice(5))) { config.size = id.slice(5); saveConfig(); ui({ kind: 'size', size: config.size }); menu(); }
   else if (id.startsWith('look:')) setLook(id.slice(5));
+  else if (/^voicemode_(classic|live)$/.test(id)) switchVoiceMode(id.slice(10));
   else if (id === 'replies:text') setReplies('text');
   else if (id === 'replies:voice') setReplies('voice');
   else if (id.startsWith('fishmodel:') && FISH_CHOICES.some((c) => c.id === id.slice(10))) {
@@ -2636,6 +2686,10 @@ async function areaSnap() {
     const res = await hands('select', file);
     if (res.cancelled) return;
     await fitImage(file);
+    if (voiceModeOf(config) === 'live') { // into the open call, or opens one; she's already listening, so no Classic listen or ask
+      await liveCall.look(await fs.readFile(file), 'image/png');
+      return;
+    }
     snap = { image: await imageBlock(file, 'image/png'), at: Date.now() };
     if (VOICE_OK && config.voice) {
       // Snap, then just talk: start listening straight away (hands-free, ends when you pause).
@@ -2837,7 +2891,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   let m;
   try { m = JSON.parse(line); } catch { return; }
   if (m.type === 'menu') onMenu(m.id, m.via).catch((e) => console.error('menu', e));
-  else if (m.type === 'panel_open') { panelOpen = true; panelAt = Date.now(); logLine('panel_open', {}); if (VOICE_OK) send({ type: 'voice_mics' }); Promise.all([refreshAuth(), signedIn.get('local') && syncLocal(), tts().local && speech.checkLocal()]).catch(() => {}).finally(() => { panel(); refreshCatalogs(); }); }
+  else if (m.type === 'panel_open') { panelOpen = true; panelAt = Date.now(); logLine('panel_open', {}); if (VOICE_OK) send({ type: 'voice_mics' }); Promise.all([refreshAuth(), signedIn.get('local') && syncLocal(), tts().local && speech.checkLocal()]).catch(() => {}).finally(() => { panel(); refreshCatalogs(); }); refreshCodex(); }
   else if (m.type === 'diagnostics') { shellInfo?.(m); shellInfo = null; }
   else if (m.type === 'panel_closed') { panelOpen = false; logLine('panel_closed', { why: String(m.why ?? ''), ms: Date.now() - panelAt }); }
   else if (m.type === 'panel_key' && typeof m.provider === 'string' && typeof m.key === 'string') {
@@ -2861,6 +2915,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   } else if (m.type?.startsWith('ob_') || m.type?.startsWith('chat_') || m.type === 'set_keys' || m.type === 'set_actions' || m.type === 'set_login' || m.type === 'keybind_error') onGuide(m).catch((e) => console.error('guide', e));
   else if (m.type?.startsWith('voice')) onVoice(m);
   else if (m.type === 'snap') areaSnap();
+  // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
+  else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
+  else if (m.type === 'live_pcm' && typeof m.data === 'string') liveCall.pcm(m.data);
+  else if (m.type === 'system_sleep') liveCall.hangUp('sleep');
   else if (m.type === 'write_tap') onWriteTap();
   else if (m.type === 'auto_listen') {
     // Still the latest reply, nothing running since, and still switched on: listen once, hands-free.
@@ -2912,6 +2970,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 }).on('close', () => {
   // The app quit (or is restarting for an update): save a reply still running, let the last saves land, never hang.
   if (busy) syncSession();
+  liveCall.hangUp('quit');
   agents.stopAll();
   mcp.dispose();
   closeSpare();
@@ -3047,6 +3106,7 @@ midnightClean();
 setTimeout(() => checkUpdates(), 20_000);
 setInterval(() => checkUpdates(), 6 * 3600_000);
 voiceConfig();
+refreshCodex(); // the crew's Codex slots count only once the CLI is checked, so check now, not just when the panel opens
 // First run (or setup never finished): open the guide.
 // v2 added the "Control apps" (Accessibility) permission: people who finished setup before that
 // get the guide once more, on the permissions step.

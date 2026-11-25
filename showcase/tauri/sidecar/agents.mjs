@@ -157,6 +157,9 @@ function checkPlace(raw, dir) {
   if (!real) return { error: `place ${p} doesn't exist. Give the folder or file you worked on, or a web address.` };
   return { place: { kind: fs.statSync(real).isDirectory() ? 'folder' : 'file', path: real, name: path.basename(real) } };
 }
+/** Claude Code and Codex run their own CLI loop: a message sent meanwhile is taken after the current turn. */
+export const steersAfterTurn = (route) => route === 'claude-code' || route === 'codex';
+
 const REPORT_MAX = 1200;
 /** finish's arguments checked: a short outcome, a report (needed when it returns an answer), where it worked, and
  *  files that really exist in the agent's folder (or where it delivers).
@@ -512,7 +515,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     if (!a) throw new Error(`No agent ${id}. The ids are in the Agents part of the live state.`);
     if (p && (a.state === 'working' || a.state === 'waiting')) {
       p.child.send({ t: 'steer', text: withWords(message, userName, config.userWords?.()) });
-      return `Passed on to ${a.id}. It takes it into account ${a.model?.route === 'claude-code' ? 'after its current turn' : 'right away'}.`;
+      return `Passed on to ${a.id}. It takes it into account ${steersAfterTurn(a.model?.route) ? 'after its current turn' : 'right away'}.`;
     }
     const b = await start({ type: a.type, title: a.title, brief: String(message), continue: a.id });
     return `${b.id} is working again in the same folder. Don't add anything: the launch is your reply.`;

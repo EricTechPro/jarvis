@@ -112,9 +112,10 @@ export function checkRead(p, home, { recursive = false } = {}) {
 }
 
 // Read-only folders (the second brain's raw evidence folder, _raw or wherever it's set): reading is fine, changing anything never.
-// Checked where the path really leads (links followed) and, where file names ignore case (macOS, Windows), in any case.
+// Checked where the path really leads (links followed) and in any letter case on every platform: Linux can hold the
+// folder on a disk that ignores case (exFAT, NTFS, a casefold ext4 folder, a network share), where _RAW is _raw.
 export const READ_ONLY_REASON = 'That is raw evidence in your second brain, so it is read-only.';
-const foldCase = (p) => (process.platform === 'darwin' || process.platform === 'win32' ? p.toLowerCase() : p);
+const foldCase = (p) => p.toLowerCase();
 /** Whether `p` is in (or is) one of the `readOnly` folders. */
 export function inReadOnly(p, home, readOnly = []) {
   if (!readOnly?.length) return false;
