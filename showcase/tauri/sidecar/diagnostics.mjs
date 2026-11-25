@@ -112,7 +112,7 @@ export async function reportDir(home = os.homedir()) {
   return home;
 }
 
-export const reportName = (now = new Date()) => `roamies-diagnostics-${now.toISOString().slice(0, 19).replace(/[T:]/g, '-')}.log`;
+export const reportName = (now = new Date()) => `jarvis-diagnostics-${now.toISOString().slice(0, 19).replace(/[T:]/g, '-')}.log`;
 
 /** Shows the saved file in Finder, Explorer or the file manager. */
 export function reveal(file) {

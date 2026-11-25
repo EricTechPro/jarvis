@@ -7,9 +7,9 @@
       "vcruntime/vcruntime140_1.dll": "vcruntime140_1.dll"
     },
     "externalBin": [
-      "binaries/roamies-voice",
-      "binaries/roamies-hands",
-      "binaries/roamies-node"
+      "binaries/jarvis-voice",
+      "binaries/jarvis-hands",
+      "binaries/jarvis-node"
     ]
   }
 }

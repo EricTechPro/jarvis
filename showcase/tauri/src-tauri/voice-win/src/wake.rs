@@ -1,14 +1,14 @@
-// The wake phrase, "Hey Roamies": a port of WakeWord in voice/main.swift (keep the two in step). A greeting, then the
+// The wake phrase, "Hey Jarvis": a port of WakeWord in voice/main.swift (keep the two in step). A greeting, then the
 // name, at the start of something said (the text's start or after a sentence end). Near-misses the recogniser writes
-// count too ("Romies", "Roamie's", "Roomies"). The name can be the user's own ("Hey Jarvis"); the greeting stays, so
+// count too ("Jervis", "Jarvis's", "Jar vis"). The name can be the user's own ("Hey Friday"); the greeting stays, so
 // the name alone in a sentence never wakes it.
 
 const GREETINGS: [&str; 5] = ["hey", "hi", "hay", "heya", "hiya"];
-const DEFAULT_NAMES: [&str; 2] = ["roamies", "roamie"];
+const DEFAULT_NAMES: [&str; 1] = ["jarvis"];
 
 pub struct WakeWord {
     names: Vec<String>,
-    /// The chosen name ("Jarvis"); None for Roamies.
+    /// The chosen name ("Friday"); None for the default, Jarvis.
     custom: Option<String>,
 }
 
@@ -18,7 +18,7 @@ impl Default for WakeWord {
     }
 }
 
-/// A word of the text, lowercased without apostrophes ("Roamie's" -> "roamies"), and where it sits (byte offsets).
+/// A word of the text, lowercased without apostrophes ("Jarvis's" -> "jarviss"), and where it sits (byte offsets).
 pub struct Token {
     pub word: String,
     pub start: usize,
@@ -35,7 +35,7 @@ impl WakeWord {
         self.custom.as_deref()
     }
 
-    /// Sets the name after the greeting; None, "" or Roamies goes back to Roamies. Letters only, 4 to 20 of them (the
+    /// Sets the name after the greeting; None, "" or Jarvis goes back to Jarvis. Letters only, 4 to 20 of them (the
     /// rule in sidecar/wakename.mjs); anything else is refused (returns false) and the name stays as it was.
     pub fn set_name(&mut self, raw: Option<&str>) -> bool {
         let w: String = raw.unwrap_or("").to_lowercase().chars().filter(|c| c.is_alphabetic()).collect();
@@ -53,20 +53,15 @@ impl WakeWord {
         true
     }
 
-    /// Whether a heard word (within the allowed edits) is shaped like the name. Roamies keeps its own tuned rule.
+    /// Whether a heard word (within the allowed edits) is shaped like the name: the same first letter, and at most
+    /// one letter short. The default, Jarvis, follows the same rule as a name of the user's own.
     fn plausible(&self, heard: &str) -> bool {
-        match (&self.custom, self.names.first()) {
-            (Some(_), Some(n)) => heard.chars().next() == n.chars().next() && heard.chars().count() + 1 >= n.chars().count(),
-            _ => heard.starts_with('r') && heard.contains('m') && heard.chars().count() >= 5,
-        }
+        self.names.first().is_some_and(|n| heard.chars().next() == n.chars().next() && heard.chars().count() + 1 >= n.chars().count())
     }
 
-    /// Edits allowed for the next word (one fewer for two words joined). A short name of the user's own must be heard
-    /// exactly ("Nova" mustn't take "Nora"); 6 or 7 letters allow one edit, longer ones two.
+    /// Edits allowed for the next word (one fewer for two words joined). A short name must be heard exactly ("Nova"
+    /// mustn't take "Nora"); 6 or 7 letters (Jarvis) allow one edit, longer ones two.
     fn allowed_edits(&self) -> i64 {
-        if self.custom.is_none() {
-            return 2;
-        }
         let n = self.names.first().map_or(0, |n| n.chars().count());
         if n >= 8 {
             2
@@ -94,12 +89,12 @@ impl WakeWord {
             let before = &text[if i == 0 { 0 } else { words[i - 1].end }..w.start];
             // Up to two stray words may come first ("um", "okay", a cough heard as "the"); live text rarely has a full stop.
             let at_start = i <= 2 || before.contains(['.', '?', '!']);
-            // Only spaces or a comma between greeting and name ("Hey, Roamies").
+            // Only spaces or a comma between greeting and name ("Hey, Jarvis").
             if !text[w.end..words[i + 1].start].chars().all(|c| c == ' ' || c == ',') {
                 continue;
             }
             let mut candidates = vec![(words[i + 1].word.clone(), words[i + 1].end, self.allowed_edits())];
-            // Split in two ("Roam ies"): joined, it must be a closer match.
+            // Split in two ("Jar vis"): joined, it must be a closer match.
             if i + 2 < words.len() {
                 candidates.push((words[i + 1].word.clone() + &words[i + 2].word, words[i + 2].end, self.allowed_edits() - 1));
             }
@@ -121,7 +116,7 @@ impl WakeWord {
 }
 
 /// What follows the first n words of the text: the wake phrase as first heard, once a later reading of it no longer
-/// matches ("Hey Romies" revised to "Hey Romy is"), so it still isn't sent as part of the request.
+/// matches ("Hey Jervis" revised to "Hey Jer vis"), so it still isn't sent as part of the request.
 pub fn dropping(n: usize, text: &str) -> String {
     if n == 0 {
         return text.to_string();
@@ -187,39 +182,32 @@ mod tests {
     fn the_phrase_and_its_near_misses() {
         let w = WakeWord::default();
         for (text, want) in [
-            ("Hey Roamies", Some("")),
-            ("Hey Roamies, open Safari.", Some("open Safari.")),
-            ("hey roamies open safari", Some("open safari")),
-            ("Hey, Roamies.", Some("")),
-            ("Hi Roamies what time is it?", Some("what time is it?")),
-            ("Hey Romies", Some("")),
-            ("Hey Roamie's, open Notes", Some("open Notes")),
-            ("Hey Roamie", Some("")),
-            ("Hey Roomies, play some music", Some("play some music")),
-            ("Hey Romi's", Some("")),
-            ("Hey, Romees.", Some("")),
-            ("Hey Romy's", None),
-            ("Hey roam ies, hello", Some("hello")),
-            ("That's it. Hey Roamies, open Mail", Some("open Mail")),
-            ("HEY ROAMIES! What's on today?", Some("What's on today?")),
-            ("Hey Roamies\u{2019} open notes", Some("open notes")),
-            ("Hey Ronnie", None),
-            ("Hey Robbie, come here", None),
-            ("Hey Rome", None),
-            ("Hey rooms", None),
-            ("Hey ramen", None),
-            ("Hey Remy", None),
-            ("Hey rhymes", None),
-            ("Hey room is ready", None),
-            ("Roamies is great", None),
-            ("I told him hey Roamies", None),
-            ("Um hey Roamies, open Mail", Some("open Mail")),
-            ("Okay, hi Roamies", Some("")),
-            ("The hey Romies what time is it", Some("what time is it")),
-            ("So I said hey Roamies", None),
+            ("Hey Jarvis", Some("")),
+            ("Hey Jarvis, open Safari.", Some("open Safari.")),
+            ("hey jarvis open safari", Some("open safari")),
+            ("Hey, Jarvis.", Some("")),
+            ("Hi Jarvis what time is it?", Some("what time is it?")),
+            ("Hey Jervis, open Notes", Some("open Notes")),
+            ("Hey Jarvis's, open Notes", Some("open Notes")),
+            ("Hey Jarvi", Some("")),
+            ("Hey Jar vis, hello", Some("hello")),
+            ("Hey Jars", None),
+            ("That's it. Hey Jarvis, open Mail", Some("open Mail")),
+            ("HEY JARVIS! What's on today?", Some("What's on today?")),
+            ("Hey Jarvis\u{2019} open notes", Some("open notes")),
+            ("Hey Travis", None),
+            ("Hey Service", None),
+            ("Hey Harvey", None),
+            ("Hey jars is ready", None),
+            ("Jarvis is great", None),
+            ("I told him hey Jarvis", None),
+            ("Um hey Jarvis, open Mail", Some("open Mail")),
+            ("Okay, hi Jarvis", Some("")),
+            ("The hey Jervis what time is it", Some("what time is it")),
+            ("So I said hey Jarvis", None),
             ("Hey there", None),
             ("Hey", None),
-            ("Hey. Roamies", None),
+            ("Hey. Jarvis", None),
             ("", None),
         ] {
             check(&w, text, want);
@@ -228,9 +216,9 @@ mod tests {
 
     #[test]
     fn dropping_takes_the_first_words_off() {
-        assert_eq!(dropping(2, "Hey Romy's, what time is it?"), "what time is it?");
-        assert_eq!(dropping(2, "Hey Romy's"), "");
-        assert_eq!(dropping(3, "Um hey Romy's open Mail"), "open Mail");
+        assert_eq!(dropping(2, "Hey Jervis, what time is it?"), "what time is it?");
+        assert_eq!(dropping(2, "Hey Jervis"), "");
+        assert_eq!(dropping(3, "Um hey Jervis open Mail"), "open Mail");
         assert_eq!(dropping(0, "open Mail"), "open Mail");
     }
 
@@ -239,29 +227,30 @@ mod tests {
         let mut w = WakeWord::default();
         assert!(!w.set_name(Some("Bob")));
         assert!(!w.set_name(Some("a really very long name for this")));
-        assert!(w.set_name(Some("Jarvis")));
-        assert_eq!(w.custom(), Some("Jarvis"));
+        assert!(w.set_name(Some("Friday")));
+        assert_eq!(w.custom(), Some("Friday"));
         for (text, want) in [
-            ("Hey Jarvis", Some("")),
-            ("Hey Jarvis, open Safari.", Some("open Safari.")),
-            ("hi jarvis what time is it", Some("what time is it")),
-            ("Hey Jervis, open Notes", Some("open Notes")),
-            ("Hey Jar vis, hello", Some("hello")),
-            ("Hey Travis", None),
-            ("Hey Service", None),
-            ("Hey Roamies", None),
-            ("Jarvis is great", None),
-            ("I told him hey Jarvis", None),
+            ("Hey Friday", Some("")),
+            ("Hey Friday, open Safari.", Some("open Safari.")),
+            ("hi friday what time is it", Some("what time is it")),
+            ("Hey Fryday, open Notes", Some("open Notes")),
+            ("Hey Fri day, hello", Some("hello")),
+            ("Hey Monday", None),
+            ("Hey Jarvis", None),
+            ("Friday is great", None),
+            ("I told him hey Friday", None),
         ] {
             check(&w, text, want);
         }
         assert!(w.set_name(Some("Nova")));
         check(&w, "Hey Nova, play music", Some("play music"));
         check(&w, "Hey Nora", None);
+        assert!(w.set_name(Some("Jarvis")), "the default's own name");
+        assert_eq!(w.custom(), None);
         assert!(w.set_name(Some("")));
         assert_eq!(w.custom(), None);
-        check(&w, "Hey Roamies, open Mail", Some("open Mail"));
-        check(&w, "Hey Jarvis", None);
+        check(&w, "Hey Jarvis, open Mail", Some("open Mail"));
+        check(&w, "Hey Friday", None);
         assert!(w.set_name(None));
     }
 }

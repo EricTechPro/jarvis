@@ -4,12 +4,12 @@ use super::*;
 use std::io::{BufRead, BufReader};
 
 fn find_node() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("ROAMIES_NODE") {
+    if let Ok(p) = std::env::var("JARVIS_NODE") {
         return Some(PathBuf::from(p));
     }
-    // The Node.js shipped inside the app (bundle.externalBin), so users don't need Node installed. Named roamies-node:
-    // a .deb installs it as /usr/bin/roamies-node, and /usr/bin/node belongs to the nodejs package (#67).
-    if let Some(p) = helper_binary("roamies-node") {
+    // The Node.js shipped inside the app (bundle.externalBin), so users don't need Node installed. Named jarvis-node:
+    // a .deb installs it as /usr/bin/jarvis-node, and /usr/bin/node belongs to the nodejs package (#67).
+    if let Some(p) = helper_binary("jarvis-node") {
         return Some(p);
     }
     // GUI apps don't get the shell's PATH on macOS, so check the usual installs too.
@@ -53,17 +53,17 @@ pub(crate) fn spawn_sidecar(app: &AppHandle) {
     let mut cmd = Command::new(node);
     hide_console(&mut cmd);
     cmd.arg(&script)
-        .env("ROAMIES_VERSION", app.package_info().version.to_string())
-        .env("ROAMIES_HANDS", helper_binary("roamies-hands").map(|p| p.to_string_lossy().into_owned()).unwrap_or_default())
+        .env("JARVIS_VERSION", app.package_info().version.to_string())
+        .env("JARVIS_HANDS", helper_binary("jarvis-hands").map(|p| p.to_string_lossy().into_owned()).unwrap_or_default())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(stderr);
     // Linux: "x11" or "wayland", for what the sidecar offers and how it words things (platform.mjs).
     // Windows: which program owns the tray icon, so the sidecar can show it next to the clock (wintray.mjs).
     #[cfg(windows)]
-    cmd.env("ROAMIES_EXE", std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default());
+    cmd.env("JARVIS_EXE", std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default());
     #[cfg(target_os = "linux")]
-    cmd.env("ROAMIES_SESSION", crate::linux::session().name()).env("ROAMIES_LAUNCH", crate::linux::launch_command());
+    cmd.env("JARVIS_SESSION", crate::linux::session().name()).env("JARVIS_LAUNCH", crate::linux::launch_command());
     if let Some(dir) = script.parent() {
         cmd.current_dir(dir);
     }

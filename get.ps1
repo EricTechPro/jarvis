@@ -50,9 +50,9 @@
     }
     if (-not (Test-Path $setup) -or (Get-Item $setup).Length -lt 1MB) { throw "download failed: $url" }
 
-    # Close a running copy so the installer can replace it.
+    # Close a running copy so the installer can replace it (roamies: its program name before the rename).
     $dirs = @((Join-Path $env:LOCALAPPDATA 'Jarvis'), (Join-Path $env:ProgramFiles 'Jarvis'))
-    Get-Process -Name roamies -ErrorAction SilentlyContinue | Where-Object {
+    Get-Process -Name jarvis, roamies -ErrorAction SilentlyContinue | Where-Object {
       $p = $_.Path; $p -and ($dirs | Where-Object { $p.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) })
     } | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -60,8 +60,10 @@
     $proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
     if ($proc.ExitCode -ne 0) { throw "the installer failed (exit code $($proc.ExitCode))" }
 
-    $app = $dirs | ForEach-Object { Join-Path $_ 'roamies.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $app = $dirs | ForEach-Object { Join-Path $_ 'jarvis.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $app) { throw 'the installer finished, but Jarvis is not where it should be' }
+    # The programs an install from before the rename left beside it (roamies.exe and its helpers): unused now.
+    Get-ChildItem (Split-Path $app) -Filter 'roamies*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
     if ($env:JARVIS_NO_OPEN -ne '1') { Start-Process -FilePath $app }
     Write-Host "Jarvis is installed in $(Split-Path $app)" -ForegroundColor Green

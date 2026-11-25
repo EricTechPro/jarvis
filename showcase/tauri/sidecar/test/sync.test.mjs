@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'roamies-sync-test-'));
-process.env.HOME = TMP; process.env.USERPROFILE = TMP; delete process.env.ROAMIES_DATA_DIR;
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-sync-test-'));
+process.env.HOME = TMP; process.env.USERPROFILE = TMP; delete process.env.JARVIS_DATA_DIR;
 process.on('exit', () => fs.rmSync(TMP, { recursive: true, force: true }));
-const { merge, cleanRemote, checkFolder, readRemotes, writeOwn, prepareFolder, seal, unseal, deriveKey, SUBDIR, HEADER, TOMB_DAYS } = await import('../sync.mjs');
+const { merge, cleanRemote, checkFolder, readRemotes, writeOwn, prepareFolder, seal, unseal, deriveKey, SUBDIR, OLD_SUBDIR, HEADER, TOMB_DAYS } = await import('../sync.mjs');
 
 const T = 1_800_000_000_000;
 const c = (id, text, extra = {}) => ({ id, text, due: null, createdAt: T, status: 'open', remindedAt: null, kind: 'commitment', ...extra });
@@ -171,11 +171,11 @@ assert.deepEqual(checkFolder('~/Cloud', TMP), { ok: true, dir: path.join(TMP, 'C
   assert.ok(!tooMuchGone(back) && Object.keys(back.out.tombs).length === 0, 'and nothing is deleted anywhere');
 }
 
-// The store says when memory couldn't be read (trusted: false) or came from a newer Roamies (readOnly).
+// The store says when memory couldn't be read (trusted: false) or came from a newer Jarvis (readOnly).
 {
   const fresh = async (name, files = {}) => {
-    process.env.ROAMIES_DATA_DIR = path.join(TMP, name);
-    const dir = path.join(TMP, name, 'Roamies', 'Data');
+    process.env.JARVIS_DATA_DIR = path.join(TMP, name);
+    const dir = path.join(TMP, name, 'Jarvis', 'Data');
     fs.mkdirSync(dir, { recursive: true });
     for (const [n, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, n), text);
     return (await import(`../store.mjs?${name}`)).syncSnapshot();
@@ -188,7 +188,20 @@ assert.deepEqual(checkFolder('~/Cloud', TMP), { ok: true, dir: path.join(TMP, 'C
   assert.equal(broken.trusted, false, 'unreadable, backup too');
   assert.equal(broken.commitments.length, 0);
   const newer = await fresh('newer', { 'memory.json': JSON.stringify({ version: 2, commitments: [] }) });
-  assert.ok(newer.readOnly && !newer.trusted, 'memory from a newer Roamies');
-  delete process.env.ROAMIES_DATA_DIR;
+  assert.ok(newer.readOnly && !newer.trusted, 'memory from a newer Jarvis');
+  delete process.env.JARVIS_DATA_DIR;
+}
+// A folder set up before the rename (Roamies Sync/, its old check) keeps working, in place, so older copies still sync.
+{
+  const dir = path.join(TMP, 'old-name');
+  const salt = Buffer.alloc(16, 7), key = deriveKey('correct horse', salt);
+  fs.mkdirSync(path.join(dir, OLD_SUBDIR), { recursive: true });
+  fs.writeFileSync(path.join(dir, OLD_SUBDIR, HEADER), JSON.stringify({ version: 1, kdf: 'scrypt', salt: salt.toString('base64'), check: seal(key, 'roamies-sync', 'check') }));
+  const r = await prepareFolder(dir, 'correct horse');
+  assert.ok(r.key && !r.error, 'the old check is accepted');
+  assert.ok((await prepareFolder(dir, 'wrong horse!')).error, 'and a wrong passphrase still refused');
+  await writeOwn(dir, 'aaaaaaaaaaaa', { device: 'aaaaaaaaaaaa', commitments: [], facts: [], tombs: [] }, r.key);
+  assert.ok(fs.existsSync(path.join(dir, OLD_SUBDIR, 'aaaaaaaaaaaa.json')), 'written beside the other computers\' files');
+  assert.ok(!fs.existsSync(path.join(dir, SUBDIR)), 'no second folder');
 }
 console.log('sync tests: passed');

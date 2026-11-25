@@ -126,7 +126,7 @@ Risky things start off. Defaults:
 
 ## Settings
 
-- Starters to copy into `~/Roamies/Data/settings.json` (keys stay in the keychain): [Classic](docs/settings.classic.example.json), [Live](docs/settings.live.example.json)
+- Starters to copy into `~/Jarvis/Data/settings.json` (keys stay in the keychain): [Classic](docs/settings.classic.example.json), [Live](docs/settings.live.example.json)
 
 ---
 

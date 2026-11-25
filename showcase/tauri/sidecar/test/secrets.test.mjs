@@ -14,7 +14,7 @@ import { createSecrets, retryLoad, runInput } from '../secrets.mjs';
     if (c === 'secret-get') return { code: 0, stdout: JSON.stringify(kc.has(name) ? { ok: true, found: true, value: kc.get(name) } : { ok: true, found: false }) };
     if (c === 'secret-delete') { kc.delete(name); return { code: 0, stdout: '{"ok":true}' }; }
   };
-  const s = createSecrets({ platform: 'darwin', hands: '/x/roamies-hands', exec });
+  const s = createSecrets({ platform: 'darwin', hands: '/x/jarvis-hands', exec });
   assert.equal(s.kind, 'keychain');
   assert.equal(await s.get('fish-audio'), null);
   await s.set('fish-audio', 'sk-fish-SECRET');
@@ -92,11 +92,11 @@ import { createSecrets, retryLoad, runInput } from '../secrets.mjs';
 
 // Anywhere else (no safe store): refuses to save rather than writing plain text.
 {
-  const prev = process.env.ROAMIES_DATA_DIR; delete process.env.ROAMIES_DATA_DIR;
+  const prev = process.env.JARVIS_DATA_DIR; delete process.env.JARVIS_DATA_DIR;
   const s = createSecrets({ platform: 'freebsd', dataDir: '/tmp' });
   assert.equal(s.kind, 'none');
   await assert.rejects(s.set('fish-audio', 'k'), /no safe place/);
-  if (prev) process.env.ROAMIES_DATA_DIR = prev;
+  if (prev) process.env.JARVIS_DATA_DIR = prev;
 }
 
 // runInput: stdin reaches the child; a missing command resolves with an error instead of throwing.

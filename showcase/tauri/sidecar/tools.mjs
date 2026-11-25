@@ -42,8 +42,8 @@ export const run = (cmd, args, { onLine, ...opts } = {}) => new Promise((res) =>
 // failure says "Unable to find application", as macOS's open does.
 // Start-Process only finds programs on PATH or in App Paths; Store apps and per-user installs (Spotify, Roblox, #81)
 // are found by their Start menu name and started through shell:AppsFolder.
-const WIN_OPEN = "try { if ($env:ROAMIES_OPEN_APP) { Start-Process -FilePath $env:ROAMIES_OPEN_APP -ArgumentList ('\"' + $env:ROAMIES_OPEN + '\"') -ErrorAction Stop } else { Start-Process -FilePath $env:ROAMIES_OPEN -ErrorAction Stop } } catch { $e = $_; $n = $env:ROAMIES_OPEN; $a = $null; if (-not $env:ROAMIES_OPEN_APP -and $n -notmatch '[\\\\/:]') { $w = [WildcardPattern]::Escape($n); $all = @(Get-StartApps -ErrorAction SilentlyContinue); $a = $all | Where-Object { $_.Name -eq $n } | Select-Object -First 1; if (-not $a) { $a = $all | Where-Object { $_.Name -like ($w + '*') } | Select-Object -First 1 }; if (-not $a) { $a = $all | Where-Object { $_.Name -like ('*' + $w + '*') } | Select-Object -First 1 } }; if ($a) { Start-Process -FilePath ('shell:AppsFolder\\' + $a.AppID) } else { [Console]::Error.WriteLine('Unable to find application: ' + $e.Exception.Message); exit 1 } }";
-export const winOpen = (target, app = '') => run('powershell', ['-NoProfile', '-NonInteractive', '-Command', WIN_OPEN], { env: { ...process.env, ROAMIES_OPEN: target, ROAMIES_OPEN_APP: app } });
+const WIN_OPEN = "try { if ($env:JARVIS_OPEN_APP) { Start-Process -FilePath $env:JARVIS_OPEN_APP -ArgumentList ('\"' + $env:JARVIS_OPEN + '\"') -ErrorAction Stop } else { Start-Process -FilePath $env:JARVIS_OPEN -ErrorAction Stop } } catch { $e = $_; $n = $env:JARVIS_OPEN; $a = $null; if (-not $env:JARVIS_OPEN_APP -and $n -notmatch '[\\\\/:]') { $w = [WildcardPattern]::Escape($n); $all = @(Get-StartApps -ErrorAction SilentlyContinue); $a = $all | Where-Object { $_.Name -eq $n } | Select-Object -First 1; if (-not $a) { $a = $all | Where-Object { $_.Name -like ($w + '*') } | Select-Object -First 1 }; if (-not $a) { $a = $all | Where-Object { $_.Name -like ('*' + $w + '*') } | Select-Object -First 1 } }; if ($a) { Start-Process -FilePath ('shell:AppsFolder\\' + $a.AppID) } else { [Console]::Error.WriteLine('Unable to find application: ' + $e.Exception.Message); exit 1 } }";
+export const winOpen = (target, app = '') => run('powershell', ['-NoProfile', '-NonInteractive', '-Command', WIN_OPEN], { env: { ...process.env, JARVIS_OPEN: target, JARVIS_OPEN_APP: app } });
 // run_command's shell. Windows: cmd /d /s /c "…" passed as is (what Node's shell: true does); handed over as a plain
 // argument, Node escaped its quotes as \" which cmd doesn't read, so any command with quotes in it broke.
 export const shellFor = (command, platform = process.platform, env = process.env) => (platform === 'win32'
@@ -138,7 +138,7 @@ const actionsOff = `File edits and commands are switched off. Tell the user to t
 
 // "hands": the bundled helper that captures one window or area and reads/controls other apps (hands/main.swift on
 // macOS, hands-win on Windows; same commands and JSON). A .mjs one (a test's fake) runs on this Node.
-const HANDS = process.env.ROAMIES_HANDS || '';
+const HANDS = process.env.JARVIS_HANDS || '';
 const runHands = (args, opts) => (HANDS.endsWith('.mjs') ? run(process.execPath, [HANDS, ...args], opts) : run(HANDS, args, opts));
 const STALE_ID = 'The page changed since read_window, so that id is out of date. Call read_window again and use the new ids.';
 // An app named in read_window or act_in_app that isn't open: open it (with the open tool's safety check) and wait
@@ -147,7 +147,7 @@ async function launchApp(name, hands) {
   const n = String(name).trim();
   if (!['darwin', 'win32'].includes(process.platform) || !n || /[/\\:]/.test(n) || checkOpen(n, HOME).level === BLOCK) return false;
   // Opened only to act in it: in background mode (the default) it opens behind the user's app, not in front (macOS).
-  const r = process.platform === 'win32' ? await winOpen(n) : await run('open', [...(process.env.ROAMIES_BG !== '0' ? ['-g'] : []), '-a', n]);
+  const r = process.platform === 'win32' ? await winOpen(n) : await run('open', [...(process.env.JARVIS_BG !== '0' ? ['-g'] : []), '-a', n]);
   if (r.err && /Unable to find application/i.test(r.stderr)) throw new Error(`There's no app called "${n}" on ${THIS_COMPUTER} (not installed, or it has another name). Don't look for it another way; say so and carry on with the rest.`);
   if (r.err) return false;
   for (let i = 0; i < 30; i++) {
@@ -255,8 +255,8 @@ export function oneYesNoAtATime(ask) {
   };
 }
 
-export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'Roamies isn\'t running.' }), workdir = HOME, fileDir = () => '', readOnly = () => [], own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, jobs = null, skills = null }) {
-  // Relative paths (and run_command) start in workdir: ~/Roamies for the chat, its own folder for an agent.
+export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'Jarvis isn\'t running.' }), workdir = HOME, fileDir = () => '', readOnly = () => [], own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, jobs = null, skills = null }) {
+  // Relative paths (and run_command) start in workdir: ~/Jarvis for the chat, its own folder for an agent.
   // fileDir: where the file tools' relative paths start instead, when set (the chat's second brain, secondbrain.mjs).
   // readOnly: folders write_file and run_command never change (the second brain's _raw, safety.mjs).
   const at = (p) => resolveAt(p, fileDir() || workdir);
@@ -341,7 +341,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
   // The helper's screenshot: one window or app (even behind others), or the screen; shrunk by the helper itself.
   async function handsShot(file, t) {
     const spec = t === 'screen' || t === 'front' || t.startsWith('window:') ? t : `app:${t}`;
-    // Shot straight away, with nothing played on screen (the Roamie only shows a "looking" tag).
+    // Shot straight away, with nothing played on screen (Jarvis only shows a "looking" tag).
     // 1568 px is Claude's own cap; a bigger image gets shrunk again and its coordinates drift. The helper shrinks it
     // itself and says the final size; an older helper doesn't, so sips does it here.
     const res = await hands('capture', file, spec, '1568');
@@ -372,20 +372,20 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
       // file path passed by environment variable so odd characters in it can't break the script.
       const ps = [
         'Add-Type -AssemblyName System.Windows.Forms,System.Drawing',
-        "Add-Type -Name D -Namespace RoamiesWin -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();'",
-        '[RoamiesWin.D]::SetProcessDPIAware() | Out-Null',
+        "Add-Type -Name D -Namespace JarvisWin -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();'",
+        '[JarvisWin.D]::SetProcessDPIAware() | Out-Null',
         '$b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds',
         '$i=New-Object System.Drawing.Bitmap $b.Width,$b.Height',
         '[System.Drawing.Graphics]::FromImage($i).CopyFromScreen($b.Location,[System.Drawing.Point]::Empty,$b.Size)',
         '$s=[Math]::Min(1.0,1568.0/[Math]::Max($b.Width,$b.Height))',
         '$o=New-Object System.Drawing.Bitmap ([int]($b.Width*$s)),([int]($b.Height*$s))',
         "$g=[System.Drawing.Graphics]::FromImage($o);$g.InterpolationMode='HighQualityBicubic';$g.DrawImage($i,0,0,$o.Width,$o.Height)",
-        '$o.Save($env:ROAMIES_SHOT,[System.Drawing.Imaging.ImageFormat]::Jpeg)',
+        '$o.Save($env:JARVIS_SHOT,[System.Drawing.Imaging.ImageFormat]::Jpeg)',
         // Physical size, the image size and the screen's scale, so draw can turn its pixels into overlay points.
         "Write-Output ('{0} {1} {2} {3} {4}' -f $b.Width,$b.Height,$o.Width,$o.Height,([System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero).DpiX/96))",
       ].join(';');
       // -EncodedCommand (UTF-16LE base64): no quoting for Windows' command line to mangle.
-      const r = await run('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(ps, 'utf16le').toString('base64')], { env: { ...process.env, ROAMIES_SHOT: file } });
+      const r = await run('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(ps, 'utf16le').toString('base64')], { env: { ...process.env, JARVIS_SHOT: file } });
       if (r.err) throw new Error('Screen capture failed.');
       const [pw, ph, iw, ih, sc] = r.stdout.trim().split(/\s+/).map(Number);
       const scale = pointScale();
@@ -891,7 +891,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     ] : []),
     {
       name: 'draw',
-      description: `Draw on the user's screen while you talk. Your Roamie turns into its cursor and draws with its tip, each beat's marks paced to its spoken line (also shown as a caption). One call holds a whole explanation or walkthrough.
+      description: `Draw on the user's screen while you talk. Your Jarvis turns into its cursor and draws with its tip, each beat's marks paced to its spoken line (also shown as a caption). One call holds a whole explanation or walkthrough.
 beats: [{say, marks, wait?}]. say: one short line, under 20 words, spoken and captioned while that beat's marks draw, so your reply after draw never repeats or rephrases it (no restating the steps). Keep 1 to 4 marks per beat, in the order you mention them.
 Places (at, to, tie), best first: {text: the exact words shown on screen} (exact bounds, scrolls to it; target 'screen' searches every app; also words inside paragraphs, text in images or canvases, and a single character, which matches case); add every: true to mark every place that text appears (each letter s, each mention of a word), one mark per place, and within: {x, y, w, h} (screenshot pixels, x, y the centre) to keep to one part of the screen (every s in one sentence); {id} from read_window, for controls without words; {x, y, w, h} pixels in your latest screenshot, for icons, shapes and areas without words: x, y is the thing's centre, and w, h its whole width and height; the box is then fitted to what's really drawn there, so a close guess is enough.
 Which mark: one control they should click: target (with wait 'click' in a walkthrough); one thing to notice: ring (follows its shape; r sets the corner radius); a small spot or icon: point; a region or panel: frame; key words: underline (outdated ones: strike); right or wrong: check, cross; order of steps: num; a name beside something: label (text) or label on any mark; how two things relate: connect (at → to; flow: true runs moving dots along it, for something that travels or keeps happening); an odd-shaped group: trace (points); scroll here: scroll (dir); one thing above all else: spotlight (sparingly); something to hover: hover with wait 'hover'; big words: write (text, size).

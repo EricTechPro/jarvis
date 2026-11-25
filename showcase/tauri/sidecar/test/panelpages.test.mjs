@@ -18,14 +18,14 @@ assert.match(html, />Second brain</);
 // About: no button, pane, render code or link left.
 assert.ok(!navPages.includes('about') && !/nav-about|pane-about/.test(html));
 assert.ok(!/aboutPage|function maker|const KEN\b|show\('about'/.test(js), 'no About render code');
-for (const f of ['../sidekick.mjs', '../../src-tauri/src/main.rs', '../../../roamies/host.js', '../../../onboarding/onboarding.js']) {
+for (const f of ['../sidekick.mjs', '../../src-tauri/src/main.rs', '../../../jarvis/host.js', '../../../onboarding/onboarding.js']) {
   let t = ''; try { t = read(f); } catch { continue; }
   assert.ok(!/openPanel\('about'\)|tab: 'about'|"about"\)|page=about/.test(t), `${f} opens no About page`);
 }
 // Its help links moved to General, and the manual says so.
 assert.match(js, /group\('Help', null, null,[^]*Save diagnostics/);
-const { aboutRoamies } = await import('../about.mjs');
-const man = aboutRoamies({ name: 'R', looks: ['A', 'B'], mac: true, linux: false, snap: true, pointer: true, voice: true, hotkeys: true, wake: true });
+const { aboutJarvis } = await import('../about.mjs');
+const man = aboutJarvis({ name: 'R', looks: ['A', 'B'], mac: true, linux: false, snap: true, pointer: true, voice: true, hotkeys: true, wake: true });
 assert.ok(!/and About \(|in About/.test(man), 'the manual has no About page');
 assert.match(man, /Second brain \(/);
 

@@ -1,6 +1,7 @@
 // Memory sync between computers (macOS and Windows) through a folder the user already syncs (iCloud Drive, OneDrive,
-// Dropbox, Google Drive). No server, no account: each computer writes only its own file, <folder>/Roamies Sync/<device>.json,
-// and reads the others', so the sync service never sees two computers editing one file. Commitments, reminders and facts
+// Dropbox, Google Drive). No server, no account: each computer writes only its own file, <folder>/Jarvis Sync/<device>.json
+// (or Roamies Sync/, its name before the rename, for a folder set up then, so older copies keep syncing), and reads
+// the others', so the sync service never sees two computers editing one file. Commitments, reminders and facts
 // are merged item by item, newest change wins; a deletion is kept as a tombstone so it isn't brought back.
 // Conversations, sign-ins and keys are never written there.
 // Everything in the folder is encrypted (AES-256-GCM) with a key made from a passphrase the user types on each computer
@@ -12,12 +13,16 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const SUBDIR = 'Roamies Sync';
+export const SUBDIR = 'Jarvis Sync';
+export const OLD_SUBDIR = 'Roamies Sync'; // a folder set up before the rename
+/** The sync files' folder inside dir: Jarvis Sync, or Roamies Sync when only that one is there. */
+export const subdirOf = (dir) => { const sub = path.join(dir, SUBDIR), old = path.join(dir, OLD_SUBDIR); return !existsSync(sub) && existsSync(old) ? old : sub; };
 export const HEADER = 'sync.json';
 export const KEY_NAME = 'sync-key'; // the secret store's name for this computer's copy of the key
 export const MIN_PASSPHRASE = 8;
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
-const CHECK = 'roamies-sync';
+const CHECK = 'jarvis-sync';
+const OLD_CHECK = 'roamies-sync'; // what a folder set up before the rename holds
 
 // ---------- encryption ----------
 /** The folder key from the passphrase and the folder's salt (scrypt; about a tenth of a second, at setup only). */
@@ -45,7 +50,7 @@ export function unseal(key, box, aad) {
  */
 export async function prepareFolder(dir, passphrase) {
   if (String(passphrase ?? '').length < MIN_PASSPHRASE) return { error: `The passphrase needs at least ${MIN_PASSPHRASE} characters.` };
-  const sub = path.join(dir, SUBDIR), file = path.join(sub, HEADER);
+  const sub = subdirOf(dir), file = path.join(sub, HEADER);
   await fs.mkdir(sub, { recursive: true });
   const read = async () => { try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return null; } };
   let head = await read();
@@ -54,9 +59,9 @@ export async function prepareFolder(dir, passphrase) {
     const fresh = { version: 1, kdf: 'scrypt', salt: salt.toString('base64'), check: seal(key, CHECK, 'check') };
     try { await fs.writeFile(file, JSON.stringify(fresh), { flag: 'wx', mode: 0o600 }); return { key }; } catch { head = await read(); }
   }
-  if (head?.version !== 1 || head.kdf !== 'scrypt' || typeof head.salt !== 'string') return { error: 'The sync folder was set up by a newer Roamies, or its sync.json is damaged.' };
+  if (head?.version !== 1 || head.kdf !== 'scrypt' || typeof head.salt !== 'string') return { error: 'The sync folder was set up by a newer Jarvis, or its sync.json is damaged.' };
   const key = deriveKey(passphrase, Buffer.from(head.salt, 'base64'));
-  try { if (unseal(key, head.check, 'check') === CHECK) return { key }; } catch { /* wrong passphrase */ }
+  try { if ([CHECK, OLD_CHECK].includes(unseal(key, head.check, 'check'))) return { key }; } catch { /* wrong passphrase */ }
   return { error: "That isn't the passphrase this sync folder was set up with. Use the same one as on your other computer." };
 }
 export const TOMB_DAYS = 60;
@@ -184,7 +189,7 @@ export function checkFolder(raw, home = os.homedir()) {
 /** The other computers' files in the folder, decrypted and cleaned. Half-synced ones are skipped this time; ones that
  *  don't open with this key (another passphrase, or changed) are counted in out.unreadable. */
 export async function readRemotes(dir, device, key, now = Date.now()) {
-  const sub = path.join(dir, SUBDIR), out = [];
+  const sub = subdirOf(dir), out = [];
   out.unreadable = 0;
   let names = [];
   try { names = await fs.readdir(sub); } catch { return out; }
@@ -208,7 +213,7 @@ export async function readRemotes(dir, device, key, now = Date.now()) {
 
 /** Writes this computer's file, encrypted: a temp file, then a rename, so another computer never reads half of it. */
 export async function writeOwn(dir, device, data, key) {
-  const sub = path.join(dir, SUBDIR);
+  const sub = subdirOf(dir);
   await fs.mkdir(sub, { recursive: true });
   const file = path.join(sub, `${device}.json`), tmp = path.join(sub, `.${device}.${randomBytes(3).toString('hex')}.tmp`);
   await fs.writeFile(tmp, JSON.stringify({ version: 1, device, enc: seal(key, data, device) }), { mode: 0o600 });

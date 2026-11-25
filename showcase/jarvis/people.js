@@ -1,7 +1,7 @@
-// Character looks for the sidekick: Anime Girl, Sarah, Adrian, Rita X, Ultren and GlayOS. Each is a hologram
+// Character looks for the sidekick: Sarah, Adrian, Rita X, Ultren and GlayOS. Each is a hologram
 // in the LED palette that fades out at the bottom like the JARVIS globe's projector, with a face that blinks,
-// follows the cursor, talks with the real voice level and acts out moods. Hair moves with the body: the anime
-// girl's twin tails swing, Sarah's long hair sways, Adrian's quiff bounces, Rita's swept waves swing.
+// follows the cursor, talks with the real voice level and acts out moods. Hair moves with the body: Sarah's long
+// hair sways, Adrian's quiff bounces, Rita's swept waves swing.
 // 10-dither.js calls in here when the look is one of these, as it does jarvis.js. Pure drawing: it composes a
 // small grid of levels, then writes it through the kit's put.
 //
@@ -13,7 +13,7 @@
 // over is drawn over the face (Rita's glasses): [row, column, levels, mirrored too]. mouths replaces the shared
 // mouths for that size.
 (() => {
-  const R = window.Roamie;
+  const R = window.Jarvis;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const LV = { h: 1, H: 2, s: 3, S: 4, z: 2, c: 2, C: 1, k: 3, w: 4, t: 1, T: 2, 0: 0, 1: 1, 2: 2, 3: 3, 4: 4 };
   const SWING = new Set(['t', 'T']);
@@ -21,27 +21,6 @@
   // eye: the viewer's-right eye's inner column (from the centre) and top row; mouth: its row; cy: the row of the
   // body point; fade: rows at the bottom that fade out.
   const ART = {
-    anime: {
-      L: {
-        w: 29, cy: 14, fade: 5, eye: [2, 12], mouth: 18, blush: [6, 17], tail: [5, 27],
-        patch: [[0, 14, 'hh'], [1, 14, 'h']],
-        rows: [
-          '...............', '...............', '..........hhhhh', '.......hhhHHHHH', '...ww.hhHHhhhhh', '..wwwwhhhhhhhhh',
-          '..twwwhhhhhhhhh', '.ttthhhhhhhhhhh', '.ttthhhhhhhhhhh', 'tttthhhhhshhhhh', 'tttthhhhssshhhh', 'ttTthhhssssshhs',
-          'ttTthhsssssssss', 'ttTthhsssssssss', 'ttTthhsssssssss', 'ttTt.hsssssssss', 'ttTt.hsssssssss', 'ttTt.hhssssssss',
-          'ttTt..hssssssss', 'ttTt..h.sssssss', 'tTtt.....ssssss', 'tTtt.......ssss', 'tTt.........zss', 'tTt.........zss',
-          'tTt.....kkkkkzs', '.tt...kkwwwkkkw', '.tt..kkwccccwkw', '.t..kkwcccccckw', '..kkkwccccccccc', '.kkkwcccccccccc',
-        ],
-      },
-      S: {
-        w: 17, cy: 8, fade: 3, eye: [2, 8], mouth: 11, blush: [4, 10], tail: [4, 16],
-        rows: ['........h', '.....hhhh', '..w.hhHHH', '.wwwhhhhh', 'tthhhhhhh', 'tthhhhhhh', 'tThhhshhs', 'tThhsssss', 'tThssssss', 'tThssssss', 'tT.hsssss', 'tT..sssss', 'tT....sss', 't......zs', 't....kkzs', '...kkwwkw', '.kwcccccc'],
-      },
-      X: {
-        w: 11, cy: 4, fade: 1, eye: [1, 3], mouth: 5, tail: [1, 7],
-        rows: ['....hh', 'w.hhhh', 'wwhhhh', 'thhsss', 'thssss', 'thssss', 't..sss', 't...zs', '..kkkw'],
-      },
-    },
     sarah: {
       L: {
         w: 29, cy: 14, fade: 5, eye: [2, 12], mouth: 18, blush: [6, 16], earring: [9, 15], tail: [11, 27],
@@ -210,11 +189,6 @@
 
   // Eyes, drawn for the viewer's-right eye and mirrored for the left. Each: open, wide, shut, happy, dizzy, sleepy.
   const EYES = {
-    anime: {
-      L: { open: ['00000.', '044100', '01110.', '01220.', '.222..'], wide: ['00000.', '044100', '01110.', '01110.', '01220.', '.222..'], shut: ['......', '......', '000000', '.0....'], happy: ['......', '.000..', '0...0.'], dizzy: ['0...0', '.0.0.', '..0..', '.0.0.', '0...0'], sleepy: ['......', '......', '00000.'] },
-      S: { open: ['00', '40'], wide: ['00', '40', '00'], shut: ['..', '00'], happy: ['.0.', '0.0'], dizzy: ['0.0', '.0.', '0.0'], sleepy: ['..', '00'] },
-      X: { open: ['0', '0'], wide: ['0', '0'], shut: ['.', '0'], happy: ['0'], dizzy: ['0'], sleepy: ['.', '0'] },
-    },
     sarah: {
       L: { open: ['.000.', '04100', '.111.'], wide: ['.000.', '04100', '01100', '.000.'], shut: ['.....', '.....', '0000.'], happy: ['.....', '.000.', '0...0'], dizzy: ['0.0', '.0.', '0.0'], sleepy: ['.....', '.....', '.000.'] },
       S: { open: ['00', '40'], wide: ['00', '40', '00'], shut: ['..', '00'], happy: ['.0.', '0.0'], dizzy: ['0.0', '.0.'], sleepy: ['..', '00'] },
@@ -354,8 +328,8 @@
           set(G, bx, yy, who === 'adrian' || who === 'ken' ? 1 : 2 - (brow ? 1 : 0));
         }
       }
-      // Blush: always for the anime girl, when happy for Sarah.
-      if (a.blush && (who === 'anime' || st.happy > 0.5)) for (const s of [1, -1]) {
+      // Blush: when happy (Sarah).
+      if (a.blush && st.happy > 0.5) for (const s of [1, -1]) {
         const bx = x + s * a.blush[0] + lx, by = y + a.blush[1] + ly;
         if (size === 'L') { set(G, bx, by, 2); set(G, bx - s, by, 2); } else set(G, bx, by, 2);
       }
@@ -380,15 +354,6 @@
       // Adrian's beard: a dark band round the jaw under the mouth, drawn after the mouth so the mouth stays clear.
       // Sarah's stud earring, on the side her hair's tucked.
       if (a.earring) { set(G, x + a.earring[0], y + a.earring[1], 4); }
-      // The anime girl sparkles when she's thrilled.
-      if (who === 'anime' && size !== 'X' && (st.act === 'hype' || st.happy > 0.5)) {
-        for (let i = 0; i < 3; i++) {
-          if (Math.sin(t * 7 + i * 2) < -0.2) continue;
-          const ang = i * 2.1 + t * 1.3, d = size === 'L' ? 15 : 9;
-          const sx = Math.round(x + Math.cos(ang) * d), sy = Math.round(y + a.cy - 4 + Math.sin(ang) * d * 0.7);
-          if (size === 'L') stamp(G, ['.4.', '444', '.4.'], sx - 1, sy - 1); else set(G, sx, sy, 4);
-        }
-      }
       // Asleep: a small z rising beside the head.
       if (st.sleepy > 0.5 && size !== 'X') {
         const zx = x + (size === 'L' ? 12 : 7), zy = y + (size === 'L' ? 2 : 0) - (Math.floor(t * 1.5) % 2);
@@ -397,5 +362,5 @@
     },
   });
 
-  R.people = { anime: person('anime'), sarah: person('sarah'), adrian: person('adrian'), rita: person('rita'), ultren: person('ultren'), glayos: person('glayos'), ken: person('ken') };
+  R.people = { sarah: person('sarah'), adrian: person('adrian'), rita: person('rita'), ultren: person('ultren'), glayos: person('glayos'), ken: person('ken') };
 })();

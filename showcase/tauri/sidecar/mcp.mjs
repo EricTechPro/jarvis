@@ -1,5 +1,5 @@
-// MCP connections: other apps and services the Roamie can use through their MCP servers (a remote address, or a
-// program on this computer). The list is ~/Roamies/Data/mcp.json in the Claude-compatible { mcpServers } shape; keys
+// MCP connections: other apps and services Jarvis can use through their MCP servers (a remote address, or a
+// program on this computer). The list is ~/Jarvis/Data/mcp.json in the Claude-compatible { mcpServers } shape; keys
 // and tokens in env or headers live in the secret store (secrets.mjs), never in the file. The client is gg's
 // (@kenkaiiii/ggcoder/mcp), which also screens tool descriptions (McpToolGuard) and handles OAuth sign-in.
 // Every call still goes through safety.mjs (checkMcpServer to add, checkMcpCall to use) in tools.mjs.
@@ -11,7 +11,9 @@ import { z } from 'zod';
 import { BLOCK, MCP_NAME, checkMcpServer } from './safety.mjs';
 import { DIR, readJson, writeJson } from './store.mjs';
 
-export const SECRET_MARK = '@roamies-secret'; // an env or header value kept in the secret store
+export const SECRET_MARK = '@jarvis-secret'; // an env or header value kept in the secret store
+// The mark saved before the rename: still read as one, so kept keys keep working.
+export const isSecretMark = (v) => v === SECRET_MARK || v === '@roamies-secret';
 const PREFIX = (server) => `mcp__${server}__`;
 
 /** Where other apps keep their MCP lists: GG Coder's, and Claude Desktop's. */
@@ -49,7 +51,7 @@ export function createMcp({ file = path.join(DIR, 'mcp.json'), secrets, manager 
     const cfg = toConfig(name, entry), missing = [];
     for (const field of ['env', 'headers']) {
       for (const [k, v] of Object.entries(cfg[field] ?? {})) {
-        if (v !== SECRET_MARK) continue;
+        if (!isSecretMark(v)) continue;
         const s = await secrets.get(secretName(name, `${field}:${k}`)).catch(() => null);
         if (s) cfg[field][k] = s; else missing.push(k);
       }
@@ -107,7 +109,7 @@ export function createMcp({ file = path.join(DIR, 'mcp.json'), secrets, manager 
     if (!e) return false;
     if (mgr) await mgr.disconnect(name).catch(() => {});
     live.delete(name);
-    for (const field of ['env', 'headers']) for (const [k, v] of Object.entries(e[field] ?? {})) if (v === SECRET_MARK) await secrets.delete(secretName(name, `${field}:${k}`)).catch(() => {});
+    for (const field of ['env', 'headers']) for (const [k, v] of Object.entries(e[field] ?? {})) if (isSecretMark(v)) await secrets.delete(secretName(name, `${field}:${k}`)).catch(() => {});
     delete j.mcpServers[name];
     await write(j);
     return true;
@@ -222,7 +224,7 @@ export function createMcpTools({ mcp, ask, isYes, allowActions = () => true, ski
           const s = list.find((x) => x.name === name);
           if (!s) throw new Error(`${SOURCES[from]} has no server called ${name}.`);
           ({ url, command } = s.entry); args = s.entry.args ?? [];
-          // What the other app kept in env or headers is copied into the secret store, never into Roamies' file.
+          // What the other app kept in env or headers is copied into the secret store, never into Jarvis' file.
           for (const [k, v] of Object.entries(s.entry.env ?? {})) secretEnv[k] = String(v);
           for (const [k, v] of Object.entries(s.entry.headers ?? {})) secretHeaders[k] = String(v);
         }

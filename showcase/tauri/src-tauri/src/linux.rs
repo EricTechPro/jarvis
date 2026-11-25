@@ -56,7 +56,7 @@ pub(crate) fn init() {
 
 fn trace() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("ROAMIES_TRACE").is_some())
+    *ON.get_or_init(|| std::env::var_os("JARVIS_TRACE").is_some())
 }
 
 // ---------- click-through by region ----------
@@ -79,7 +79,7 @@ pub(crate) fn set_hit_rects(window: &tauri::WebviewWindow, flat: &[f64]) {
     use gtk::cairo::{RectangleInt, Region};
     use gtk::prelude::WidgetExt;
     let rects = hit_rects(flat);
-    // ROAMIES_TRACE=1: the shape goes to stderr, for checking click-through from outside (and for bug reports).
+    // JARVIS_TRACE=1: the shape goes to stderr, for checking click-through from outside (and for bug reports).
     if trace() {
         eprintln!("hit rects: {rects:?}");
     }
@@ -102,7 +102,7 @@ pub(crate) fn set_hit_rects(window: &tauri::WebviewWindow, flat: &[f64]) {
 
 /// COSMIC files every X11 window it manages with the apps: it ignores "keep above" (_NET_WM_STATE_ABOVE), so app
 /// windows cover the overlay, and it rounds and tints it like an app. It draws override-redirect windows (ones no
-/// window manager manages, like menus) above every app window, untouched. ROAMIES_UNMANAGED=1 or 0 forces it.
+/// window manager manages, like menus) above every app window, untouched. JARVIS_UNMANAGED=1 or 0 forces it.
 fn unmanaged_for(desktop: Option<&str>, force: Option<&str>) -> bool {
     match force {
         Some("1") => true,
@@ -115,7 +115,7 @@ pub(crate) fn unmanaged_overlay() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| {
         let env = |k: &str| std::env::var(k).ok();
-        unmanaged_for(env("XDG_CURRENT_DESKTOP").as_deref(), env("ROAMIES_UNMANAGED").as_deref())
+        unmanaged_for(env("XDG_CURRENT_DESKTOP").as_deref(), env("JARVIS_UNMANAGED").as_deref())
     })
 }
 
@@ -150,7 +150,7 @@ pub(crate) fn set_unmanaged(window: &tauri::WebviewWindow, on: bool, focus: bool
 
 /// _NET_ACTIVE_WINDOW's data for a request from a pager or taskbar (source 2), with no timestamp. GTK sends one
 /// from the app (source 1), which KWin's focus-stealing prevention turns down once another app has had a keypress,
-/// such as the shortcut that ran `roamies --ask`: the field shows but its keys go to the other app.
+/// such as the shortcut that ran `jarvis --ask`: the field shows but its keys go to the other app.
 fn activation_request() -> [u32; 5] {
     [2, 0, 0, 0, 0]
 }
@@ -367,7 +367,7 @@ async fn portal_screenshot_async() -> Result<PathBuf, String> {
     const NO_PORTAL: &str = "This desktop has no screenshot portal (install xdg-desktop-portal and the one for your desktop, e.g. xdg-desktop-portal-gnome, -kde or -wlr).";
     let err = |e: zbus::Error| e.to_string();
     let conn = Connection::session().await.map_err(err)?;
-    let token = format!("roamies_{}_{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed));
+    let token = format!("jarvis_{}_{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed));
     let me = conn.unique_name().map(|n| n.to_string()).ok_or("no session bus name")?;
     // Listen for the answer before asking, so a quick one isn't missed.
     let request = Proxy::new(&conn, "org.freedesktop.portal.Desktop", portal_request_path(&me, &token), "org.freedesktop.portal.Request").await.map_err(err)?;
@@ -420,7 +420,7 @@ async fn within<T>(limit: Duration, fut: impl std::future::Future<Output = T>) -
     .await
 }
 
-/// Overlays go clear for a moment so the Roamie isn't in its own screenshot (macOS and Windows leave them out of
+/// Overlays go clear for a moment so Jarvis isn't in its own screenshot (macOS and Windows leave them out of
 /// captures instead). Main thread only.
 fn fade_overlays(app: &AppHandle, opacity: f64) {
     use gtk::prelude::WidgetExt;
@@ -517,10 +517,10 @@ fn exec_quoted(path: &str) -> Option<String> {
     Some(out)
 }
 
-/// The XDG autostart entry that starts Roamies when the user logs in.
+/// The XDG autostart entry that starts Jarvis when the user logs in.
 fn autostart_entry(program: &str) -> Option<String> {
     let exec = exec_quoted(program)?;
-    Some(format!("[Desktop Entry]\nType=Application\nName=Jarvis\nComment=AI desktop companion\nExec={exec}\nIcon=roamies\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"))
+    Some(format!("[Desktop Entry]\nType=Application\nName=Jarvis\nComment=AI desktop companion\nExec={exec}\nIcon=jarvis\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"))
 }
 
 /// Whether an autostart entry is switched on: desktops' own "startup apps" settings switch one off by adding
@@ -529,9 +529,23 @@ fn autostart_on(entry: &str) -> bool {
     !entry.lines().map(|l| l.trim().to_ascii_lowercase().replace(' ', "")).any(|l| l == "hidden=true" || l == "x-gnome-autostart-enabled=false")
 }
 
-fn autostart_file() -> Option<PathBuf> {
+fn autostart_dir() -> Option<PathBuf> {
     let config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(config.join("autostart").join("roamies.desktop"))
+    Some(config.join("autostart"))
+}
+
+fn autostart_file() -> Option<PathBuf> {
+    Some(autostart_dir()?.join("jarvis.desktop"))
+}
+
+/// Before the rename the entry was roamies.desktop, starting the old roamies binary: it's replaced by jarvis.desktop
+/// (switched on only if the old one was, and only when there's no new one yet) and removed, so login never starts the
+/// old file. Returns whether the new entry should be written.
+fn replace_old_autostart(dir: &std::path::Path) -> bool {
+    let old = dir.join("roamies.desktop");
+    let Ok(entry) = std::fs::read_to_string(&old) else { return false };
+    let _ = std::fs::remove_file(&old);
+    autostart_on(&entry) && !dir.join("jarvis.desktop").exists()
 }
 
 /// Open at Login: an entry in ~/.config/autostart, which GNOME, KDE and the other XDG desktops all run. It starts
@@ -543,6 +557,10 @@ pub(crate) fn login_item(set: Option<bool>, installed: bool) -> (bool, bool) {
     if !installed {
         return (false, false);
     }
+    let set = match (set, autostart_dir().is_some_and(|d| replace_old_autostart(&d))) {
+        (None, true) => Some(true),
+        (set, _) => set,
+    };
     match set {
         Some(true) => {
             if let Some(dir) = file.parent() {
@@ -560,11 +578,11 @@ pub(crate) fn login_item(set: Option<bool>, installed: bool) -> (bool, bool) {
     (true, std::fs::read_to_string(&file).is_ok_and(|e| autostart_on(&e)))
 }
 
-/// The program as a shell word, for commands people bind to keys (`<this> --talk`): plain `roamies` when that's
+/// The program as a shell word, for commands people bind to keys (`<this> --talk`): plain `jarvis` when that's
 /// what the package installed on PATH, else the AppImage or binary's full path, single-quoted if it needs it.
 fn launch_word(program: &str) -> String {
-    if program == "/usr/bin/roamies" || program == "/usr/local/bin/roamies" {
-        return "roamies".into();
+    if program == "/usr/bin/jarvis" || program == "/usr/local/bin/jarvis" {
+        return "jarvis".into();
     }
     if program.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+".contains(c)) {
         return program.into();
@@ -573,7 +591,7 @@ fn launch_word(program: &str) -> String {
 }
 
 pub(crate) fn launch_command() -> String {
-    let program = appimage().or_else(|| std::env::current_exe().ok()).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "roamies".into());
+    let program = appimage().or_else(|| std::env::current_exe().ok()).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "jarvis".into());
     launch_word(&program)
 }
 
@@ -586,6 +604,25 @@ pub(crate) fn open_releases_page() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_old_autostart_entry_is_replaced() {
+        let dir = std::env::temp_dir().join(format!("jarvis-autostart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!replace_old_autostart(&dir), "no old entry: nothing to do");
+        std::fs::write(dir.join("roamies.desktop"), "[Desktop Entry]\nExec=roamies\n").unwrap();
+        assert!(replace_old_autostart(&dir), "an old entry that was on: write the new one");
+        assert!(!dir.join("roamies.desktop").exists(), "and the old one is gone");
+        std::fs::write(dir.join("roamies.desktop"), "[Desktop Entry]\nExec=roamies\nHidden=true\n").unwrap();
+        assert!(!replace_old_autostart(&dir), "switched off stays off");
+        assert!(!dir.join("roamies.desktop").exists());
+        std::fs::write(dir.join("roamies.desktop"), "[Desktop Entry]\nExec=roamies\n").unwrap();
+        std::fs::write(dir.join("jarvis.desktop"), "[Desktop Entry]\nExec=jarvis\nHidden=true\n").unwrap();
+        assert!(!replace_old_autostart(&dir), "an existing new entry is kept as it is");
+        assert!(!dir.join("roamies.desktop").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_overlay_is_unmanaged_on_cosmic_only() {
@@ -616,10 +653,10 @@ mod tests {
 
     #[test]
     fn the_autostart_entry_quotes_the_program() {
-        let e = autostart_entry("/home/kai/Apps/Roamies 0.1.33.AppImage").expect("an entry");
+        let e = autostart_entry("/home/kai/Apps/Jarvis 0.1.33.AppImage").expect("an entry");
         assert!(e.starts_with("[Desktop Entry]\nType=Application\nName=Jarvis\n"));
-        assert!(e.contains("\nExec=\"/home/kai/Apps/Roamies 0.1.33.AppImage\"\n"), "{e}");
-        assert_eq!(exec_quoted("/usr/bin/roamies").as_deref(), Some("\"/usr/bin/roamies\""));
+        assert!(e.contains("\nExec=\"/home/kai/Apps/Jarvis 0.1.33.AppImage\"\n"), "{e}");
+        assert_eq!(exec_quoted("/usr/bin/jarvis").as_deref(), Some("\"/usr/bin/jarvis\""));
         // Characters a shell or the desktop would act on stay literal.
         assert_eq!(exec_quoted("/opt/a$b/50%/q\"t/b`t").as_deref(), Some("\"/opt/a\\\\$b/50%%/q\\\\\"t/b\\\\`t\""));
         assert_eq!(exec_quoted("/opt/back\\slash").as_deref(), Some("\"/opt/back\\\\\\\\slash\""));
@@ -629,17 +666,17 @@ mod tests {
 
     #[test]
     fn the_command_to_bind_names_this_copy() {
-        assert_eq!(launch_word("/usr/bin/roamies"), "roamies", "the package's own command");
-        assert_eq!(launch_word("/home/kai/Apps/Roamies_0.1.33_amd64.AppImage"), "/home/kai/Apps/Roamies_0.1.33_amd64.AppImage");
-        assert_eq!(launch_word("/home/kai/My Apps/Roamies.AppImage"), "'/home/kai/My Apps/Roamies.AppImage'");
-        assert_eq!(launch_word("/home/kai/it's/Roamies"), "'/home/kai/it'\\''s/Roamies'");
+        assert_eq!(launch_word("/usr/bin/jarvis"), "jarvis", "the package's own command");
+        assert_eq!(launch_word("/home/kai/Apps/Jarvis_0.1.33_amd64.AppImage"), "/home/kai/Apps/Jarvis_0.1.33_amd64.AppImage");
+        assert_eq!(launch_word("/home/kai/My Apps/Jarvis.AppImage"), "'/home/kai/My Apps/Jarvis.AppImage'");
+        assert_eq!(launch_word("/home/kai/it's/Jarvis"), "'/home/kai/it'\\''s/Jarvis'");
     }
 
     #[test]
     fn an_entry_the_desktop_switched_off_counts_as_off() {
-        assert!(autostart_on(&autostart_entry("/usr/bin/roamies").unwrap()));
-        assert!(!autostart_on("[Desktop Entry]\nExec=roamies\nHidden=true\n"));
-        assert!(!autostart_on("[Desktop Entry]\nExec=roamies\nX-GNOME-Autostart-enabled=false\n"));
+        assert!(autostart_on(&autostart_entry("/usr/bin/jarvis").unwrap()));
+        assert!(!autostart_on("[Desktop Entry]\nExec=jarvis\nHidden=true\n"));
+        assert!(!autostart_on("[Desktop Entry]\nExec=jarvis\nX-GNOME-Autostart-enabled=false\n"));
         assert!(!autostart_on("[Desktop Entry]\nHidden = True\n"));
         assert!(autostart_on("[Desktop Entry]\nHidden=false\n"));
     }
@@ -665,7 +702,7 @@ mod tests {
 
     #[test]
     fn the_portal_answers_on_a_path_made_from_the_bus_name_and_token() {
-        assert_eq!(portal_request_path(":1.42", "roamies_7_0"), "/org/freedesktop/portal/desktop/request/1_42/roamies_7_0");
+        assert_eq!(portal_request_path(":1.42", "jarvis_7_0"), "/org/freedesktop/portal/desktop/request/1_42/jarvis_7_0");
         assert_eq!(portal_request_path(":1.1024", "t"), "/org/freedesktop/portal/desktop/request/1_1024/t");
     }
 

@@ -1,17 +1,17 @@
-// Hands helper for Roamies (macOS): lets the agent see one window or app, read its controls, and type,
-// press keys or click into it. One command per run; prints one JSON object. Runs as a child of Roamies,
-// so macOS attributes Screen Recording and Accessibility to Roamies.
+// Hands helper for Jarvis (macOS): lets the agent see one window or app, read its controls, and type,
+// press keys or click into it. One command per run; prints one JSON object. Runs as a child of Jarvis,
+// so macOS attributes Screen Recording and Accessibility to Jarvis.
 //
-//   roamies-hands windows                      visible windows, front to back
-//   roamies-hands capture <out.jpg> front|app:<name>|window:<id>|screen
-//   roamies-hands locate front|app:<name>|window:<id>   which window that is, without capturing (for the animation)
-//   roamies-hands select <out.png>             drag to choose an area (built-in macOS selection UI)
-//   roamies-hands ui front|app:<name>          the window's buttons, fields, etc. with ids
-//   roamies-hands act <json>                   {"app":"Brave","steps":[{"do":"focus","id":3},{"do":"type","text":"hi"}]}
-//   roamies-hands trusted [--prompt]           Accessibility permission status
-//   roamies-hands locate-control <target> <id>  where one control (from `ui`) is on screen, for pointing
-//   roamies-hands screencheck                  takes (and deletes) one test screenshot: {"seen": true|false}
-//   roamies-hands guide accessibility|screen [<Roamies.app>] [--preview]  drag-me-in panel under System Settings (until stdin closes)
+//   jarvis-hands windows                      visible windows, front to back
+//   jarvis-hands capture <out.jpg> front|app:<name>|window:<id>|screen
+//   jarvis-hands locate front|app:<name>|window:<id>   which window that is, without capturing (for the animation)
+//   jarvis-hands select <out.png>             drag to choose an area (built-in macOS selection UI)
+//   jarvis-hands ui front|app:<name>          the window's buttons, fields, etc. with ids
+//   jarvis-hands act <json>                   {"app":"Brave","steps":[{"do":"focus","id":3},{"do":"type","text":"hi"}]}
+//   jarvis-hands trusted [--prompt]           Accessibility permission status
+//   jarvis-hands locate-control <target> <id>  where one control (from `ui`) is on screen, for pointing
+//   jarvis-hands screencheck                  takes (and deletes) one test screenshot: {"seen": true|false}
+//   jarvis-hands guide accessibility|screen [<Jarvis.app>] [--preview]  drag-me-in panel under System Settings (until stdin closes)
 import AppKit
 import ApplicationServices
 import CoreGraphics
@@ -32,8 +32,8 @@ func fail(_ msg: String) -> Never { out(["ok": false, "error": msg]) }
 
 let me = ProcessInfo.processInfo.processIdentifier
 let myParent = getppid()
-// Never point at Roamies itself (its overlay windows cover every screen).
-func isRoamies(_ pid: pid_t) -> Bool {
+// Never point at Jarvis itself (its overlay windows cover every screen).
+func isJarvis(_ pid: pid_t) -> Bool {
     pid == me || pid == myParent || NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.erictech.jarvis"
 }
 
@@ -46,7 +46,7 @@ func windows() -> [Win] {
     return list.compactMap { w in
         guard (w[kCGWindowLayer as String] as? Int) == 0,
               let id = w[kCGWindowNumber as String] as? Int,
-              let pid = w[kCGWindowOwnerPID as String] as? Int32, !isRoamies(pid),
+              let pid = w[kCGWindowOwnerPID as String] as? Int32, !isJarvis(pid),
               let b = w[kCGWindowBounds as String] as? [String: Double],
               (b["Width"] ?? 0) > 80, (b["Height"] ?? 0) > 60 else { return nil }
         return Win(id: id, pid: pid, app: (w[kCGWindowOwnerName as String] as? String) ?? "?",
@@ -63,7 +63,7 @@ func appMatches(_ app: String, _ want: String) -> Bool {
     return a == w || a.contains(w) || w.contains(a)
 }
 
-/// Resolves a target to a window. "front" = the frontmost app that isn't Roamies.
+/// Resolves a target to a window. "front" = the frontmost app that isn't Jarvis.
 func resolve(_ target: String) -> Win? {
     let w = resolveWin(target)
     if BG, let w { bgPid = w.pid }
@@ -104,7 +104,7 @@ func shotArea(_ w: Win, _ all: [Win], _ px: [Int]) -> CGRect? {
 func resolveWin(_ target: String) -> Win? {
     let all = windows()
     if target == "front" {
-        if let f = NSWorkspace.shared.frontmostApplication, !isRoamies(f.processIdentifier), let w = mainWindow(all.filter { $0.pid == f.processIdentifier }) { return w }
+        if let f = NSWorkspace.shared.frontmostApplication, !isJarvis(f.processIdentifier), let w = mainWindow(all.filter { $0.pid == f.processIdentifier }) { return w }
         return all.first
     }
     if target.hasPrefix("window:"), let id = Int(target.dropFirst(7)) { return all.first { $0.id == id } }
@@ -832,7 +832,7 @@ func pixelsOf(_ win: Win?) -> (CGImage, CGRect)? {
         let d = CGDisplayBounds(CGMainDisplayID())
         return Shot.image(d).map { ($0, d) }
     }
-    let file = NSTemporaryDirectory() + "roamies-look-\(getpid()).png"
+    let file = NSTemporaryDirectory() + "jarvis-look-\(getpid()).png"
     defer { try? FileManager.default.removeItem(atPath: file) }
     guard run("/usr/sbin/screencapture", ["-x", "-o", "-t", "png", "-l", String(w.id), file]) == 0,
           let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: file) as CFURL, nil),
@@ -912,13 +912,13 @@ func axApp(_ w: Win) -> AXUIElement {
 // which turned typed digits into Cmd+1… and switched browser tabs.
 let src = CGEventSource(stateID: .privateState)
 
-// Background mode (the default; ROAMIES_BG=0 turns it off). Roamies acts in an app without the user's cursor or
+// Background mode (the default; JARVIS_BG=0 turns it off). Jarvis acts in an app without the user's cursor or
 // keyboard focus, so they can keep working: keys and typing go straight to that app, shortcuts like Cmd+S press the
 // app's own menu item, clicks are accessibility presses on what's at the spot, scrolls are sent to the app.
 // A step that only works with the real cursor (date pickers, a field that didn't take the typing, a spot with nothing
 // pressable) borrows it: the app comes forward, the step runs, then the cursor goes back where it was and the user's
 // app comes back to the front.
-let BG = ProcessInfo.processInfo.environment["ROAMIES_BG"] != "0"
+let BG = ProcessInfo.processInfo.environment["JARVIS_BG"] != "0"
 var bgPid: pid_t? = nil
 var bgPoint = CGPoint.zero
 var fgActive = false
@@ -986,7 +986,7 @@ var userBusy = false
 /// Gives the cursor and the front app back.
 func borrowEnd(_ saved: (CGPoint?, NSRunningApplication?), _ w: Win) {
     if let c = saved.0 { CGWarpMouseCursorPosition(c); CGAssociateMouseAndMouseCursorPosition(1) }
-    if let prev = saved.1, prev.processIdentifier != w.pid, !isRoamies(prev.processIdentifier) { prev.activate(options: []) }
+    if let prev = saved.1, prev.processIdentifier != w.pid, !isJarvis(prev.processIdentifier) { prev.activate(options: []) }
     progress(["ev": "return"])
 }
 /// Set when a borrowed step's app didn't come forward, so nothing was pressed: why, for that step's error.
@@ -1197,9 +1197,9 @@ func handsOff(_ pid: pid_t) -> String? {
 }
 
 // ---------- permission guide ----------
-// A small panel that sits under System Settings while a Privacy pane is open, holding Roamies' icon
+// A small panel that sits under System Settings while a Privacy pane is open, holding Jarvis' icon
 // so it can be dragged straight into the list (macOS sometimes leaves the app out). Lives until
-// stdin closes (Roamies quit or stopped it), Settings closes, or Accessibility is granted.
+// stdin closes (Jarvis quit or stopped it), Settings closes, or Accessibility is granted.
 
 enum Pal {
     static func c(_ hex: Int) -> NSColor {
@@ -1239,7 +1239,7 @@ final class GuideBack: NSView {
     override func draw(_ dirtyRect: NSRect) { drawFrame(bounds, frame: Pal.lineHi, fill: Pal.panel) }
 }
 
-/// Roamies' icon and name. Dragging it hands System Settings the app bundle, like dragging it from Finder.
+/// Jarvis' icon and name. Dragging it hands System Settings the app bundle, like dragging it from Finder.
 final class DragPill: NSView, NSDraggingSource {
     let url: URL
     let icon: NSImage
@@ -1332,7 +1332,7 @@ final class Guide: NSObject {
         title.frame = NSRect(x: textX, y: 14, width: w, height: 18)
         body.frame = NSRect(x: textX, y: 34, width: w, height: 34)
         for t in [title, body] { t.lineBreakMode = .byWordWrapping; back.addSubview(t) }
-        // The guide opens Settings directly (no macOS dialog), so Roamies usually isn't in the list yet.
+        // The guide opens Settings directly (no macOS dialog), so Jarvis usually isn't in the list yet.
         title.stringValue = hasPill ? "Drag me into the list above." : "Add me to the list above."
         body.stringValue = kind == "screen"
             ? "Use Screen & System Audio Recording, not the audio-only list."
@@ -1414,7 +1414,7 @@ func runGuide(_ rest: [String]) -> Never {
     let nsApp = NSApplication.shared
     nsApp.setActivationPolicy(.accessory)
     let guide = Guide(kind: kind, app: app, preview: preview)
-    // Roamies holds our stdin open; when it closes (stopped, or Roamies quit), go.
+    // Jarvis holds our stdin open; when it closes (stopped, or Jarvis quit), go.
     Thread { while FileHandle.standardInput.availableData.count > 0 {}; exit(0) }.start()
     Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in guide.tick() }
     guide.tick()
@@ -1520,13 +1520,13 @@ case "windows":
     let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
     out(["ok": true, "windows": windows().prefix(30).map { var i = winInfo($0); if $0.pid == front { i["frontApp"] = true }; return i }])
 
-// Where the user is right now, for each message's live state: the app in front (never Roamies), its focused
+// Where the user is right now, for each message's live state: the app in front (never Jarvis), its focused
 // window's title, and for a browser the page's address. Accessibility for the title and address; the window list
 // (title only with Screen Recording) as a fallback. Fast, read-only, never focuses anything.
 case "front":
     var o: [String: Any] = ["ok": true]
     let wins = windows()
-    let frontPid = NSWorkspace.shared.frontmostApplication.flatMap { isRoamies($0.processIdentifier) ? nil : $0.processIdentifier }
+    let frontPid = NSWorkspace.shared.frontmostApplication.flatMap { isJarvis($0.processIdentifier) ? nil : $0.processIdentifier }
     guard let pid = frontPid ?? wins.first?.pid, let app = NSRunningApplication(processIdentifier: pid) else { out(o) }
     o["app"] = app.localizedName ?? "?"
     if let b = app.bundleIdentifier { o["bundle"] = b }
@@ -1586,7 +1586,7 @@ case "capture":
         return CGImageDestinationFinalize(dst) ? [img.width, img.height] : nil
     }
     if target == "screen" {
-        // The main display without Roamies on it (shared/shot.swift); older macOS: screencapture, Roamies and all.
+        // The main display without Jarvis on it (shared/shot.swift); older macOS: screencapture, Jarvis and all.
         let px = Shot.capture(nil, to: file, png: false, maxPx: maxPx)
         if px == nil { guard run("/usr/sbin/screencapture", ["-x", "-t", "jpg", file]) == 0 else { fail("Screen capture failed. Jarvis may need Screen Recording permission.") } }
         // Its bounds (points) let the caller map pixels back.
@@ -1660,7 +1660,7 @@ case "find-text":
     guard args.count >= 3 else { fail("usage: find-text <target> <text>") }
     let t = args[1]
     var wins: [Win]
-    if t == "screen" { wins = windows().filter { !isRoamies($0.pid) } }
+    if t == "screen" { wins = windows().filter { !isJarvis($0.pid) } }
     else if t == "front", let f = resolve("front") { wins = windows().filter { $0.pid == f.pid } }
     else if t.hasPrefix("app:") { let name = String(t.dropFirst(4)); wins = windows().filter { appMatches($0.app, name) } }
     else if let w = resolve(t) { wins = [w] } else { wins = [] }
@@ -1694,7 +1694,7 @@ case "act":
     if let name = handsOff(w.pid) {
         fail("Blocked for safety: I can point at things in \(name), but I never type or click in it. Show the user where to click instead.")
     }
-    // Bring the target app forward so keystrokes land there, not in Roamies (in background mode it stays behind).
+    // Bring the target app forward so keystrokes land there, not in Jarvis (in background mode it stays behind).
     let app = axApp(w)
     bgWin = w; bgApp = app; bgPid = w.pid
     // Keys and clicks go to whichever app is in front, so the target must really be there first.
@@ -2120,7 +2120,7 @@ case "secret-delete":
 case "screencheck":
     // Screen Recording can read as allowed and still not work (say, before a relaunch), so take one real screenshot.
     guard CGPreflightScreenCaptureAccess() else { out(["ok": true, "seen": false]) }
-    let file = NSTemporaryDirectory() + "roamies-screencheck-\(me).jpg"
+    let file = NSTemporaryDirectory() + "jarvis-screencheck-\(me).jpg"
     let code = run("/usr/sbin/screencapture", ["-x", "-t", "jpg", file])
     let size = ((try? FileManager.default.attributesOfItem(atPath: file))?[.size] as? Int) ?? 0
     try? FileManager.default.removeItem(atPath: file)

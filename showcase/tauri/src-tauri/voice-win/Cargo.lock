@@ -576,6 +576,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jarvis-voice"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "hound",
+ "parakeet-rs",
+ "png",
+ "serde_json",
+ "windows-sys",
+ "x11rb",
+]
+
+[[package]]
 name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1313,19 +1326,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "roamies-voice"
-version = "0.1.0"
-dependencies = [
- "cpal",
- "hound",
- "parakeet-rs",
- "png",
- "serde_json",
- "windows-sys",
- "x11rb",
-]
 
 [[package]]
 name = "rustc_version"

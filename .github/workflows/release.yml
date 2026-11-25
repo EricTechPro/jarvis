@@ -178,23 +178,23 @@ jobs:
           if (-not $setup) { throw 'No installer was built' }
           $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode) { throw "The installer failed (exit code $($p.ExitCode))" }
-          $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Jarvis'), (Join-Path $env:ProgramFiles 'Jarvis') -Filter roamies.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $app) { throw 'roamies.exe is not where the installer puts it' }
+          $app = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Jarvis'), (Join-Path $env:ProgramFiles 'Jarvis') -Filter jarvis.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $app) { throw 'jarvis.exe is not where the installer puts it' }
           $dir = $app.DirectoryName
           "Installed in $dir"
-          $missing = @('roamies-node.exe', 'roamies-voice.exe', 'roamies-hands.exe', 'sidecar/sidekick.mjs', 'msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
+          $missing = @('jarvis-node.exe', 'jarvis-voice.exe', 'jarvis-hands.exe', 'sidecar/sidekick.mjs', 'msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
           if ($missing) { throw "The installed app is missing: $($missing -join ', ')" }
-          & (Join-Path $dir 'roamies-hands.exe') --self-test
+          & (Join-Path $dir 'jarvis-hands.exe') --self-test
           if ($LASTEXITCODE) { throw "The installed hands helper failed its self-test ($LASTEXITCODE)" }
-          $perms = & (Join-Path $dir 'roamies-voice.exe') --perms
+          $perms = & (Join-Path $dir 'jarvis-voice.exe') --perms
           if (-not ($perms -match '"type":"perms"')) { throw "The installed voice helper didn't start: $perms" }
           # Voice off so the first run doesn't download the voice model.
-          $data = Join-Path $env:RUNNER_TEMP 'roamies-installed'
+          $data = Join-Path $env:RUNNER_TEMP 'jarvis-installed'
           New-Item -ItemType Directory -Force $data | Out-Null
           Set-Content (Join-Path $data 'sidekick.json') '{"onboarded":true,"setupVersion":2,"voice":false}'
-          $env:ROAMIES_DATA_DIR = $data
+          $env:JARVIS_DATA_DIR = $data
           $run = Start-Process -FilePath $app.FullName -PassThru
-          $logs = Join-Path $data 'Roamies/Data/logs' # the old-layout sidekick.json above moves in there first
+          $logs = Join-Path $data 'Jarvis/Data/logs' # the old-layout sidekick.json above moves in there first
           $started = $false
           for ($i = 0; $i -lt 60; $i++) {
             Start-Sleep -Seconds 1
@@ -204,10 +204,10 @@ jobs:
           $alive = -not $run.HasExited
           if ($alive) { taskkill /PID $run.Id /T /F | Out-Null }
           if (-not ($started -and $alive)) {
-            Get-Content (Join-Path $env:USERPROFILE 'Roamies/Data/logs/sidekick.log') -ErrorAction SilentlyContinue | Select-Object -Last 40
-            throw "The installed Roamies didn't start its sidecar (started: $started, still running: $alive)"
+            Get-Content (Join-Path $env:USERPROFILE 'Jarvis/Data/logs/sidekick.log') -ErrorAction SilentlyContinue | Select-Object -Last 40
+            throw "The installed Jarvis didn't start its sidecar (started: $started, still running: $alive)"
           }
-          "The installed Roamies started its sidecar (pid $($run.Id))"
+          "The installed Jarvis started its sidecar (pid $($run.Id))"
 
       # Tauri notarizes the app inside; the DMG around it is a download of its own that macOS checks too.
       - name: Notarize the DMG

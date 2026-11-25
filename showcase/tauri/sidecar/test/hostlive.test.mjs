@@ -1,4 +1,4 @@
-// The overlay in a Live call (showcase/roamies/host.js): the call's listening bubble shows what they say, and an
+// The overlay in a Live call (showcase/jarvis/host.js): the call's listening bubble shows what they say, and an
 // Allow that's open stays open while they talk (in Classic, starting to talk closes it as a no). Run: npm test
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,16 +13,16 @@ const agent = { visible: true, pos: { x: 0, y: 0, r: 10 }, hide: noop, setAuto: 
   listen: (o) => bubble('listen', o), prompt: (o) => bubble('prompt', o), say: (_, o) => bubble('say', o), think: () => bubble('think') };
 const window = {
   __TAURI__: { core: { invoke: (cmd, args) => { calls.push([cmd, args]); return Promise.resolve(true); } } },
-  Roamie: { ptr: () => false, tiles: [{ creature: { agent } }] },
+  Jarvis: { ptr: () => false, tiles: [{ creature: { agent } }] },
 };
 const ctx = {
-  window, Roamie: window.Roamie, navigator: { platform: 'MacIntel' }, performance, Math, JSON, Promise, Set, Map, Array, Object, String, Number, RegExp, Date,
+  window, Jarvis: window.Jarvis, navigator: { platform: 'MacIntel' }, performance, Math, JSON, Promise, Set, Map, Array, Object, String, Number, RegExp, Date,
   document: { createElement: el, addEventListener: noop, body: el(), hidden: false },
   addEventListener: noop, setTimeout: noop, clearTimeout: noop, clearInterval: noop, setInterval: () => 0,
   matchMedia: () => ({ matches: false, addEventListener: noop }), requestAnimationFrame: noop, innerWidth: 1512, innerHeight: 982,
 };
-vm.runInNewContext(fs.readFileSync(new URL('../../../roamies/host.js', import.meta.url), 'utf8'), ctx);
-const host = window.__roamieHost;
+vm.runInNewContext(fs.readFileSync(new URL('../../../jarvis/host.js', import.meta.url), 'utf8'), ctx);
+const host = window.__jarvisHost;
 const answers = () => calls.filter(([c, a]) => c === 'sidecar_send' && a.msg.type === 'answer');
 
 host({ kind: 'live', state: 'connecting', hint: 'Live · Connecting…' });

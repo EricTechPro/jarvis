@@ -8,11 +8,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'roamies-codexrun-')));
+const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-codexrun-')));
 process.env.HOME = process.env.USERPROFILE = tmp;
-process.env.ROAMIES_DATA_DIR = path.join(tmp, 'data');
+process.env.JARVIS_DATA_DIR = path.join(tmp, 'data');
 process.env.FAKE_CODEX_LOG = path.join(tmp, 'codex.log');
-delete process.env.ROAMIES_FAKE_AGENT;
+delete process.env.JARVIS_FAKE_AGENT;
 const fake = fileURLToPath(new URL('./fakecodex.mjs', import.meta.url));
 const { agentsRoot, createAgents } = await import('../agents.mjs');
 const { checkOpen, checkRead, checkWrite } = await import('../safety.mjs');

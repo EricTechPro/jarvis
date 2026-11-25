@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict';
-import { aboutRoamies } from '../about.mjs';
+import { aboutJarvis } from '../about.mjs';
 
-// The app's manual for about_roamies: each platform's own wording, and only the features this copy has.
-const base = { name: 'JARVIS', looks: ['Roamie', 'JARVIS', 'Anime Girl'], mac: false, linux: false, snap: false, pointer: false, voice: false, hotkeys: false };
-const mac = aboutRoamies({ ...base, mac: true, snap: true, pointer: true, voice: true, hotkeys: true, wake: true });
-const win = aboutRoamies(base);
-const linux = aboutRoamies({ ...base, linux: true, voice: true, wake: true });
+// The app's manual for about_jarvis: each platform's own wording, and only the features this copy has.
+const base = { name: 'JARVIS', looks: ['JARVIS', 'GlayOS', 'Sarah'], mac: false, linux: false, snap: false, pointer: false, voice: false, hotkeys: false };
+const mac = aboutJarvis({ ...base, mac: true, snap: true, pointer: true, voice: true, hotkeys: true, wake: true });
+const win = aboutJarvis(base);
+const linux = aboutJarvis({ ...base, linux: true, voice: true, wake: true });
 assert.match(mac, /lives in the menu bar at the top of the screen/);
 assert.match(mac, /Show JARVIS, Ask JARVIS…, Ask About an Area…, Stop, Quit Jarvis/);
-assert.match(mac, /Look: Roamie, JARVIS or Anime Girl/);
-assert.match(mac, /Wake word \(say "Hey Roamies"/);
+assert.match(mac, /Look: JARVIS, GlayOS or Sarah/);
+assert.match(mac, /Wake word \(say "Hey Jarvis"/);
 assert.match(mac, /Voice Provider: Fish Audio, Gemini or VoiceStudio/);
 assert.match(win, /bottom right of the taskbar/);
 assert.ok(!/Ask About an Area|Wake word|Voice Control|Cursor, a little arrow/.test(win), 'features this copy lacks are left out');
 assert.match(linux, /AppIndicator extension/);
 assert.match(linux, /In-app updates are off in this build/);
-assert.match(linux, /Wake word \(say "Hey Roamies"/, 'the wake word on Windows and Linux too (#97)');
+assert.match(linux, /Wake word \(say "Hey Jarvis"/, 'the wake word on Windows and Linux too (#97)');
 // The settings pages as the panel names them (Speaking, Listening, Shortcuts, General since the split; Routines is an Abilities tab).
 assert.match(mac, /Speaking \(Replies:.*Listening \(Voice Control.*Shortcuts \(.*General \(Sound Effects/);
 assert.match(linux, /Shortcuts \(the commands to bind/, 'no global keys there: the commands to bind');

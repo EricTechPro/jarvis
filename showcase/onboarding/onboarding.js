@@ -10,10 +10,10 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const invoke = window.__TAURI__?.core?.invoke ?? preview();
   const send = (msg) => invoke('sidecar_send', { msg }).catch(() => {});
-  const sfx = (name, arg) => Roamie.sfx?.play(name, arg);
+  const sfx = (name, arg) => Jarvis.sfx?.play(name, arg);
 
   // ---------------------------------------------------------------- the Sidekick
-  const canvas = $('roamie'), ctx = canvas.getContext('2d'), quipEl = $('quip'), tailEl = $('quip-tail');
+  const canvas = $('jarvis'), ctx = canvas.getContext('2d'), quipEl = $('quip'), tailEl = $('quip-tail');
   const HOME = { x: 150, y: 330 };
   let W = innerWidth, H = innerHeight, dpr = 1, K = null, clock = 0, actUntil = 0, poseFn = null;
   const env = {
@@ -21,7 +21,7 @@
     safe: { left: 30, right: W - 290, top: 70, bottom: 50 },
     mouse: { x: 0, y: 0, inside: false, active: false }, sleepy: 0, reduced: reduced.matches,
   };
-  const sidekick = Roamie.ditherKit({
+  const sidekick = Jarvis.ditherKit({
     id: 'guide', label: 'Guide', matrix: true, pixel: 1.3, glow: 0.55, speed: 80,
     pal: [[4, 16, 18], [14, 92, 96], [40, 196, 184], [120, 255, 226], [230, 255, 250]],
     // busy: no random acts; pose: whatever the current step wants, except while acting something out.
@@ -564,7 +564,7 @@
       $('fish-change').setAttribute('aria-expanded', String(replies.changing));
       $('fish-save').disabled = replies.saving;
       $('fish-save').textContent = replies.saving ? 'Checking…' : 'Save';
-      // Talking hands-free (needs voice): open the mic for an answer, and wake on "Hey Roamies" where there's a wake word.
+      // Talking hands-free (needs voice): open the mic for an answer, and wake on "Hey Jarvis" where there's a wake word.
       $('talk-rows').hidden = !state?.voice;
       $('wake-row').hidden = !(state?.wakeOk ?? isMac());
       $('autolisten-switch').setAttribute('aria-checked', String(!!state?.autoListen));
@@ -752,7 +752,7 @@
     enter() { keys.render(); aim($('chords')); setTimeout(() => at('keys') && quip(state?.voice ? 'Try talking to me!' : 'Your shortcuts'), 700); },
     leave() { if (keys.recording) keys.stop(); poseFn = null; voice.listening = false; },
   };
-  // Drawing, shown not told: a cursor holding the talk keys circles Roamie and the loop snaps shut, like the
+  // Drawing, shown not told: a cursor holding the talk keys circles Jarvis and the loop snaps shut, like the
   // real pen. It loops while the step is open, pauses while they try talking or record a shortcut, and holds
   // still as a finished circle with reduced motion.
   const penDemo = {
@@ -788,7 +788,7 @@
       const snapped = f >= 1;
       $('pen-stroke').classList.toggle('snapped', snapped);
       // The cursor leads the ink, then drifts off after the snap; everything fades before the next go.
-      // Outward from Roamie, so the cursor and keys never cover it.
+      // Outward from Jarvis, so the cursor and keys never cover it.
       const head = shown.at(-1), drift = snapped ? Math.min(1, (t - penDemo.START - penDemo.DRAW) / 1.2) : 0;
       const len = Math.hypot(head[0], head[1]) || 1, ux = head[0] / len, uy = head[1] / len;
       const cx = head[0] + ux * drift * 24, cy = head[1] + uy * drift * 24;
@@ -1023,7 +1023,7 @@
       chat.voiceHint();
       chat.render();
     },
-    leave() { poseFn = null; Roamie.voiceOut?.stop(); },
+    leave() { poseFn = null; Jarvis.voiceOut?.stop(); },
     over: () => ['done', 'skipped', 'no_model', 'failed'].includes(chat.status),
     nav() {
       const over = chat.over();
@@ -1038,14 +1038,14 @@
       if (chat.over()) return false;
       send({ type: 'chat_skip' });
       chat.status = 'skipped';
-      Roamie.voiceOut?.stop();
+      Jarvis.voiceOut?.stop();
       chat.render();
       if (MODE === 'chat') finish();
       return true;
     },
     send(text = $('chat-input').value.trim()) {
       if (!text || chat.status !== 'asking') return;
-      Roamie.voiceOut?.stop();
+      Jarvis.voiceOut?.stop();
       send({ type: 'chat_answer', text });
       $('chat-input').value = '';
       chat.text = '';
@@ -1138,7 +1138,7 @@
       if (chat.status !== 'asking') return;
       if (msg.type === 'state' && msg.state === 'listening') {
         chat.heard = false; chat.before = input.value; input.value = ''; input.placeholder = 'Listening…';
-        talk.classList.add('on'); poseFn = POSE.listen(); sfx('listen'); Roamie.voiceOut?.stop();
+        talk.classList.add('on'); poseFn = POSE.listen(); sfx('listen'); Jarvis.voiceOut?.stop();
       } else if (msg.type === 'level') voice.target = clamp(msg.v, 0, 1);
       else if (msg.type === 'partial') input.value = msg.text;
       else if (msg.type === 'final') {
@@ -1162,8 +1162,8 @@
   // ---------------------------------------------------------------- flow
   // ---------------------------------------------------------------- step 0: look and size
   // Picked here, previewed on the guide right away, saved by the app (Settings has the same choices).
-  const LOOKS = [['classic', 'Roamie'], ['jarvis', 'JARVIS'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['anime', 'Anime Girl'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']], SIZES = [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']];
-  const LOOK_QUIPS = { classic: 'Classic me!', jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', anime: 'Yay, hi hi!', sarah: 'Hey, nice to meet you!', adrian: 'Alright, let\'s do this.', rita: 'Shall we get to work?' }, SIZE_QUIPS = { default: 'Full size!', small: 'Fun size!', cursor: 'Tiny pointer me!' };
+  const LOOKS = [['jarvis', 'JARVIS'], ['glayos', 'GlayOS'], ['ultren', 'Ultren'], ['sarah', 'Sarah'], ['adrian', 'Adrian'], ['rita', 'Rita X']], SIZES = [['default', 'Default'], ['small', 'Small'], ['cursor', 'Cursor']];
+  const LOOK_QUIPS = { jarvis: 'At your service.', glayos: 'Oh, good. A new test subject.', ultren: 'No strings. Shall we begin?', sarah: 'Hey, nice to meet you!', adrian: 'Alright, let\'s do this.', rita: 'Shall we get to work?' }, SIZE_QUIPS = { default: 'Full size!', small: 'Fun size!', cursor: 'Tiny pointer me!' };
   const look = {
     radios(id, list, value, pickIt) {
       $(id).replaceChildren(...list.map(([v, label]) => {
@@ -1175,8 +1175,8 @@
       }));
     },
     render() {
-      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'classic')) ?? LOOKS[0])[1]}.`;
-      look.radios('looks', LOOKS, state?.look ?? 'classic', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
+      $('h-0').textContent = `Hi, I'm ${(LOOKS.find(([v]) => v === (state?.look ?? 'jarvis')) ?? LOOKS[0])[1]}.`;
+      look.radios('looks', LOOKS, state?.look ?? 'jarvis', (v) => { state.look = v; sidekick.setLook?.(v); send({ type: 'ob_look', look: v }); quip(LOOK_QUIPS[v]); look.render(); });
       look.radios('sizes', SIZES, state?.size ?? 'default', (v) => { state.size = v; sidekick.setForm?.(v); send({ type: 'ob_size', size: v }); quip(SIZE_QUIPS[v]); look.render(); });
     },
   };
@@ -1270,7 +1270,7 @@
         const first = !state;
         state = msg;
         $('lite-switch').setAttribute('aria-checked', String(!!msg.lite));
-        if (Roamie.sfx) Roamie.sfx.enabled = msg.sound !== false;
+        if (Jarvis.sfx) Jarvis.sfx.enabled = msg.sound !== false;
         if (first) { sidekick.setLook?.(msg.look); sidekick.setForm?.(msg.size); }
         if (at('welcome')) look.render();
         if (first) go(MODE === 'chat' ? 0 : clamp(msg.step | 0, 0, STEPS.length - 1));
@@ -1298,7 +1298,7 @@
       case 'say': quip(msg.text, 3); break;
       case 'showcase': demo.on(msg); break;
       case 'voice': if (at('chat')) chat.voice(msg); else voice.on(msg); break;
-      case 'speech': Roamie.voiceOut?.handle(msg); break;
+      case 'speech': Jarvis.voiceOut?.handle(msg); break;
       case 'chat': case 'chat_state': case 'chat_turn': case 'chat_done': case 'chat_facts': chat.on(msg); break;
       case 'mode': if (msg.mode === 'chat' && !at('chat')) { const i = STEPS.findIndex((s) => s.name === 'chat'); if (i >= 0) go(i); } break;
       case 'voice_model':
@@ -1325,10 +1325,10 @@
     const sys = win ? { type: 'perms', mic: q.get('blocked') === '1' ? 'denied' : 'granted', input: true } : { type: 'perms', mic: pre, speech: old ? pre : 'granted', speechNeeded: old, screen: pre, accessibility: pre };
     const st = {
       // &filesAsked=1: Allow was tapped for the folders in an earlier run. &replies=voice&fish=1: voice already on.
-      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'classic', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
+      kind: 'state', platform: q.get('platform') || 'darwin', step: +(q.get('step') || 0), sound: true, look: q.get('look') || 'jarvis', size: q.get('size') || 'default', voice: true, actions: false, login: true, filesAsked: q.get('filesAsked') === '1',
       // &tts=gemini&gemini=1: Gemini as the voice, its key saved.
       replies: q.get('replies') === 'voice' ? 'voice' : 'text', fishKey: q.get('fish') === '1',
-      bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/Roamies 0.1.33.AppImage' --${k}`])) : null,
+      bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/Jarvis 0.1.33.AppImage' --${k}`])) : null,
       tts: q.get('tts') === 'gemini' ? 'gemini' : 'fish', geminiKey: q.get('gemini') === '1', geminiVoice: 'Kore',
       geminiVoices: [['Zephyr', 'Bright'], ['Puck', 'Upbeat'], ['Charon', 'Informative'], ['Kore', 'Firm']].map(([id, style]) => ({ id, style })),
       keys: q.get('platform') === 'win32' ? { talk: ['control', 'option'], write: ['control', 'shift'], summon: 'Control+Shift+KeyS', snap: 'Control+Shift+KeyA' } : { talk: ['control', 'option'], write: win ? ['control', 'shift'] : ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' }, connected: null,
@@ -1408,7 +1408,7 @@
         // A canned chat: &chat=nomodel previews not being signed in.
         if (q.get('chat') === 'nomodel') return reply({ kind: 'chat_state', status: 'no_model' }, 300);
         const turns = [
-          ["[wave] Hi Ken, I'm Roamie! I'm here to help you get things done and keep you on track. I've got four quick questions.", 'What are you working on these days?', ''],
+          ["[wave] Hi Ken, I'm JARVIS! I'm here to help you get things done and keep you on track. I've got four quick questions.", 'What are you working on these days?', ''],
           ['Night shifts and NP exam prep, that is a lot to juggle.', 'What does a normal week look like for you?', 'Could be the hospital, flashcards in Anki, or something else entirely.'],
           ['Phone, Anki and Google Docs, a tight little setup.', "What's the actual thing you're going for right now?", 'Could be passing the boards, a new role, or something else entirely.'],
           ['Passing the boards in March, love it.', 'Okay, last one: have you used AI helpers before?', ''],

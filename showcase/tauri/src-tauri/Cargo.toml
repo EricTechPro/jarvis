@@ -1,6 +1,6 @@
 [package]
-name = "roamies"
-version = "0.2.0"
+name = "jarvis"
+version = "0.2.1"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "Jarvis: an AI desktop companion (based on Roamies)"

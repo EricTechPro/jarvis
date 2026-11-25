@@ -1,4 +1,4 @@
-// Menu-bar-only shell for the roamies. One transparent, always-on-top, click-through webview per
+// Menu-bar-only shell for the jarvis. One transparent, always-on-top, click-through webview per
 // monitor; a Node sidecar (gg-agent) is the brain and owns the tray menu, settings and logins.
 // No Dock icon (LSUIElement + Accessory policy) and no taskbar entries on Windows/Linux.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -82,7 +82,7 @@ static TYPING: AtomicBool = AtomicBool::new(false);
 static INK_WAIT: AtomicBool = AtomicBool::new(false);
 /// The type-to-ask pair as tap.rs bits (0: none, as on Wayland): a quick tap of it opens the text field by the cursor.
 static WRITE_CHORD: AtomicU8 = AtomicU8::new(0);
-/// The cursor is over something clickable in an overlay (a card, its buttons): a click there is on Roamies, not the app below.
+/// The cursor is over something clickable in an overlay (a card, its buttons): a click there is on Jarvis, not the app below.
 pub(crate) static OVERLAY_HOT: AtomicBool = AtomicBool::new(false);
 
 fn is_overlay(label: &str) -> bool {
@@ -105,7 +105,7 @@ fn to_overlays(app: &AppHandle, msg: &Value) {
     if shows_answer(msg) {
         to_voice(app, &json!({ "cmd": "handoff" }));
     }
-    let js = format!("window.__roamieHost&&__roamieHost({msg})");
+    let js = format!("window.__jarvisHost&&__jarvisHost({msg})");
     for (label, w) in app.webview_windows() {
         if is_overlay(&label) {
             let _ = w.eval(&js);
@@ -127,7 +127,7 @@ fn to_onboarding(app: &AppHandle, msg: &Value) {
 
 // ---------- commands called by the page ----------
 
-/// The Roamie came on screen in this overlay (on), or left it: Esc is held only meanwhile.
+/// Jarvis came on screen in this overlay (on), or left it: Esc is held only meanwhile.
 #[tauri::command]
 fn esc_watch(app: AppHandle, window: WebviewWindow, on: bool) {
     let label = window.label().to_owned();
@@ -235,7 +235,7 @@ fn other_input_down() -> bool {
     false
 }
 
-/// Windows: leaves an overlay out of every capture, so Roamies never shows up in its own screenshots, area snaps
+/// Windows: leaves an overlay out of every capture, so Jarvis never shows up in its own screenshots, area snaps
 /// or the pictures it reads text from.
 #[cfg(target_os = "windows")]
 fn exclude_from_capture(w: &WebviewWindow) {
@@ -313,7 +313,7 @@ fn to_sidekick_buddy(app: &AppHandle, msg: &Value) {
     if msg.get("state").and_then(Value::as_str) != Some("shown") {
         BUDDY_ON.store(false, Ordering::Relaxed);
     }
-    let js = format!("window.__roamieBuddy&&__roamieBuddy({msg})");
+    let js = format!("window.__jarvisBuddy&&__jarvisBuddy({msg})");
     for (label, w) in app.webview_windows() {
         if is_overlay(&label) {
             let _ = w.eval(&js);
@@ -343,7 +343,7 @@ fn set_typing(app: AppHandle, window: WebviewWindow, on: bool) {
         if !linux::unmanaged_overlay() {
             linux::activate(&window);
         }
-        // Opened from a hotkey (e.g. after an area snap), Roamies isn't the active app and macOS 14+
+        // Opened from a hotkey (e.g. after an area snap), Jarvis isn't the active app and macOS 14+
         // ignores plain focus requests, so make the overlay key directly, then ask to activate.
         #[cfg(target_os = "macos")]
         if let Ok(p) = window.ns_window() {
@@ -412,11 +412,11 @@ fn diagnostics(app: &AppHandle) -> Value {
         "webview": tauri::webview_version().ok(),
         "screens": screens,
         "primary": app.primary_monitor().ok().flatten().and_then(|m| m.name().cloned()),
-        "tray_icon": app.tray_by_id("roamies").and_then(|t| t.rect().ok().flatten()).map(rect),
+        "tray_icon": app.tray_by_id("jarvis").and_then(|t| t.rect().ok().flatten()).map(rect),
         "panel": panel,
         "windows": app.webview_windows().keys().cloned().collect::<Vec<_>>(),
         "voice_helper": voice_binary().map(|p| p.exists()),
-        "hands_helper": helper_binary("roamies-hands").map(|p| p.exists()),
+        "hands_helper": helper_binary("jarvis-hands").map(|p| p.exists()),
         "voice_running": app.state::<Voice>().0.lock().map(|v| v.is_some()).unwrap_or(false),
         "permissions": perms,
         "microphones": mics,
@@ -425,7 +425,7 @@ fn diagnostics(app: &AppHandle) -> Value {
 
 /// Accessibility (reading and controlling other apps) is checked by the hands helper.
 fn accessibility(prompt: bool) -> &'static str {
-    let Some(bin) = helper_binary("roamies-hands") else { return "unknown" };
+    let Some(bin) = helper_binary("jarvis-hands") else { return "unknown" };
     let mut cmd = Command::new(bin);
     cmd.arg("trusted");
     if prompt {
@@ -481,7 +481,7 @@ async fn perm_request(kind: String) -> Value {
 #[tauri::command]
 fn open_settings(pane: String) {
     const PANES: [&str; 6] = ["Privacy_Microphone", "Privacy_SpeechRecognition", "Privacy_ScreenCapture", "Privacy_FilesAndFolders", "Privacy_AllFiles", "Privacy_Accessibility"];
-    // explorer hands ms-settings: links to the Settings app. Taskbar: where Roamies' tray icon is switched on.
+    // explorer hands ms-settings: links to the Settings app. Taskbar: where Jarvis' tray icon is switched on.
     if cfg!(windows) && (pane == "privacy-microphone" || pane == "taskbar") {
         let _ = hide_console(&mut Command::new("explorer")).arg(format!("ms-settings:{pane}")).spawn();
         return;
@@ -499,7 +499,7 @@ async fn screen_check() -> Value {
         return json!({ "unsupported": true });
     }
     tauri::async_runtime::spawn_blocking(|| {
-        let Some(bin) = helper_binary("roamies-hands") else { return json!({ "unsupported": true }) };
+        let Some(bin) = helper_binary("jarvis-hands") else { return json!({ "unsupported": true }) };
         Command::new(bin)
             .arg("screencheck")
             .stdin(Stdio::null())
@@ -514,7 +514,7 @@ async fn screen_check() -> Value {
 }
 
 /// Shows the hands helper's panel under System Settings for one Privacy pane ("accessibility" or
-/// "screen"): Roamies' icon to drag into the list, in case macOS left it out. Any other kind just
+/// "screen"): Jarvis' icon to drag into the list, in case macOS left it out. Any other kind just
 /// closes it. The helper waits for Settings to open and leaves once its stdin (held here) closes.
 #[tauri::command]
 fn perm_guide(app: AppHandle, kind: Option<String>) {
@@ -522,8 +522,8 @@ fn perm_guide(app: AppHandle, kind: Option<String>) {
     #[cfg(target_os = "macos")]
     {
         let Some(kind) = kind.filter(|k| k == "accessibility" || k == "screen") else { return };
-        let Some(bin) = helper_binary("roamies-hands") else { return };
-        // The Roamies.app around this binary; a dev build has none, so the panel shows text only.
+        let Some(bin) = helper_binary("jarvis-hands") else { return };
+        // The Jarvis.app around this binary; a dev build has none, so the panel shows text only.
         let bundle = std::env::current_exe()
             .ok()
             .and_then(|e| e.ancestors().find(|p| p.extension().is_some_and(|x| x == "app")).map(|p| p.to_string_lossy().into_owned()))
@@ -620,7 +620,7 @@ fn onboarding_finish(app: AppHandle, text: String) {
     if let Some(w) = app.get_webview_window(ONBOARDING_LABEL) {
         let _ = w.close();
     }
-    let tray = app.tray_by_id("roamies").and_then(|t| t.rect().ok().flatten());
+    let tray = app.tray_by_id("jarvis").and_then(|t| t.rect().ok().flatten());
     let app2 = app.clone();
     // Let the guide window finish closing first, so the drop-in is the only thing moving.
     thread::spawn(move || {
@@ -648,7 +648,7 @@ fn intro_at_tray(app: &AppHandle, tray: Option<tauri::Rect>, text: &str) {
             None => size.width as f64 / scale - 120.0,
         };
         let msg = json!({ "kind": "intro", "x": x, "text": text });
-        let _ = w.eval(format!("window.__roamieHost&&__roamieHost({msg})"));
+        let _ = w.eval(format!("window.__jarvisHost&&__jarvisHost({msg})"));
         return;
     }
 }
@@ -759,7 +759,7 @@ fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
                 .maximizable(false)
                 .minimizable(false)
                 .decorations(false)
-                // macOS: the first click acts even while another app is active, instead of only activating Roamies.
+                // macOS: the first click acts even while another app is active, instead of only activating Jarvis.
                 .accept_first_mouse(true)
                 .always_on_top(true)
                 .skip_taskbar(true)
@@ -789,7 +789,7 @@ fn show_panel(app: &AppHandle, rect: Option<tauri::Rect>, toggle: bool) {
             }
         }
     };
-    let rect = rect.or_else(|| app.tray_by_id("roamies").and_then(|t| t.rect().ok().flatten()));
+    let rect = rect.or_else(|| app.tray_by_id("jarvis").and_then(|t| t.rect().ok().flatten()));
     PANEL_FROM_BOTTOM.store(place_panel(app, &w, rect), Ordering::SeqCst);
     PANEL_GEN.fetch_add(1, Ordering::SeqCst);
     PANEL_CLOSING.store(false, Ordering::SeqCst);
@@ -865,7 +865,7 @@ fn tray_scale(app: &AppHandle) -> f64 {
         .ok()
         .flatten()
     };
-    app.tray_by_id("roamies").and_then(|t| read(&t)).filter(|k| *k > 0.0).unwrap_or(1.0)
+    app.tray_by_id("jarvis").and_then(|t| read(&t)).filter(|k| *k > 0.0).unwrap_or(1.0)
 }
 #[cfg(not(target_os = "macos"))]
 fn tray_scale(_app: &AppHandle) -> f64 {
@@ -882,7 +882,7 @@ fn set_panel_position(w: &WebviewWindow, x: f64, y: f64, _s: f64) {
 
 // ---------- setup guide window ----------
 
-/// While the setup guide is open Roamies is a normal app (Dock icon, ⌘Tab), so it's easy to get
+/// While the setup guide is open Jarvis is a normal app (Dock icon, ⌘Tab), so it's easy to get
 /// back to after a trip to System Settings. Otherwise it lives only in the menu bar.
 fn set_dock(app: &AppHandle, visible: bool) {
     #[cfg(target_os = "macos")]
@@ -917,7 +917,7 @@ fn open_onboarding(app: &AppHandle, mode: Option<&str>) {
         .maximizable(false)
         .minimizable(false)
         .center()
-        // macOS: the first click acts even while another app is active, instead of only activating Roamies.
+        // macOS: the first click acts even while another app is active, instead of only activating Jarvis.
         .accept_first_mouse(true)
         .focused(true)
         .background_color(tauri::window::Color(5, 16, 18, 255));
@@ -1063,7 +1063,7 @@ fn move_sidekick_to(app: &AppHandle, x: f64, y: f64) {
         let _ = w.set_size(tauri::PhysicalSize::new(mon.size().width, mon.size().height.saturating_sub(1)));
     }
     let _ = w.eval(safe_js(&mon));
-    let _ = w.eval("window.__roamieMoved&&__roamieMoved()");
+    let _ = w.eval("window.__jarvisMoved&&__jarvisMoved()");
 }
 
 fn build_overlays(app: &AppHandle) -> tauri::Result<()> {
@@ -1085,12 +1085,12 @@ fn build_overlays(app: &AppHandle) -> tauri::Result<()> {
         let scale = mon.scale_factor();
         let pos = mon.position().to_logical::<f64>(scale);
         let size = mon.size().to_logical::<f64>(scale);
-        let init = format!("window.ROAMIE_ONLY=[{}];window.ROAMIE_AUTOSOUND=true;window.ROAMIE_UNIT=400;", mine.join(","));
+        let init = format!("window.JARVIS_ONLY=[{}];window.JARVIS_AUTOSOUND=true;window.JARVIS_UNIT=400;", mine.join(","));
         // Linux: the page reports its click areas (host.js). Linux and Windows: the window stops a pixel short of the
         // screen, as one of exactly its size is taken for a fullscreen app (GNOME then hides its top bar; Windows
         // draws a strip by an auto-hidden taskbar, #58).
         #[cfg(target_os = "linux")]
-        let init = format!("{init}window.ROAMIE_LINUX={:?};", linux::session().name());
+        let init = format!("{init}window.JARVIS_LINUX={:?};", linux::session().name());
         #[cfg(not(target_os = "macos"))]
         let size = tauri::LogicalSize::new(size.width, size.height - 1.0);
         let label = format!("overlay-{gen}-{i}");
@@ -1113,7 +1113,7 @@ fn build_overlays(app: &AppHandle) -> tauri::Result<()> {
             .visible_on_all_workspaces(true)
             .skip_taskbar(true)
             // macOS: a click on its bubbles and buttons (Allow, Don't allow) acts even while another app is active,
-            // instead of only activating Roamies. It stays unfocusable: set_typing decides when it takes the keyboard.
+            // instead of only activating Jarvis. It stays unfocusable: set_typing decides when it takes the keyboard.
             .accept_first_mouse(true)
             .focused(false)
             .focusable(false)
@@ -1351,7 +1351,7 @@ fn safe_js(mon: &tauri::Monitor) -> String {
     // coordinates (like the window being captured).
     let (ox, oy) = (p.x as f64 / s, p.y as f64 / s);
     let notch = notch_js(ox, z.width as f64 / s, z.height as f64 / s);
-    format!("window.__roamieSafe&&__roamieSafe({{top:{top:.0},left:{left:.0},bottom:{bottom:.0},right:{right:.0},ox:{ox:.0},oy:{oy:.0},notch:{notch}}})")
+    format!("window.__jarvisSafe&&__jarvisSafe({{top:{top:.0},left:{left:.0},bottom:{bottom:.0},right:{right:.0},ox:{ox:.0},oy:{oy:.0},notch:{notch}}})")
 }
 
 /// A screen as the overlays were laid out for it: where it is and its size (physical pixels), and its scale.
@@ -1369,7 +1369,7 @@ fn screens(monitors: &[tauri::Monitor]) -> Vec<Screen> {
     monitors.iter().map(|m| Screen { pos: (m.position().x, m.position().y), size: (m.size().width, m.size().height), scale: m.scale_factor() }).collect()
 }
 
-/// Why the overlays need building again, or None. `have` overlays are open and `roster` Roamies want one each, at
+/// Why the overlays need building again, or None. `have` overlays are open and `roster` Jarvis want one each, at
 /// most one per screen. Never with no screens: while the only display sleeps macOS lists none (it lists active
 /// displays), and the overlays already made are kept for when it wakes.
 fn overlays_stale(built: &[Screen], now: &[Screen], have: usize, roster: usize) -> Option<&'static str> {
@@ -1385,7 +1385,7 @@ fn overlays_stale(built: &[Screen], now: &[Screen], have: usize, roster: usize) 
 }
 
 /// The overlays were built at launch and when the roster changed, and never again. Started while the only display
-/// slept, Roamies listed no screens, built no overlay and never showed the Roamie (it still talked); a screen plugged
+/// slept, Jarvis listed no screens, built no overlay and never showed Jarvis (it still talked); a screen plugged
 /// in or taken away later wasn't followed either. So every 3 s, on the main thread, they're built again when one is
 /// missing or the screens changed.
 fn watch_screens(app: AppHandle) {
@@ -1465,7 +1465,7 @@ fn pump_cursor(app: AppHandle) {
                         };
                         #[cfg(not(target_os = "macos"))]
                         let (x, y) = ((cur.0 - pos.x as f64) / scale, (cur.1 - pos.y as f64) / scale);
-                        let _ = w.eval(format!("window.__roamieClick&&__roamieClick({x:.1},{y:.1},{t:.1})"));
+                        let _ = w.eval(format!("window.__jarvisClick&&__jarvisClick({x:.1},{y:.1},{t:.1})"));
                     }
                 }
             }
@@ -1513,7 +1513,7 @@ fn pump_cursor(app: AppHandle) {
             }
             sent.insert(label.clone(), (x, y));
             let t = start.elapsed().as_secs_f64() * 1000.0;
-            let _ = w.eval(format!("window.__roamiePtr&&__roamiePtr({x:.1},{y:.1},{t:.1})"));
+            let _ = w.eval(format!("window.__jarvisPtr&&__jarvisPtr({x:.1},{y:.1},{t:.1})"));
         }
     });
 }
@@ -1545,7 +1545,7 @@ fn menu_items(app: &AppHandle, items: &[Value]) -> tauri::Result<Vec<Box<dyn IsM
 }
 
 fn set_menu(app: &AppHandle, items: &[Value]) {
-    let Some(tray) = app.tray_by_id("roamies") else { return };
+    let Some(tray) = app.tray_by_id("jarvis") else { return };
     let built = menu_items(app, items).and_then(|kids| {
         let refs: Vec<&dyn IsMenuItem<Wry>> = kids.iter().map(|b| b.as_ref()).collect();
         Menu::with_items(app, &refs)
@@ -1586,10 +1586,28 @@ fn log_stdio(name: &str) -> Stdio {
         .unwrap_or_else(Stdio::null)
 }
 
-/// Where the app's own logs go: ~/Roamies/Data/logs. Until the sidecar has moved old data out of ~/.gg (datadir.mjs),
+/// The app's folder: ~/Jarvis. Before the rename it was ~/Roamies, which becomes ~/Jarvis the first time it's
+/// needed when there's no ~/Jarvis yet (datadir.mjs does the same, whichever runs first). If that rename fails, the
+/// old folder is used this run and the next one tries again.
+fn data_root(home: &std::path::Path) -> PathBuf {
+    let root = home.join("Jarvis");
+    let old = home.join("Roamies");
+    if root.exists() || !old.is_dir() {
+        return root;
+    }
+    match std::fs::rename(&old, &root) {
+        Ok(()) => root,
+        Err(e) => {
+            eprintln!("couldn't rename {} to {}: {e}", old.display(), root.display());
+            old
+        }
+    }
+}
+
+/// Where the app's own logs go: ~/Jarvis/Data/logs. Until the sidecar has moved old data out of ~/.gg (datadir.mjs),
 /// they stay in ~/.gg, so creating the new folder here never makes that move think it's already done.
 fn log_path(home: &std::path::Path, name: &str) -> Option<PathBuf> {
-    let data = home.join("Roamies").join("Data");
+    let data = data_root(home).join("Data");
     let old = home.join(".gg");
     if !data.exists() && (old.join("sidekick").exists() || old.join("sidekick.json").exists()) {
         return Some(old.join(name));
@@ -1647,12 +1665,19 @@ fn login_item(app: &AppHandle, set: Option<bool>) {
         if !installed {
             (false, false, false)
         } else {
+            let add = || { let v = format!("\"{}\"", exe.display()); reg(&["add", KEY, "/v", "Jarvis", "/t", "REG_SZ", "/d", &v, "/f"]) };
+            // Before the rename the entry was "Roamies", pointing at roamies.exe: it's replaced by "Jarvis" (this exe),
+            // so login never starts the old file.
+            if reg(&["query", KEY, "/v", "Roamies"]) {
+                reg(&["delete", KEY, "/v", "Roamies", "/f"]);
+                if set != Some(false) { add(); }
+            }
             match set {
-                Some(true) => { let v = format!("\"{}\"", exe.display()); reg(&["add", KEY, "/v", "Roamies", "/t", "REG_SZ", "/d", &v, "/f"]); }
-                Some(false) => { reg(&["delete", KEY, "/v", "Roamies", "/f"]); }
+                Some(true) => { add(); }
+                Some(false) => { reg(&["delete", KEY, "/v", "Jarvis", "/f"]); }
                 None => {}
             }
-            (true, reg(&["query", KEY, "/v", "Roamies"]), false)
+            (true, reg(&["query", KEY, "/v", "Jarvis"]), false)
         }
     };
     #[cfg(target_os = "linux")]
@@ -1800,9 +1825,9 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
         // Live mode (a Gemini Live call, switched on by voice_config's live): live_capture streams the open call's mic
         // (echo-cancelled 16 kHz PCM, back as live_pcm). macOS helper only.
         Some("live_capture") => to_voice(app, &json!({ "cmd": "live_capture", "on": msg.get("on").and_then(Value::as_bool) == Some(true) })),
-        // `roamies --talk` (Linux): start a take, or send the one under way.
+        // `jarvis --talk` (Linux): start a take, or send the one under way.
         Some("talk_toggle") => to_voice(app, &json!({ "cmd": "toggle" })),
-        // Roamies is answering or speaking: the wake word waits, so it can't wake itself.
+        // Jarvis is answering or speaking: the wake word waits, so it can't wake itself.
         Some("wake_hold") => to_voice(app, &json!({ "cmd": "wake_hold", "on": msg.get("on").and_then(Value::as_bool) == Some(true) })),
         // Esc while it's listening: drop the take.
         Some("listen_cancel") => to_voice(app, &json!({ "cmd": "cancel" })),
@@ -1855,7 +1880,7 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
     }
 }
 
-/// What a second launch asks the running app to do: `roamies --summon | --list | --talk | --ask | --panel`. They're
+/// What a second launch asks the running app to do: `jarvis --summon | --list | --talk | --ask | --panel`. They're
 /// for binding to keys in the desktop's keyboard settings, the one kind of global shortcut Wayland lets every app
 /// have. None: a plain launch.
 fn cli_action(args: &[String]) -> Option<&'static str> {
@@ -1864,8 +1889,8 @@ fn cli_action(args: &[String]) -> Option<&'static str> {
 }
 
 /// A second launch quit and handed its arguments over (the single-instance plugin). A plain one summons the
-/// Roamie and, on Windows and Linux, opens the panel: Windows 11 hides a new tray icon behind the ^ arrow and many
-/// Linux desktops show none, so opening Roamies again from the Start menu or the app list is the way in.
+/// Jarvis and, on Windows and Linux, opens the panel: Windows 11 hides a new tray icon behind the ^ arrow and many
+/// Linux desktops show none, so opening Jarvis again from the Start menu or the app list is the way in.
 fn second_launch(app: &AppHandle, args: &[String]) {
     match cli_action(args) {
         Some("summon") => to_overlays(app, &json!({ "kind": "summon" })),
@@ -1916,7 +1941,7 @@ fn main() {
             let quit = MenuItem::with_id(app, "quit", "Quit Jarvis", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&starting, &quit])?;
             // Left click opens the panel; right click shows the short menu.
-            let mut tray = TrayIconBuilder::with_id("roamies")
+            let mut tray = TrayIconBuilder::with_id("jarvis")
                 .tooltip("Jarvis")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -1970,13 +1995,13 @@ mod tests {
     #[test]
     fn a_second_launch_says_what_it_wants_with_one_flag() {
         let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(cli_action(&args(&["roamies"])), None, "a plain launch");
+        assert_eq!(cli_action(&args(&["jarvis"])), None, "a plain launch");
         for f in ["summon", "list", "talk", "ask", "panel"] {
-            assert_eq!(cli_action(&args(&["/usr/bin/roamies", &format!("--{f}")])), Some(f));
+            assert_eq!(cli_action(&args(&["/usr/bin/jarvis", &format!("--{f}")])), Some(f));
         }
-        assert_eq!(cli_action(&args(&["roamies", "--verbose", "--talk"])), Some("talk"), "other arguments are skipped");
-        assert_eq!(cli_action(&args(&["roamies", "talk"])), None, "only as a flag");
-        assert_eq!(cli_action(&args(&["roamies", "--talks"])), None);
+        assert_eq!(cli_action(&args(&["jarvis", "--verbose", "--talk"])), Some("talk"), "other arguments are skipped");
+        assert_eq!(cli_action(&args(&["jarvis", "talk"])), None, "only as a flag");
+        assert_eq!(cli_action(&args(&["jarvis", "--talks"])), None);
         assert_eq!(cli_action(&args(&["--talk"])), None, "the first argument is the program");
         assert_eq!(cli_action(&args(&[])), None);
     }
@@ -1997,18 +2022,18 @@ mod tests {
         assert!(overlays_stale(&one, &[s(0, 2560)], 1, 1).is_some(), "resolution changed");
         assert!(overlays_stale(&one, &[s(100, 1920)], 1, 1).is_some(), "moved in the arrangement");
         assert!(overlays_stale(&one, &[Screen { scale: 1.0, ..s(0, 1920) }], 1, 1).is_some(), "scale changed");
-        assert_eq!(overlays_stale(&two, &two, 1, 1), None, "two screens and one Roamie: one overlay is all there is");
-        assert!(overlays_stale(&two, &two, 1, 2).is_some(), "two Roamies on two screens and one overlay: build");
-        // build_overlays puts every Roamie on one screen's overlay when there's one screen: counting one overlay per
-        // Roamie there would rebuild every 3 s, forever.
-        assert_eq!(overlays_stale(&one, &one, 1, 2), None, "two Roamies on one screen: one overlay holds both");
-        assert!(overlays_stale(&one, &one, 0, 2).is_some(), "two Roamies on one screen and no overlay: build");
-        assert_eq!(overlays_stale(&one, &one, 0, 0), None, "no Roamies: no overlay is missing");
+        assert_eq!(overlays_stale(&two, &two, 1, 1), None, "two screens and one Jarvis: one overlay is all there is");
+        assert!(overlays_stale(&two, &two, 1, 2).is_some(), "two Jarvis on two screens and one overlay: build");
+        // build_overlays puts every Jarvis on one screen's overlay when there's one screen: counting one overlay per
+        // Jarvis there would rebuild every 3 s, forever.
+        assert_eq!(overlays_stale(&one, &one, 1, 2), None, "two Jarvis on one screen: one overlay holds both");
+        assert!(overlays_stale(&one, &one, 0, 2).is_some(), "two Jarvis on one screen and no overlay: build");
+        assert_eq!(overlays_stale(&one, &one, 0, 0), None, "no Jarvis: no overlay is missing");
     }
 
     #[test]
     fn a_helper_log_past_its_limit_starts_again_keeping_one_old_copy() {
-        let dir = std::env::temp_dir().join(format!("roamies-log-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("jarvis-log-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (log, old) = (dir.join("sidekick.log"), dir.join("sidekick.log.old"));
         std::fs::write(&log, vec![b'x'; 1000]).unwrap();
@@ -2024,19 +2049,36 @@ mod tests {
     }
 
     #[test]
-    fn app_logs_go_in_the_roamies_data_folder_once_old_data_has_moved() {
-        let home = std::env::temp_dir().join(format!("roamies-logpath-{}", std::process::id()));
+    fn app_logs_go_in_the_jarvis_data_folder_once_old_data_has_moved() {
+        let home = std::env::temp_dir().join(format!("jarvis-logpath-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.join(".gg").join("sidekick")).unwrap();
         assert_eq!(log_path(&home, "sidekick.log"), Some(home.join(".gg").join("sidekick.log")), "old data not moved yet");
-        assert!(!home.join("Roamies").exists(), "and Data/ isn't created early");
-        std::fs::create_dir_all(home.join("Roamies").join("Data")).unwrap();
-        let logs = home.join("Roamies").join("Data").join("logs");
+        assert!(!home.join("Jarvis").exists(), "and Data/ isn't created early");
+        std::fs::create_dir_all(home.join("Jarvis").join("Data")).unwrap();
+        let logs = home.join("Jarvis").join("Data").join("logs");
         assert_eq!(log_path(&home, "sidekick.log"), Some(logs.join("sidekick.log")), "after the move");
         assert!(logs.is_dir(), "the logs folder is made");
         let fresh = home.join("fresh");
         std::fs::create_dir_all(&fresh).unwrap();
-        assert_eq!(log_path(&fresh, "sidekick-voice.log"), Some(fresh.join("Roamies").join("Data").join("logs").join("sidekick-voice.log")), "a fresh install");
+        assert_eq!(log_path(&fresh, "sidekick-voice.log"), Some(fresh.join("Jarvis").join("Data").join("logs").join("sidekick-voice.log")), "a fresh install");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_old_roamies_folder_becomes_jarvis() {
+        let home = std::env::temp_dir().join(format!("jarvis-rename-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("Roamies").join("Data").join("logs")).unwrap();
+        std::fs::write(home.join("Roamies").join("Data").join("settings.json"), "{}").unwrap();
+        let logs = home.join("Jarvis").join("Data").join("logs");
+        assert_eq!(log_path(&home, "sidekick.log"), Some(logs.join("sidekick.log")));
+        assert!(home.join("Jarvis").join("Data").join("settings.json").is_file(), "its data came along");
+        assert!(!home.join("Roamies").exists(), "renamed, not copied");
+        // Both there (say, an older copy ran again): ~/Jarvis wins and the old one is left alone.
+        std::fs::create_dir_all(home.join("Roamies")).unwrap();
+        assert_eq!(data_root(&home), home.join("Jarvis"));
+        assert!(home.join("Roamies").exists());
         let _ = std::fs::remove_dir_all(&home);
     }
 }

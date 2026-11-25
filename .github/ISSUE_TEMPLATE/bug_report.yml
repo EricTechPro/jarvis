@@ -44,4 +44,4 @@ body:
     id: logs
     attributes:
       label: Diagnostics file
-      description: In Jarvis, open the panel > General > Help > Save diagnostics (or the tray icon's menu > Save Diagnostics…). It saves a roamies-diagnostics-….log file in Downloads with keys and personal details removed. Drag that file into this box.
+      description: In Jarvis, open the panel > General > Help > Save diagnostics (or the tray icon's menu > Save Diagnostics…). It saves a jarvis-diagnostics-….log file in Downloads with keys and personal details removed. Drag that file into this box.

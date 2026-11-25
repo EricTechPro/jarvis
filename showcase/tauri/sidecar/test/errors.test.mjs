@@ -42,7 +42,7 @@ const circular = {}; circular.self = circular;
 const NASTY = [
   '{ "error": { "message": "Incorrect thing", "type": "weird_error", "param": null, "code": "nope" } }',
   '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body><center><h1>502 Bad Gateway</h1></center><hr>cloudflare</body></html>',
-  'TypeError: Cannot read properties of undefined (reading \'x\')\n    at prompt (file:///Applications/Roamies.app/sidekick.mjs:882:17)\n    at async run (node:internal/x:1:1)',
+  'TypeError: Cannot read properties of undefined (reading \'x\')\n    at prompt (file:///Applications/Jarvis.app/sidekick.mjs:882:17)\n    at async run (node:internal/x:1:1)',
   'x'.repeat(5000),
   `zxqv ${'{"a":"b"},'.repeat(600)}`,
   '', null, undefined, 0, 404, NaN, {}, [], circular, { message: { nested: '"quoted"' } }, Symbol('s').toString(), () => 'fn',
@@ -118,9 +118,9 @@ const CASES = [
   ['hearing', 'The network connection was lost.', 'x', 'Speech recognition needs the internet. Try again.'],
   ['hearing', 'Load model from parakeet.onnx failed', 'x', "My voice model didn't load. Restart Jarvis."],
   ['screen', new Error('Screen Recording permission is off'), 'x', 'I need Screen Recording permission for that.'],
-  ['screen', new Error("Roamies didn't answer in time."), 'x', 'The screenshot took too long. Try again.'],
+  ['screen', new Error("Jarvis didn't answer in time."), 'x', 'The screenshot took too long. Try again.'],
   ['diagnostics', Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' }), 'x', 'Not enough disk space for the diagnostics file.'],
-  ['diagnostics', Object.assign(new Error("EACCES: permission denied, open '/Users/jane/Downloads/roamies-diagnostics.log'"), { code: 'EACCES' }), 'x', "I couldn't write the diagnostics file there."],
+  ['diagnostics', Object.assign(new Error("EACCES: permission denied, open '/Users/jane/Downloads/jarvis-diagnostics.log'"), { code: 'EACCES' }), 'x', "I couldn't write the diagnostics file there."],
 ];
 for (const [area, err, who, text, store] of CASES) {
   const p = explain(area, err, { who, store });

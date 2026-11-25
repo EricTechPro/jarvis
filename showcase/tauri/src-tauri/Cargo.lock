@@ -1789,6 +1789,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jarvis"
+version = "0.2.1"
+dependencies = [
+ "futures-core",
+ "global-hotkey",
+ "gtk",
+ "objc2",
+ "objc2-service-management",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "x11rb 0.14.0",
+ "zbus 6.5.0",
+]
+
+[[package]]
 name = "javascriptcore-rs"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2971,25 +2990,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "roamies"
-version = "0.2.0"
-dependencies = [
- "futures-core",
- "global-hotkey",
- "gtk",
- "objc2",
- "objc2-service-management",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "x11rb 0.14.0",
- "zbus 6.5.0",
 ]
 
 [[package]]

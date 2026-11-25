@@ -53,11 +53,11 @@ Each provider's own privacy policy applies to what is sent to it.
 - The microphone is used only while you hold the talk keys (or, on Linux with Wayland, from your talk shortcut
   until you press it again or pause).
 - **Wake word (macOS, off by default):** when you turn it on, the microphone stays open so Jarvis can hear
-  "Hey Roamies", and macOS shows its microphone dot the whole time. That audio is turned into text only on your Mac
+  "Hey Jarvis", and macOS shows its microphone dot the whole time. That audio is turned into text only on your Mac
   (it never starts on a Mac that would need Apple's servers). Nothing is kept or sent anywhere until you say the phrase;
   the log notes only when it heard speech and how close that came to the phrase, never what was said.
 - **Memory sync (off by default):** if you choose a sync folder, Jarvis writes your reminders, commitments and
-  remembered facts to `Roamies Sync/<random id>.json` in it, so your other computer can read them. Everything in that
+  remembered facts to `Jarvis Sync/<random id>.json` in it, so your other computer can read them. Everything in that
   folder is encrypted (AES-256-GCM) with a key made from a passphrase you type on each computer; the key is kept in
   your Keychain (macOS), with DPAPI (Windows) or in your keyring (Linux), and the passphrase itself isn't stored. Your
   sync service sees only encrypted files and random file names. Conversations, sign-ins and keys are never written
@@ -67,7 +67,7 @@ Each provider's own privacy policy applies to what is sent to it.
 
 ## What's stored on your computer
 
-Everything lives in one **Roamies** folder in your home folder (`~/Roamies`, on Windows `%USERPROFILE%\Roamies`)
+Everything lives in one **Jarvis** folder in your home folder (`~/Jarvis`, on Windows `%USERPROFILE%\Jarvis`)
 and stays on your computer:
 
 | File or folder           | What's in it                                                                        |
@@ -79,17 +79,17 @@ and stays on your computer:
 | `Data/usage.jsonl`       | token counts and timings only, never content                                       |
 | `Data/jobs.json`         | your scheduled jobs (never synced to another computer)                             |
 | `Data/mcp.json`          | your connections; their keys and tokens are kept with your other keys, not here   |
-| `Data/models/`           | the speech model, on Linux (on Windows it's in `%LOCALAPPDATA%\Roamies\models`)    |
+| `Data/models/`           | the speech model, on Linux (on Windows it's in `%LOCALAPPDATA%\Jarvis\models`)    |
 | `Skills/`                | the skills Jarvis learned or you installed, one folder each with its `SKILL.md`   |
 | `Agents/`                | what background agents made                                                         |
 
 Your AI sign-ins are in `~/.gg/auth.json` (on Windows, `%USERPROFILE%\.gg\auth.json`), shared with GG Coder.
 
 Older versions kept Jarvis' data in `~/.gg/sidekick` and `~/.gg/sidekick.json`. The first launch after
-updating copies it into `~/Roamies/Data` and leaves the old copy where it was, with a `MOVED.txt` note. You can
+updating copies it into `~/Jarvis/Data` and leaves the old copy where it was, with a `MOVED.txt` note. You can
 delete the old copy once you're happy everything came across.
 
-**Save Diagnostics** (the panel's General page under Help, or the tray icon's menu) writes one `roamies-diagnostics-….log` file to
+**Save Diagnostics** (the panel's General page under Help, or the tray icon's menu) writes one `jarvis-diagnostics-….log` file to
 your Downloads folder, only when you ask. It holds the logs above, your system and screen details, your microphones and
 permission states, and your settings. Keys, tokens, email addresses, names, your home folder and user name are removed
 first. Nothing is uploaded: it stays on your computer unless you choose to send it (for example by attaching it to a

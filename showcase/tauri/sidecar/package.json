@@ -1,5 +1,5 @@
 {
-  "name": "roamies-sidekick",
+  "name": "jarvis-sidekick",
   "description": "The Jarvis agent: a Node sidecar for the Jarvis desktop app (based on Roamies)",
   "private": true,
   "license": "AGPL-3.0-only",
