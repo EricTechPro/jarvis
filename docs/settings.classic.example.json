@@ -1,0 +1,10 @@
+{
+  "voiceMode": "classic",
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "voice": true,
+  "replies": "voice",
+  "tts": "gemini",
+  "allowActions": false,
+  "secondBrain": { "root": "~/Notes" }
+}
