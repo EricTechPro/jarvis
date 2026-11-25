@@ -19,6 +19,18 @@ export const SWITCH_TO_CLASSIC = 'Switch to Classic';
 // ponytail: how long held draw marks wait for her voice before drawing anyway (a walkthrough step waiting for a click
 // gets no voice until after it). A guess: needs a calibration pass on a real call, with a real mic and speakers.
 export const DRAW_HOLD_MS = 5000;
+// ponytail: cutting in on her locally (story 10). Mic loudness (RMS, fraction of full scale) held this long while her
+// reply plays stops it before Gemini's `interrupted` arrives. A guess: needs a real-mic calibration pass by Eric (echo
+// cancellation leaves some of her own voice in; too low and she cuts herself off, too high and she talks over him).
+export const CUT_IN = { rms: 0.04, holdMs: 150 };
+
+// RMS of a base64 16 kHz s16le mono frame, as a fraction of full scale, and its length in ms.
+const frameLevel = (data) => {
+  const b = Buffer.from(data, 'base64'), n = b.length >> 1;
+  let sum = 0;
+  for (let i = 0; i < n; i++) { const v = b.readInt16LE(i * 2) / 32768; sum += v * v; }
+  return { rms: n ? Math.sqrt(sum / n) : 0, ms: n / 16 };
+};
 
 /**
  * makeBrain(emit): a Live brain for one call (async: the key is looked up first). ask: the app's yes/no card.
@@ -26,11 +38,12 @@ export const DRAW_HOLD_MS = 5000;
  * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
  * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent).
  */
-export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS }) {
+export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN }) {
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
   let speechId = null; // the reply audio playing now
+  let cutId = null, loudMs = 0; // cutId: the reply he cut in on (its late audio is dropped); loudMs: how long he's been loud
   // draw in the call: its lines are said by her after the tool answers, so its overlay segments are held here (by
   // tool call id) and released when her voice after that answer starts. answered: the answer went out.
   const held = new Map(); // id → { segs: [ui message], answered, timer }
@@ -78,6 +91,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         if (e.state !== 'speaking') ui({ kind: 'live', state: e.state, hint: e.state === 'listening' ? `Live · Listening… ${typeof hangUpHint === 'function' ? hangUpHint() : hangUpHint}`.trim() : undefined });
         return;
       case 'audio':
+        if (e.id === cutId) return;
         for (const [id, h] of [...held]) if (h.answered) release(id, true);
         speechId = e.id;
         if (turn) turn.speech ??= e.id;
@@ -161,7 +175,17 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     hangUp,
     /** A problem outside the call itself (the helper's mic): hang up and show the card. */
     fail,
-    pcm(data) { brain?.pushAudio(data); },
+    pcm(data) {
+      if (!brain) return;
+      brain.pushAudio(data);
+      if (!speechId) { loudMs = 0; return; }
+      const { rms, ms } = frameLevel(data);
+      loudMs = rms >= cutIn.rms ? loudMs + ms : 0;
+      if (loudMs < cutIn.holdMs) return;
+      // He's talking over her: stop her now; Gemini's `interrupted` follows and ends the turn.
+      loudMs = 0; cutId = speechId; speechId = null;
+      ui({ kind: 'speech', stop: true });
+    },
     pushImage(data, mimeType) { brain?.pushImage(data, mimeType); },
     /** A crop for the call: straight in when it is up, held until it is listening while it connects, and it opens a call when there is none. */
     async look(data, mimeType) {
