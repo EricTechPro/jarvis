@@ -12,7 +12,12 @@
         { "kind": "fixed", "title": "No stray thinking", "text": "Gemini's planning notes no longer show up or get read out before my answer." },
         { "kind": "fixed", "title": "Codex builders can write", "text": "A Codex Builder can now make files, in its own folder only." },
         { "kind": "fixed", "title": "Codex models that work", "text": "The Codex models offered are the ones your account can use." },
-        { "kind": "fixed", "title": "Straight to the app", "text": "Asked to work an app, I use the screen right away instead of reading my own code." }
+        { "kind": "fixed", "title": "Straight to the app", "text": "Asked to work an app, I use the screen right away instead of reading my own code." },
+        { "kind": "fixed", "title": "Headed answers stay", "text": "An answer that starts with a bold heading, like Morning Briefing, shows in full." },
+        { "kind": "fixed", "title": "Headed answers stream", "text": "Those answers now show and speak as they come, not only at the end." },
+        { "kind": "fixed", "title": "Codex stops writing", "text": "Turn Allow actions off and a Codex Builder stops changing files on its next turn." },
+        { "kind": "fixed", "title": "Your real Desktop", "text": "The new second brain goes on your real Desktop, even with OneDrive or another language." },
+        { "kind": "fixed", "title": "No call from a goodbye", "text": "After you hang up in Live, my last words can't wake me and start a new call." }
       ]
     },
     {
