@@ -100,7 +100,7 @@ try {
     const s = start();
     await hello(s);
     s.send({ type: 'ob_step', step: 99 });
-    await saved((c) => c.onboardStep === 8, 'CP-11: a step past the end is clamped to the last one');
+    await saved((c) => c.onboardStep === 9, 'CP-11: a step past the end is clamped to the last one (Find me, step 9 of 0-9)');
     s.send({ type: 'ob_step', step: -4 });
     await saved((c) => c.onboardStep === 0, 'CP-11: a negative step is clamped to 0');
     s.send({ type: 'ob_step', step: 5 });

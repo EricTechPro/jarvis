@@ -114,7 +114,10 @@ async function run({ agent: a, model: md, content }) {
   if (Fake) agent = new Fake({ ...common, provider: md.provider });
   else if (route === 'claude-code') agent = new ClaudeCodeAgent({ ...common, executable: md.cc.executable, env: md.cc.env, cwd: a.dir });
   // Codex runs headless with our tools served to it over MCP (codex.mjs); md.codex is the CLI to run.
-  else if (route === 'codex') agent = new CodexAgent({ ...common, codex: md.codex, cwd: a.dir });
+  // Types that make or move files (the Builder, Writer, Tidier) may let Codex write in their folder while actions are
+  // allowed (checked again for every turn, so turning actions off mid-run reaches the next one); researchers and
+  // operators stay read-only.
+  else if (route === 'codex') agent = new CodexAgent({ ...common, codex: md.codex, cwd: a.dir, write: () => allow && (a.type === 'maker' || a.type === 'organizer') });
   else {
     agent = new Agent({
       ...common, provider: md.provider, maxTurnExtensions: 0, baseUrl: md.baseUrl, transportSessionId: a.id ? `jarvis-agent-${a.id}` : undefined,

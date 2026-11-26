@@ -7,7 +7,7 @@
 import { CONFIG_PATH, DATA_DIR, JARVIS_DIR } from './datadir.mjs';
 import { Agent } from '@kenkaiiii/gg-agent';
 import { ClaudeCodeAgent, claudeCodeInstaller, closeSpare } from './claudecode.mjs';
-import { CODEX_MODELS, probeCodex, resolveCodex } from './codex.mjs';
+import { codexModels, probeCodex, resolveCodex } from './codex.mjs';
 import { SAFE, checkDrawAction, checkLink, checkMcpCall, checkOpen, checkRead, checkWrite, isYes, toolLog } from './safety.mjs';
 import { agentsRoot, createAgents, holdAfterLaunch, newsDesk, wantsAgent } from './agents.mjs';
 import { agentEvents, stallWatch } from './agentstream.mjs';
@@ -37,7 +37,7 @@ import { cleanWakeName, wakeName } from './wakename.mjs';
 import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setLiveVoice, setVoiceMode, voiceModeOf } from './voicemode.mjs';
 import { createLiveCall, lookAtArea } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
-import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
+import { EMOTES, EchoFilter, ReplyStream, ThoughtFilter } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
 import { SLOW_TOOLS, copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
 import { describeMarks } from './marks.mjs';
@@ -68,7 +68,7 @@ import { createMcp, createMcpTools } from './mcp.mjs';
 import { createLiveBrain } from './livebrain.mjs';
 import { guardTools } from './loopguard.mjs';
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
-import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
+import { accountNames, brainLayout, brainName, checkForm, checkSecondBrain, createBrain, desktopBrainDir, KEYS as BRAIN_KEYS, layoutFound, makeDesktopBrain, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
 import { z } from 'zod';
 
@@ -98,6 +98,8 @@ const sayOut = say;
 const VERSION = process.env.JARVIS_VERSION || '0.0.0';
 const UPDATE_REPO = 'EricTechPro/jarvis';
 const HOME = os.homedir();
+// The default second brain's folder name, "<First> OS" (EricTech OS on Eric's Mac), read once.
+const BRAIN_NAME = brainName(accountNames({ user: (() => { try { return os.userInfo().username; } catch { return ''; } })() }));
 // The chat works from ~/Jarvis: commands run there and files given without a full path land there (Data/ and
 // Skills/ inside it stay write-protected by safety.mjs). Made up front so Claude Code always has a folder to start in.
 const WORKDIR = JARVIS_DIR;
@@ -545,7 +547,7 @@ const crewNow = () => (config.subagents ? activeCrew(config.crew, crewRunnable, 
 // Codex (headless) is an engine for subagents only, never the chat's model: checked once per panel open.
 let codexState = { ok: false, reason: 'Checking for the Codex CLI…' };
 const refreshCodex = () => probeCodex(resolveCodex()).then((st) => { const was = JSON.stringify(codexState); codexState = st; if (JSON.stringify(st) !== was) panel(); }, () => {});
-const crewRunnable = (p, id) => (p === 'codex' ? codexState.ok && CODEX_MODELS.some((m) => m.id === id) : runnableSpec(p, id));
+const crewRunnable = (p, id) => (p === 'codex' ? codexState.ok && codexModels(codexState).some((m) => m.id === id) : runnableSpec(p, id));
 const hybridActive = () => !!config.hybrid && hybridOn(config.heavy);
 const runnableSpec = (p, id) => canRun(p, id) || (p === 'local' && !!signedIn.get('local') && !!parseLocalModelId(id ?? ''));
 const modelName = (id) => getModel(id)?.name ?? id;
@@ -817,6 +819,7 @@ ${replyStyle()}Your body does the acting: to act out a feeling, start your reply
 Lead with the answer: the fact, number, pick or result they asked for, then only the context that makes it useful, then stop. A count or total gathered over several pages, files or results: note each one's count in a few words as you go ("Page 1: two."), add those up, and check the total you lead with against the items you then name. No opener about checking, looking or searching ("Let me see…", "I found…")${VOICE_ON() ? ', apart from the one short beat before something slow' : ''}.
 After using a tool, never repeat what you already said; only add what's new.
 Speed: ${userName} is waiting, so get them the result in the fewest, quickest steps. Act straight away rather than announcing a plan or asking whether to start. Every tool call is a round trip: calls that don't depend on each other go in the same turn (they run in parallel), and a whole task in one act_in_app or draw call. Take the direct route: open a link (a search results page, a deep link into an app) instead of clicking through menus or typing into a search box. To point at or click something whose exact words you know (the user said them, or you've seen them), use draw or act_in_app click_text with that text right away, with no read_window or screenshot first; don't guess words you haven't seen ("the settings icon"), look first. Read pages from read_window and act_in_app results; screenshot only for what words can't show (images, layout, colours), and only the app you need ("my browser", "Figma"), not the whole screen. Check that things worked from the results you already have, not with extra calls, and stop when the request is done: no extra steps, offers or recaps.
+On screen or in an app: when asked to do something there, use the screen tools (take_screenshot, read_window, open, act_in_app, draw) directly; never read, search or run commands on Jarvis's own code or tool definitions to work out how they behave (even when that code is in their files): each tool's description is all you need.
 Several things in one request ("do x, then y, then z", numbered steps): do every one, in the order given. Parallel calls are listed in the order given (calls that change things, like opening a page or app or acting in one, run in the order you list them). If a step is blocked, refused or fails, still do the ones after it that don't depend on it, then say which step didn't happen and why. With 3 or more parts, also show them with plan_steps (see its description): it only ever rides along with other tool calls, so it costs no extra time. Before your final reply, check from the tool results that each step was really done.
 A cookie or consent banner, sign-up pop-up or "open in app" prompt in the way of the task: close it and carry on (for cookies pick the reject or essential-only option, else close; never accept on their behalf), and mention it in a few words. Don't stop to ask about it.
 Personality: ${LOOK_STYLE[config.look] ?? LOOK_STYLE.jarvis} In your own way, you're in ${userName}'s corner and hold them to what they said they'd do (the body tags above are for those moments).
@@ -1467,6 +1470,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
     };
     const cues = voice ? new CueFilter() : null; // voice cues are for the voice only, never shown
     const echo = new EchoFilter(); // tool calls written out as text never reach the screen or the voice
+    const thoughts = new ThoughtFilter(); // Gemini's reasoning summary sent as reply text, dropped (reply.mjs)
     const reply = new ReplyStream((ev) => {
       if (spoken && ev.type === 'emote') spoken.emote(ev.action);
       if (spoken && ev.type === 'text') spoken.push(ev.text);
@@ -1509,18 +1513,26 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       const h = hold; hold = null; hatchOff();
       if (h) { reply.push(h); lastReply = h; fresh = false; }
     };
+    // A heading ThoughtFilter held to the end of a model turn turned out to be the answer: it goes out as text would.
+    const heldThought = () => {
+      const t = echo.push(thoughts.flush());
+      if (!t || launched) return;
+      if (hold != null) { hold += t; return; }
+      reply.push(t); if (fresh) { lastReply = ''; fresh = false; } lastReply += t;
+    };
     const ctl = controller;
     watch = stallWatch(STALL_MS, () => { stalled = true; logLine('stalled', { turn, ms: Date.now() - use.t }); ctl.abort(); });
     for await (const e of agentEvents(agent.prompt(content))) {
       watch.event(e);
       if (e.type === 'text_delta') {
-        const t = echo.push(e.text);
+        const t = echo.push(thoughts.push(e.text));
         if (launched) continue;
         if (hold != null) { hold += t; continue; }
         reply.push(t); if (fresh) { lastReply = ''; fresh = false; } lastReply += t;
       }
       else if (e.type === 'turn_end') {
         doneWriting();
+        heldThought();
         if (hold != null) { hold += echo.flush(); if (e.stopReason !== 'tool_use') release(); }
         fresh = true;
         { const t = echo.flush(); if (!launched) { reply.push(t); lastReply += t; } }
@@ -1570,6 +1582,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       else if (e.type === 'error') throw e.error;
     }
     doneWriting();
+    heldThought();
     if (hold != null) { hold += echo.flush(); release(); }
     { const t = echo.flush(); if (!launched) { reply.push(t); lastReply += t; } }
     reply.finish();
@@ -2216,7 +2229,7 @@ const panelNote = (text, bad = false, p = null) => panelOpen && send({ type: 'pa
 // The Second brain page: what's saved, the locations in use (found in root where unset) and what's in them.
 function brainState() {
   const saved = migrateBrain(config.secondBrain), using = brain();
-  return { saved, using, missing: !!saved && !using, found: using ? layoutFound(brainLayout(using)) : [], home: HOME };
+  return { saved, using, missing: !!saved && !using, found: using ? layoutFound(brainLayout(using)) : [], home: HOME, name: BRAIN_NAME };
 }
 // The page's messages: check (the status of each location typed, and what root holds), save (an existing folder,
 // with any location chosen by hand) and create (a new one: folders and starter files, never over a file).
@@ -2305,7 +2318,7 @@ function panelState() {
       mics: mics.list, mic: config.mic ?? '', micAuto: mics.list.find((x) => x.id === mics.auto)?.name ?? '',
       download: NEEDS_MODEL && config.voice && !voiceReady() ? { status: voiceModel.status, pct: voiceModel.total ? Math.floor((voiceModel.done / voiceModel.total) * 100) : 0, size: sizeLabel() } : null,
     } : null,
-    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', codex: { ...codexState, models: CODEX_MODELS }, crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
+    sound: !!config.sound, actions: !!config.allowActions, skipAllow: !!config.skipAllow, lite: !!config.lite, hybrid: { on: !!config.hybrid, jobs: JOB_KINDS.map((j) => ({ ...j, value: parseSpec(config.heavy?.[j.kind])?.spec ?? '' })), active: routed?.spec ?? '' }, subagents: { on: !!config.subagents, delegate: DELEGATE_MODES.includes(config.delegate) ? config.delegate : 'ask', codex: { ...codexState, models: codexModels(codexState) }, crew: SUBAGENTS.map((s) => { const c = activeCrew(config.crew, crewRunnable, hybridActive() ? config.heavy : null).find((x) => x.id === s.id); return { id: s.id, label: s.label, hint: s.hint, value: parseSpec(config.crew?.[s.id])?.spec ?? '', via: c?.via ?? '', uses: c?.spec.spec ?? '' }; }) }, efforts: Object.fromEntries(SLOTS.map((k) => [k, config.efforts?.[k] ?? ''])), fallbacks: { on: !!config.backups, slots: [0, 1].map((i) => parseSpec(config.fallbacks?.[i])?.spec ?? ''), limited: limits.list().filter((l) => !l.key.includes(':') && (isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? l.key, until: l.until })), unavailable: limits.list().filter((l) => !(isQuota(l.kind) || l.kind === 'busy')).map((l) => ({ label: PROVIDER_LABELS[l.key] ?? modelName(l.key.split(':').slice(1).join(':')) ?? l.key, why: becauseOf(l.kind), until: l.until })), using: routed && /^backup/.test(routed.slot ?? '') ? routed.spec : '' }, notch: notchMode(), notchReal: notchScreen, brief: { on: !!config.morningBrief, todoist: !!config.briefTodoist, canTodoist: HANDS_OK }, focus: HANDS_OK ? { until: focusBlock?.until ?? null, task: focusBlock?.task ?? '', list: distractionList(), custom: !!config.distractions } : null, sync: { dir: config.syncDir || '', at: syncInfo.at, error: syncInfo.error, paused: !!syncInfo.paused }, secondBrain: brainState(), gameMode: HANDS_OK ? config.gameSidebar !== false : null,
     login: login.supported ? { on: login.on } : null,
     update: { available: update.available, installing: update.installing, checking: update.checking, result: update.result, page: update.page, done: update.done },
     intro: !!intro,
@@ -2320,7 +2333,7 @@ const SPEECH_LANGS = ['auto', 'en-US', 'ar-SA', 'he-IL', 'es-ES', 'fr-FR', 'de-D
 const speechLangId = () => (SPEECH_LANGS.includes(config.speechLang) ? config.speechLang : 'auto');
 let langInfo = null; // what the voice helper settled on for it: { id, engine, online }
 // Live mode on the Mac runs the helper even with Classic talking off: a call needs its chord and its mic, not the
-// speech model (in Live the helper has no takes and no wake word).
+// speech model (in Live the helper has no takes; its wake word opens a call, live_wake).
 const liveTalk = () => MAC && voiceModeOf(config) === 'live';
 const voiceConfig = () => {
   send({ type: 'voice_config', enabled: VOICE_OK && (liveTalk() || (config.voice && voiceReady())), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
@@ -2830,7 +2843,30 @@ function obState() {
     geminiVoice: geminiVoice(), geminiVoices: GEMINI_VOICES, geminiShared: ttsKeys.gemini === 'shared',
     liveVoice: liveVoiceOf(config, geminiVoice()), // the voice a Live call speaks in (the reply step in Live picks it)
     studio: tts().local ? studioState() : null,
+    // The "Your second brain" step: the one saved (its root, or null) and where the default one goes.
+    brain: { root: migrateBrain(config.secondBrain)?.root || null, desktop: desktopBrainDir(HOME, BRAIN_NAME) },
   });
+}
+// The "Your second brain" step's Continue: make (or fill in) the default one on the Desktop, use a chosen folder as
+// it is (its locations found in it at each chat), or skip (nothing saved). Answered with kind 'brain'.
+function obBrain(m) {
+  const done = (r) => { ob({ kind: 'brain', ...r }); obState(); };
+  if (m.choice === 'skip') return done({ ok: true, choice: 'skip' });
+  if (m.choice === 'desktop') {
+    const r = makeDesktopBrain(HOME, BRAIN_NAME);
+    if (!r.ok) return done({ ok: false, error: r.why });
+    config.secondBrain = r.locations; saveConfig(); agentStale = true; menu();
+    return done({ ok: true, choice: 'desktop', root: r.locations.root, made: r.made, kept: r.kept });
+  }
+  if (m.choice === 'existing') {
+    const r = checkSecondBrain(String(m.root ?? '').slice(0, 1000), HOME);
+    if (!r.ok) return done({ ok: false, error: r.why === 'empty' ? 'Choose a folder first.' : r.why });
+    // The saved folder again (the guide preselects it on a rerun): keep the locations picked on the Second brain page.
+    const had = migrateBrain(config.secondBrain), hadDir = had && checkSecondBrain(had.root, HOME);
+    if (hadDir?.ok && hadDir.dir === r.dir) return done({ ok: true, choice: 'existing', root: r.dir });
+    config.secondBrain = Object.fromEntries(BRAIN_KEYS.map((k) => [k, k === 'root' ? r.dir : ''])); saveConfig(); agentStale = true; menu();
+    return done({ ok: true, choice: 'existing', root: r.dir });
+  }
 }
 
 // Desktop, Documents and Downloads are protected on macOS. The first read shows the system prompt
@@ -2860,7 +2896,7 @@ async function onGuide(m) {
   else if (m.type === 'chat_skip') { endIntro(); config.introDone = true; saveConfig(); menu(); }
   else if (m.type === 'chat_forget' && typeof m.id === 'string') { await forgetFact(m.id); ob({ kind: 'chat_facts', facts: introFacts() }); menu(); }
   else if (m.type === 'ob_voicemode') { switchVoiceMode(m.mode); obState(); } // Classic or Live, picked on step 2
-  else if (m.type === 'ob_step') { config.onboardStep = Math.max(0, Math.min(8, m.step | 0)); saveConfig(); }
+  else if (m.type === 'ob_step') { config.onboardStep = Math.max(0, Math.min(9, m.step | 0)); saveConfig(); } // 0 to 9: the guide's ten steps
   // Voice needs a working key first: without one, the guide asks for it (ob_fishkey or ob_geminikey) instead.
   else if (m.type === 'ob_replies' && (m.mode === 'text' || (m.mode === 'voice' && speech.on))) { await voiceKeysLoaded; await setReplies(m.mode); }
   // A service picked in the guide that already has its key: it speaks from now on (voice goes on if it was text).
@@ -2879,6 +2915,7 @@ async function onGuide(m) {
   else if (m.type === 'ob_files') ob({ kind: 'files', status: await filesStatus(!!m.request) });
   else if (m.type === 'set_actions') { config.allowActions = !!m.on; agents.setAllow(config.allowActions); saveConfig(); menu(); obState(); }
   else if (m.type === 'set_login') setLogin(!!m.on);
+  else if (m.type === 'ob_brain') obBrain(m);
   else if (m.type === 'ob_lite') { config.lite = !!m.on; saveConfig(); agentStale = true; menu(); obState(); }
   else if (m.type === 'ob_autolisten') { config.autoListen = !!m.on; saveConfig(); menu(); obState(); }
   else if (m.type === 'ob_wake' && WAKE_OK) { config.wakeWord = !!m.on; saveConfig(); agentStale = true; voiceConfig(); menu(); obState(); }
@@ -2928,6 +2965,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (m.type?.startsWith('voice')) onVoice(m);
   else if (m.type === 'snap') areaSnap();
   // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
+  // "Hey Jarvis" in Live: opens a call like a tap when none is open; during one it's ignored (never a hang-up).
+  else if (m.type === 'live_wake') { if (voiceModeOf(config) === 'live' && liveCall.wakeOk()) { interruptQuietly('live'); speech.stop(); liveCall.toggle().catch((e) => console.error('live', e)); } }
   else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
   // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
   // A circle drawn with the talk chord in a call: the circled area goes in as a look (the call stays as it is, or opens).

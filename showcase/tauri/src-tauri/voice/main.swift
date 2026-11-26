@@ -750,7 +750,8 @@ final class Voice {
     /// is, or opened by the look); anything else opens or hangs up the call.
     static func liveRelease(circled: Bool) -> LiveRelease { circled ? .look : .toggle }
     // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
-    // instead of starting a take, so there's no recogniser, no pause that ends a turn, no muted output and no wake word.
+    // instead of starting a take, so there's no pause that ends a turn and no muted output. The wake word, when on, is
+    // listened for only while no call has the mic, and reported as {"type":"live_wake"} (the app opens a call).
     // {"cmd":"live_capture"}: the open call's mic stream (livemic.swift).
     private(set) var liveMode = false
     private let liveMic = LiveMic()
@@ -770,6 +771,7 @@ final class Voice {
         liveWanted = on
         if !on { return liveMic.stop() }
         guard liveMode else { return log("live capture refused: not in live mode") }
+        if phase == .wake { stopWake() }
         switch LiveMic.access(AVCaptureDevice.authorizationStatus(for: .audio)) {
         case .open: openLiveMic()
         case .refused: emit(["type": "error", "code": "live_mic", "reason": "permission"])
@@ -1023,7 +1025,7 @@ final class Voice {
 
     // Never asks for permission: wake listening starts only once talking has been allowed.
     private func wakeAllowed(_ now: Double) -> Bool {
-        wakeOn && !wakeHold && !dryRun && !liveMode && now >= wakeCooldownUntil && now >= wakeRetryAt && authorized(wake: true)
+        wakeOn && !wakeHold && !dryRun && !(liveMode && liveWanted) && now >= wakeCooldownUntil && now >= wakeRetryAt && authorized(wake: true)
     }
 
     private func startWake(_ now: Double) {
@@ -1088,6 +1090,8 @@ final class Voice {
         guard let rest else { if let miss { wakeMiss = miss }; return }
         wakeLog("heard the phrase (distance \(d ?? 0))")
         wakeMiss = nil
+        // Live mode: no take; the app opens a call (as a tap would), and the call's mic takes over.
+        if liveMode { stopWake(); wakeCooldownUntil = now + Self.wakeCooldown; emit(["type": "live_wake"]); return }
         // Same mic, same recogniser: what follows the phrase is already the start of the take.
         woke = true
         wakeWords = max(0, WakeWord.tokens(text).count - WakeWord.tokens(rest).count)

@@ -1,7 +1,7 @@
 // Codex (headless) as an engine for background agents: `codex exec --json` runs the model loop, and our tools reach it
 // as a stdio MCP server, so every file, command and URL still goes through safety.mjs and the Allow prompts, and plan
 // and finish work as on the other routes. Codex's own shell, web search and image viewer are off and its sandbox is
-// read-only, so it has no way around them. CodexAgent has the surface agentrun.mjs uses of gg-agent's Agent.
+// read-only (a maker or organizer with actions allowed may write in its own folder only), so it has no way around them. CodexAgent has the surface agentrun.mjs uses of gg-agent's Agent.
 //
 // The MCP server Codex starts is a small relay (`node -e RELAY <socket>`): it pipes Codex's stdio to a local socket
 // this worker listens on, where the tools run (createToolBridge, shared with the Claude Code route).
@@ -17,16 +17,19 @@ import { AgentStream } from '@kenkaiiii/gg-agent';
 import { createToolBridge } from './claudecode.mjs';
 
 export const MCP_SERVER = 'jarvis';
-// The models Codex lists (codex-rs/models-manager/models.json, visibility "list"), newest first.
+// The models offered when this Codex can't say which ones the account has (codex-rs/models-manager/models.json,
+// visibility "list"), newest first. gpt-5.5 is left out: it's listed but not every account can use it.
 export const CODEX_MODELS = [
   { id: 'gpt-6-astra', name: 'GPT-6-Astra' }, { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol' }, { id: 'gpt-5.6-terra', name: 'GPT-5.6-Terra' },
-  { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna' }, { id: 'gpt-5.5', name: 'GPT-5.5' },
+  { id: 'gpt-5.6-luna', name: 'GPT-5.6-Luna' },
 ];
+/** The models to offer: the account's own catalog from the probe, else CODEX_MODELS. */
+export const codexModels = (state) => (state?.models?.length ? state.models : CODEX_MODELS);
 const STDERR_TAIL_CHARS = 4_000;
 const KILL_GRACE_MS = 3_000;
 // Codex built-ins that would reach files, commands, the web or other apps without safety.mjs. apply_patch has no
 // feature key at rust-v0.155.1 (apply_patch_freeform is a removed, ignored flag; the tool comes with the model's
-// apply_patch_tool_type), so its writes are left to the read-only sandbox.
+// apply_patch_tool_type), so its writes are left to the sandbox (read-only, or confined to the agent's folder).
 const FEATURES_OFF = ['shell_tool', 'unified_exec', 'view_image', 'multi_agent', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'tool_search_always_defer_mcp_tools'];
 // CommonJS for `node -e`; argv's last entry is the socket.
 const RELAY = 'const s=require("net").connect(process.argv.at(-1));process.stdin.pipe(s);s.pipe(process.stdout);s.on("error",()=>process.exit(1));s.on("close",()=>process.exit(0))';
@@ -71,7 +74,15 @@ export async function probeCodex({ bin, args = [] } = resolveCodex()) {
   if (v.error?.code === 'ENOENT' || (v.error && !v.stdout)) return { ok: false, reason: NOT_FOUND };
   const s = await run(bin, [...args, 'login', 'status']);
   if (s.error) return { ok: false, reason: SIGNED_OUT };
-  return { ok: true, version: v.stdout.match(/\d+\.\d+\.\d+\S*/)?.[0] ?? v.stdout.trim() };
+  const models = catalog(await run(bin, [...args, 'debug', 'models'], 20_000));
+  return { ok: true, version: v.stdout.match(/\d+\.\d+\.\d+\S*/)?.[0] ?? v.stdout.trim(), ...(models.length ? { models } : {}) };
+}
+// `codex debug models`: the account's model catalog (refreshed from the server), the ones it lists, in its order.
+function catalog({ error, stdout }) {
+  if (error) return [];
+  let list; try { list = JSON.parse(stdout).models; } catch { return []; }
+  return (Array.isArray(list) ? list : []).filter((m) => m?.visibility === 'list' && typeof m.slug === 'string')
+    .sort((a, b) => (a.priority ?? 1e9) - (b.priority ?? 1e9)).map((m) => ({ id: m.slug, name: String(m.display_name || m.slug) }));
 }
 
 /** A Codex failure in words that say what to do. */
@@ -84,10 +95,15 @@ export function codexError(text, model) {
   return `Codex stopped: ${t.slice(-300) || 'it exited without a reason'}`;
 }
 
-/** The arguments for one `codex exec` turn: a new thread, or `resume` of the last one. */
-export function codexArgs({ model, cwd, mcp, threadId }) {
+// write: Codex's own file edits (apply_patch) may land in its folder (-C) and nowhere else: not /tmp, not $TMPDIR,
+// no extra roots, no network. Everything else still goes through our tools and safety.mjs.
+const CONFINED = ['exclude_slash_tmp=true', 'exclude_tmpdir_env_var=true', 'network_access=false', 'writable_roots=[]'];
+/** The arguments for one `codex exec` turn: a new thread, or `resume` of the last one. write: a workspace-write
+ *  sandbox confined to cwd (a type that makes files, with actions allowed); otherwise read-only. */
+export function codexArgs({ model, cwd, mcp, threadId, write = false }) {
   return [
-    'exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--sandbox', 'read-only', '-C', cwd,
+    'exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--sandbox', write ? 'workspace-write' : 'read-only', '-C', cwd,
+    ...(write ? CONFINED.flatMap((c) => ['-c', `sandbox_workspace_write.${c}`]) : []),
     ...(model ? ['-m', model] : []),
     '-c', 'approval_policy="never"', '-c', 'web_search="disabled"',
     ...FEATURES_OFF.flatMap((f) => ['-c', `features.${f}=false`]),
@@ -167,7 +183,8 @@ function mapEvent(e, push) {
   }
 }
 
-/** prompt(content) → AgentStream. Options: model, system, tools, signal, cwd, codex ({ bin, args }). */
+/** prompt(content) → AgentStream. Options: model, system, tools, signal, cwd, write (codexArgs; a function is read
+ *  again for every turn, so turning Allow actions off reaches the next one), codex ({ bin, args }). */
 export class CodexAgent {
   #running = false;
   #threadId = null;
@@ -187,7 +204,7 @@ export class CodexAgent {
     const sock = await listenBridge(bridge);
     const timeoutSec = Math.ceil(bridge.config.timeout / 1000);
     const { bin, args: pre = [] } = o.codex ?? resolveCodex();
-    const args = [...pre, ...codexArgs({ model: o.model, cwd: o.cwd, threadId: this.#threadId, mcp: { command: process.execPath, args: ['-e', RELAY, sock.where], timeoutSec } })];
+    const args = [...pre, ...codexArgs({ model: o.model, cwd: o.cwd, write: !!(typeof o.write === 'function' ? o.write() : o.write), threadId: this.#threadId, mcp: { command: process.execPath, args: ['-e', RELAY, sock.where], timeoutSec } })];
     hookExit();
     const child = spawn(bin, args, { cwd: o.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     children.add(child);

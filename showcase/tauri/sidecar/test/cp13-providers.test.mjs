@@ -19,7 +19,7 @@ const fakeClaude = fileURLToPath(new URL('./cp13-fakeclaude.mjs', import.meta.ur
 const fakeCodex = fileURLToPath(new URL('./fakecodex.mjs', import.meta.url));
 const { OPENAI_CHATGPT_KEY, dualAuthProvider, signInWithClaudeCode } = await import('@kenkaiiii/gg-core');
 const { openAuth, signInCards } = await import('../providers.mjs');
-const { CODEX_MODELS, probeCodex } = await import('../codex.mjs');
+const { codexModels, probeCodex } = await import('../codex.mjs');
 const { activeCrew, findSubagent } = await import('../subagents.mjs');
 const { parseSpec } = await import('../route.mjs');
 const { agentsRoot, createAgents } = await import('../agents.mjs');
@@ -97,8 +97,10 @@ const callbacks = (log) => ({ onOpenUrl: (u) => log.push(['open', u]), onStatus:
 
 // ---- CP-13 crew slot "codex:<model>" routes the subagent to Codex headless (fake codex binary), happy and failure.
 const codex = { bin: process.execPath, args: [fakeCodex] };
-assert.match(side, /const crewRunnable = \(p, id\) => \(p === 'codex' \? codexState\.ok && CODEX_MODELS\.some\(\(m\) => m\.id === id\) : runnableSpec\(p, id\)\);/, 'mirrors sidekick crewRunnable');
-const crewRunnable = (st) => (p, id) => (p === 'codex' ? st.ok && CODEX_MODELS.some((m) => m.id === id) : false);
+// The Codex models a slot can run on are the ones the probe found on the account (codex debug models), as offered.
+assert.match(side, /const crewRunnable = \(p, id\) => \(p === 'codex' \? codexState\.ok && codexModels\(codexState\)\.some\(\(m\) => m\.id === id\) : runnableSpec\(p, id\)\);/, 'mirrors sidekick crewRunnable');
+assert.match(side, /codex: \{ \.\.\.codexState, models: codexModels\(codexState\) \}/, 'the Subagents page offers the same models');
+const crewRunnable = (st) => (p, id) => (p === 'codex' ? st.ok && codexModels(st).some((m) => m.id === id) : false);
 const crewCfg = { builder: 'codex:gpt-5.5', scout: 'codex:gpt-bogus' };
 {
   const st = await probeCodex(codex);
