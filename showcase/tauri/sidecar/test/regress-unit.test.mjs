@@ -16,7 +16,7 @@ fs.writeFileSync(fake, `import fs from 'node:fs'; const a = process.argv.slice(2
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n');
 const win = { id: 7, app: 'Chrome', title: 'Cards', bounds: [0, 0, 800, 600] };
 let o = { ok: true, window: win };
-if (a[0] === 'act') { const p = JSON.parse(a[1]); o = { ok: true, done: p.steps.map((s) => s.do), window: win }; }
+if (a[0] === 'act') { const p = JSON.parse(a[1]); o = { ok: true, done: p.steps.map((s) => s.do), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }] }; }
 if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts: ['Now showing: Cards'] };
 if (a[0] === 'windows') o = { ok: true, windows: [{ id: 7, app: 'Chrome', title: 'Cards', frontApp: true }] };
 if (a[0] === 'front') o = { ok: true, app: win.app, title: win.title };

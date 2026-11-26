@@ -330,7 +330,7 @@ if (HANDS) {
     const log = fs.readFileSync(process.env.FAKE_LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.ok(log[0].tools.includes('act_in_app') && log[0].tools.includes('take_screenshot'), 'the operator gets the screen tools');
     const scrolls = log.filter((l) => l.name === 'act_in_app');
-    assert.deepEqual(scrolls.map((l) => l.isError), [false, false, false, true], 'the operator is loop-guarded too');
+    assert.deepEqual(scrolls.map((l) => l.isError), [false, false, false, true, false, false], 'the operator is loop-guarded too, then both sends run');
     assert.equal(log.find((l) => l.name === 'take_screenshot')?.isError, false, 'its screenshot came back');
     const rep = await call('agent_report', { id: end.agent.id });
     assert.match(rep.output, /operator/);
