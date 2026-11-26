@@ -2332,7 +2332,7 @@ const SPEECH_LANGS = ['auto', 'en-US', 'ar-SA', 'he-IL', 'es-ES', 'fr-FR', 'de-D
 const speechLangId = () => (SPEECH_LANGS.includes(config.speechLang) ? config.speechLang : 'auto');
 let langInfo = null; // what the voice helper settled on for it: { id, engine, online }
 // Live mode on the Mac runs the helper even with Classic talking off: a call needs its chord and its mic, not the
-// speech model (in Live the helper has no takes and no wake word).
+// speech model (in Live the helper has no takes; its wake word opens a call, live_wake).
 const liveTalk = () => MAC && voiceModeOf(config) === 'live';
 const voiceConfig = () => {
   send({ type: 'voice_config', enabled: VOICE_OK && (liveTalk() || (config.voice && voiceReady())), mute: config.muteWhileTalking !== false, sound: !!config.sound, wake: WAKE_OK && !!config.wakeWord, wakeName: config.wakeName || '', lang: MAC ? speechLangId() : 'auto', live: voiceModeOf(config) === 'live', ...(NEEDS_MODEL ? { model: MODEL_DIR } : {}) });
@@ -2963,6 +2963,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (m.type?.startsWith('voice')) onVoice(m);
   else if (m.type === 'snap') areaSnap();
   // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
+  // "Hey Jarvis" in Live: opens a call like a tap when none is open; during one it's ignored (never a hang-up).
+  else if (m.type === 'live_wake') { if (voiceModeOf(config) === 'live' && !liveCall.open) { interruptQuietly('live'); speech.stop(); liveCall.toggle().catch((e) => console.error('live', e)); } }
   else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
   // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
   else if (m.type === 'live_hangup') { if (!liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap')) ui({ kind: 'live', state: 'closed' }); }

@@ -241,12 +241,14 @@ pub(crate) fn set_esc(app: &AppHandle, label: &str, on: bool) {
 }
 
 /// Live mode lines from the helper, as the sidecar takes them: `pcm` (16 kHz 16-bit mono, base64) becomes
-/// `live_pcm`, `live_toggle` (a tap of the talk chord: open or hang up the call) passes as is, and `sleep` (the Mac
+/// `live_pcm`, `live_toggle` (a tap of the talk chord: open or hang up the call) and `live_wake` (the wake word: open one) pass as is, and `sleep` (the Mac
 /// is going to sleep) becomes `system_sleep`.
 fn live_line(msg: &Value) -> Option<Value> {
     match msg.get("type").and_then(Value::as_str) {
         Some("pcm") => Some(json!({ "type": "live_pcm", "data": msg.get("data") })),
         Some("live_toggle") => Some(json!({ "type": "live_toggle" })),
+        // The wake word heard in Live mode with no call open: the sidecar opens one.
+        Some("live_wake") => Some(json!({ "type": "live_wake" })),
         // The Mac is going to sleep: the sidecar hangs up an open Live call.
         Some("sleep") => Some(json!({ "type": "system_sleep" })),
         _ => None,
@@ -337,6 +339,11 @@ mod tests {
     #[test]
     fn a_live_tap_goes_to_the_sidecar() {
         assert_eq!(live_line(&json!({ "type": "live_toggle" })), Some(json!({ "type": "live_toggle" })));
+    }
+
+    #[test]
+    fn a_live_wake_goes_to_the_sidecar() {
+        assert_eq!(live_line(&json!({ "type": "live_wake" })), Some(json!({ "type": "live_wake" })));
     }
 
     #[test]

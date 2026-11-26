@@ -333,6 +333,16 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /\.on\('close', \(\) => \{[^]{0,200}liveCall\.hangUp\('quit'\)/);
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
+  // "Hey Jarvis" in Live (wake word on): the helper reports live_wake, which opens a call like a tap when none is
+  // open, and is ignored during one (never a hang-up).
+  assert.match(src, /m\.type === 'live_wake'\) \{ if \(voiceModeOf\(config\) === 'live' && !liveCall\.open\) \{ interruptQuietly\('live'\); speech\.stop\(\); liveCall\.toggle\(\)/, 'the wake word opens a Live call, never hangs one up');
+  const swift = fs.readFileSync(new URL('../../src-tauri/voice/main.swift', import.meta.url), 'utf8');
+  assert.match(swift, /private func wakeAllowed[^]{0,300}!\(liveMode && liveWanted\)/, 'the helper listens for the wake word in Live while no call has the mic');
+  assert.doesNotMatch(swift.slice(swift.indexOf('private func wakeAllowed'), swift.indexOf('private func startWake')), /&& !liveMode &&/, 'not only in Classic');
+  assert.match(swift, /if liveMode \{ stopWake\(\); wakeCooldownUntil = now \+ Self\.wakeCooldown; emit\(\["type": "live_wake"\]\); return \}/, 'heard in Live: report live_wake instead of starting a take');
+  assert.match(swift, /func setLiveCapture[^]{0,200}if phase == \.wake \{ stopWake\(\) \}/, "the call's mic takes over from wake listening");
+  const voiceRs = fs.readFileSync(new URL('../../src-tauri/src/voice.rs', import.meta.url), 'utf8');
+  assert.match(voiceRs, /Some\("live_wake"\) => Some\(json!\(\{ "type": "live_wake" \}\)\)/, 'Rust passes live_wake on to the sidecar');
   assert.match(src, /m\.type === 'live_hangup'\) \{ if \(!liveCall\.hangUp\(m\.via === 'esc' \? 'esc' : 'tap'\)\) ui\(\{ kind: 'live', state: 'closed' \}\); \}/,
     "the overlay's Esc hangs up through the same path, and with no call left (a respawned sidecar) it still tells the overlay the call is closed so Esc is let go");
   // Live mode starts the helper even with Classic talking off (macOS: the only helper with a Live mic).
