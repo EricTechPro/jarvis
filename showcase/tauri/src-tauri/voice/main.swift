@@ -603,6 +603,8 @@ final class Voice {
     // The chord last read as pressed (talk or highlight), and whether this take is a highlight (it draws).
     private var prevPressed: Chord?
     private var highlighting = false
+    // This Live highlight hold sent live_open: a shortcut caught later sends live_cancel, so that call is hung up.
+    private var liveOpened = false
     // The keys already reading down when the chord went down: they can't be part of its shortcut (isShortcut).
     private var heldAtArm = Set<CGKeyCode>()
     private var engine: AVAudioEngine?
@@ -781,6 +783,20 @@ final class Voice {
     static func isShortcut(extra: Bool, heldAtArm: Set<CGKeyCode>, now: Set<CGKeyCode>) -> Bool {
         extra || !now.subtracting(heldAtArm).isEmpty
     }
+    /// A highlight is a shortcut on the same terms, and also when a mouse button is down with it (a ⌃⌘-click or drag):
+    /// the ink follows the cursor and never needs the button.
+    static func highlightShortcut(extra: Bool, heldAtArm: Set<CGKeyCode>, now: Set<CGKeyCode>, mouse: Bool) -> Bool {
+        mouse || isShortcut(extra: extra, heldAtArm: heldAtArm, now: now)
+    }
+    /// When the chord is checked for a shortcut: a talk only at its first moment (armed); a highlight for its whole hold,
+    /// since ⌃⌘ starts many macOS shortcuts and a slow ⌃⌘Q or ⌃⌘F is still one.
+    static func checksShortcut(highlight: Bool, phase: Phase) -> Bool { phase == .armed || (highlight && phase == .holding) }
+    /// Whether the mic opens at the press: a talk's does, so the first word isn't lost; a highlight's waits until it's
+    /// clearly a hold, so a ⌃⌘ shortcut never opens and closes the audio engine (which drops what's playing).
+    static func micAtArm(highlight: Bool) -> Bool { !highlight }
+    private static func mouseDown() -> Bool {
+        CGEventSource.buttonState(.combinedSessionState, button: .left) || CGEventSource.buttonState(.combinedSessionState, button: .right)
+    }
 
     // ---------- Live mode ----------
     // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
@@ -875,6 +891,15 @@ final class Voice {
             return now - (releasedAt ?? now) >= Self.releaseDebounce
         }()
 
+        // A highlight is checked for a shortcut for its whole hold (checksShortcut); a talk only while armed.
+        if down && Self.checksShortcut(highlight: highlighting, phase: phase) {
+            let keys = keysDown()
+            let shortcut = highlighting
+                ? Self.highlightShortcut(extra: extra, heldAtArm: heldAtArm, now: keys, mouse: Self.mouseDown())
+                : Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keys)
+            if shortcut { dropShortcut(); return }
+        }
+
         switch phase {
         case .idle:
             if let c = started { arm(now, highlight: c == .highlight) }
@@ -887,14 +912,13 @@ final class Voice {
             let quiet = now - voiceAt > Self.wakePause / 2 && now - heardAt > Self.wakePause
             if paused || (now - wakeAt > Self.wakeRecycle && quiet) || now - wakeAt > Self.wakeRecycle * 2 { recycleWake(now) }
         case .armed:
-            // Only the first moment decides shortcut vs. talk: ⌃⌥ plus a key pressed since, ⇧ or ⌘ is a shortcut.
-            if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: the chord was part of a shortcut"); cancel(); blocked = true; return }
+            // A shortcut (⌃⌥ plus a key pressed since, an extra ⇧ or ⌘) was already caught above.
             if highlighting {
                 if released { releaseHighlight(now); return }
                 // Clearly a hold, not a shortcut: Live opens the call now so it hears what's said while circling.
                 if down && now - chordAt >= Self.tapLimit {
                     phase = .holding
-                    if liveMode { emit(["type": "live_open"]) } else { showListening("hold", now) }
+                    if liveMode { liveOpened = true; emit(["type": "live_open"]) } else { showListening("hold", now) }
                 }
                 return
             }
@@ -926,11 +950,18 @@ final class Voice {
     /// clears; Classic: the take finishes, and finalize sends the words with the circle or keeps listening.
     private func releaseHighlight(_ now: Double) {
         if !liveMode { end("highlight released"); finish(); return }
-        phase = .idle; highlighting = false
+        phase = .idle; highlighting = false; liveOpened = false
         switch Self.highlightRelease(live: true, circled: ink.capture()) {
         case .look: ink.take { area in if let area { emit(["type": "live_look", "area": area]) } }
         case .clear, .finish: ink.clear()
         }
+    }
+
+    /// The chord was part of a shortcut (⌃⌥S, ⌃⌘Q, a ⌃⌘-click): drop the take, and hang up a call this hold opened.
+    private func dropShortcut() {
+        log("not a \(highlighting ? "highlight" : "talk"): the chord was part of a shortcut")
+        if liveOpened { emit(["type": "live_cancel"]) }
+        cancel(); blocked = true
     }
 
     private func end(_ why: String) { log("session end: \(why) after \(String(format: "%.1f", uptime() - listenAt))s, mic boost \(String(format: "%.1f", autoGain.gain))x") }
@@ -954,7 +985,7 @@ final class Voice {
         if liveMode { return } // the call's mic is opened by live_capture, not by the chord
         // Already allowed: start the mic now so the first word isn't lost. Otherwise wait until
         // the press is clearly a talk (hold or tap), so shortcuts like ⌃⌥S never trigger a prompt.
-        if authorized() { startAudio(device: InputDevice.picked()) }
+        if authorized() && Self.micAtArm(highlight: highlight) { startAudio(device: InputDevice.picked()) }
     }
 
     // Whether the recogniser needs Speech Recognition permission: a take's (its speech language decides), or the wake word's.
@@ -1059,7 +1090,7 @@ final class Voice {
         rec?.cancel(); rec = nil
         finishTimer?.invalidate(); finishTimer = nil
         phase = .idle
-        highlighting = false
+        highlighting = false; liveOpened = false
         woke = false; wakeCooldownUntil = uptime() + Self.wakeCooldown
         reportEmpty = false
         ink.clear()
@@ -1503,6 +1534,25 @@ if args.contains("--test-snap") {
     first.closed = true; second.closed = true
     check("a new circle replaces the last", Ink.replaced([first, line, second], newest: second).map { $0 === first } == [true])
     check("the only circle stays", Ink.replaced([line, second], newest: second).isEmpty)
+    // Letting go can snap a nearly closed loop shut (end()): it still replaces the circle before it, so only the
+    // newest loop is sent, whichever screen it's on.
+    SnapCue.soundOn = false
+    func loop(_ cx: CGFloat) -> InkStroke {
+        let s = InkStroke(); s.pts = arc(cx, 300, 60, turns: 1); s.radii = s.pts.map { _ in 2 }; s.snap(from: 0); return s
+    }
+    let a = loop(200), b = loop(500)
+    check("two loops on one screen: only the newer is sent", Ink.toSend([[a, line, b]]).map { $0.panel == 0 && $0.loop === b } == true)
+    let c = loop(200), d = loop(500)
+    check("the newer loop is sent even listed first", Ink.toSend([[d], [c]]).map { $0.panel == 0 && $0.loop === d } == true)
+    check("no loop, nothing sent", Ink.toSend([[line], []]) == nil)
+    let v = InkView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+    v.begin(at: CGPoint(x: 260, y: 300))
+    for p in arc(200, 300, 60, turns: 1.05) { _ = v.move(to: p) }
+    v.begin(at: CGPoint(x: 560, y: 300))
+    for p in arc(500, 300, 60, turns: 0.93) { _ = v.move(to: p) }
+    let snappedAtRelease = v.end()
+    check("a nearly closed loop snaps shut at the release", snappedAtRelease)
+    check("the loop snapped at the release is the one sent", Ink.toSend([v.strokes]).map { $0.loop === v.strokes.last } == true && v.strokes.filter(\.closed).count == 2)
     exit(bad == 0 ? 0 : 1)
 }
 // --test-chord checks when the talk chord counts as part of a shortcut, with made-up key states; exits 1 on a failure.
@@ -1537,6 +1587,17 @@ if args.contains("--test-chord") {
     check("Classic, words and no circle: sent like a talk", Voice.highlightEnd(words: true, circled: false) == .send)
     check("Classic, a circle and no words yet: keep listening for the question", Voice.highlightEnd(words: false, circled: true) == .listen)
     check("Classic, no circle and no words: dropped quietly", Voice.highlightEnd(words: false, circled: false) == .quiet)
+    // ⌃⌘ is a common macOS pair (⌃⌘Q, ⌃⌘F, ⌃⌘Space): a highlight is checked for a shortcut for its whole hold, not just
+    // the first 250 ms, and a click or drag with it held is a shortcut too (the ink never needs the mouse button).
+    check("a highlight held past the tap limit is still checked for a shortcut", Voice.checksShortcut(highlight: true, phase: .holding))
+    check("a highlight is checked from the first moment", Voice.checksShortcut(highlight: true, phase: .armed))
+    check("a talk hold isn't checked once it's listening", !Voice.checksShortcut(highlight: false, phase: .holding) && Voice.checksShortcut(highlight: false, phase: .armed))
+    check("a ⌃⌘-click is a shortcut, not a highlight", Voice.highlightShortcut(extra: false, heldAtArm: [], now: [], mouse: true))
+    check("a slow ⌃⌘Q is a shortcut", Voice.highlightShortcut(extra: false, heldAtArm: [], now: [0x0C], mouse: false))
+    check("⌃⌘ alone with the mouse up is a highlight", !Voice.highlightShortcut(extra: false, heldAtArm: [0x00], now: [0x00], mouse: false))
+    // The mic waits for a highlight to be clearly a hold, so ⌃⌘ shortcuts never open and close the audio engine.
+    check("a highlight doesn't start the mic at the press", !Voice.micAtArm(highlight: true))
+    check("a talk still starts the mic at the press", Voice.micAtArm(highlight: false))
     exit(bad == 0 ? 0 : 1)
 }
 // --test-livemic: the Live call's mic frames (16 kHz 16-bit mono PCM) from a 48 kHz float mic, and the crop chord

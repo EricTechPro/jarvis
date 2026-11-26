@@ -246,10 +246,24 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
  * hangs up). True: a call was opened.
  */
 export async function openForHighlight(call, { quiet = () => {} } = {}) {
-  if (call.open) return false;
+  if (call.open) { heldOpen.delete(call); return false; }
+  heldOpen.add(call);
   quiet();
   await call.toggle();
   return true;
+}
+
+// The calls the latest highlight hold opened (openForHighlight), so a shortcut caught later hangs up only those.
+const heldOpen = new WeakSet();
+
+/**
+ * The highlight hold was a shortcut after all (a slow ⌃⌘Q, a ⌃⌘-click; the voice helper's live_cancel): hang up the
+ * call that hold opened, even while it's still connecting. A call that was already open is left alone. True: hung up.
+ */
+export function cancelHighlightOpen(call) {
+  if (!heldOpen.has(call)) return false;
+  heldOpen.delete(call);
+  return call.hangUp('shortcut');
 }
 
 /**

@@ -7,6 +7,8 @@
         { "kind": "new", "title": "Highlight has its own key", "text": "Hold ⌃⌘ and circle part of the screen. I listen while you do." },
         { "kind": "new", "title": "Circle, then talk", "text": "Let go with nothing said and I keep listening for your question." },
         { "kind": "improved", "title": "⌃⌥ just talks", "text": "⌃⌥ is for talking and calls only. It no longer draws." },
+        { "kind": "fixed", "title": "⌃⌘ shortcuts left alone", "text": "⌃⌘Q, ⌃⌘F, ⌃⌘Space and ⌃⌘-clicks no longer open a call or pause your music." },
+        { "kind": "fixed", "title": "Newest circle only", "text": "Only your newest circle goes out, even one that closes as you let go." },
         { "kind": "new", "title": "Second brain in setup", "text": "Setup asks where your notes live. I can make a folder for them on your Desktop." },
         { "kind": "improved", "title": "Named after you", "text": "A new second brain is named after you, with OS on the end, like EricTech OS." },
         { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts on your Desktop, with that name." },

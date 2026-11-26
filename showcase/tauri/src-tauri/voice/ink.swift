@@ -17,6 +17,9 @@ final class InkStroke {
     var pts: [CGPoint] = []
     var radii: [CGFloat] = []
     var done = false, closed = false
+    // When it snapped shut, in snap order (0: never): the newest loop is the one that counts (Ink.toSend).
+    private(set) var order = 0
+    private static var snaps = 0
     let group = CALayer(), edge = CAShapeLayer(), fill = CAShapeLayer()
 
     init() {
@@ -64,6 +67,7 @@ final class InkStroke {
         pts = Array(pts[i...]); radii = Array(radii[i...])
         pts.append(pts[0]); radii.append(radii[0])
         closed = true; done = true
+        Self.snaps += 1; order = Self.snaps
         group.opacity = 1
         redraw()
     }
@@ -282,8 +286,10 @@ final class Ink {
             for p in panels { p.orderFrontRegardless() }
             last = NSEvent.mouseLocation; lastMoved = ProcessInfo.processInfo.systemUptime; onPanel = nil; snappedAt = nil
         } else {
+            let now = ProcessInfo.processInfo.systemUptime
             for p in panels {
-                p.view.end()
+                // Letting go can snap a nearly closed loop shut: it replaces the last circle like any other.
+                if p.view.end() { didSnap(on: p, now) }
                 if p.view.strokes.isEmpty { p.orderOut(nil) }
             }
             last = nil; onPanel = nil
@@ -314,6 +320,16 @@ final class Ink {
     /// The closed loops a new one replaces: every other closed stroke (lines that never closed aren't loops).
     static func replaced(_ strokes: [InkStroke], newest: InkStroke) -> [InkStroke] { strokes.filter { $0.closed && $0 !== newest } }
 
+    /// The loop that's sent, and the index of its panel: the newest that snapped shut, on any screen (each circle
+    /// replaces the one before), or nil when nothing closed.
+    static func toSend(_ panels: [[InkStroke]]) -> (panel: Int, loop: InkStroke)? {
+        var best: (panel: Int, loop: InkStroke)?
+        for (i, strokes) in panels.enumerated() {
+            for s in strokes where s.closed && s.order > (best?.loop.order ?? -1) { best = (i, s) }
+        }
+        return best
+    }
+
     /// A circle just snapped shut on panel p: it replaces any earlier one, on every screen.
     private func didSnap(on p: InkPanel, _ now: Double) {
         snappedAt = now
@@ -342,11 +358,12 @@ final class Ink {
     @discardableResult
     func capture(then done: @escaping () -> Void = {}) -> Bool {
         setArmed(false)
-        // Only loops that snapped shut count (end() above already dropped the rest).
-        let loops = { (p: InkPanel) in p.view.strokes.filter(\.closed) }
-        guard let panel = panels.max(by: { loops($0).count < loops($1).count }), !loops(panel).isEmpty else { done(); return false }
+        // Only the newest loop that snapped shut counts (end() above already dropped the lines); older ones fade.
+        guard let pick = Self.toSend(panels.map { $0.view.strokes }) else { done(); return false }
+        let panel = panels[pick.panel]
+        for p in panels { fade(Self.replaced(p.view.strokes, newest: pick.loop), in: p, after: 0) }
         let o = origin(panel)
-        let strokes = loops(panel)
+        let strokes = [pick.loop]
         log("drawing: \(strokes.count) circled area(s) captured")
         var box = CGRect.null
         for s in strokes { for p in s.pts { box = box.union(CGRect(x: p.x, y: p.y, width: 0, height: 0)) } }

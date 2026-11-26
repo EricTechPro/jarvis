@@ -246,7 +246,8 @@ pub(crate) fn set_esc(app: &AppHandle, label: &str, on: bool) {
 
 /// Helper lines that go straight to the sidecar: `pcm` (16 kHz 16-bit mono, base64) becomes `live_pcm`;
 /// `live_toggle` (a tap of the talk chord: open or hang up the call), `live_wake` (the wake word: open one),
-/// `live_open` (the highlight keys held in Live: open the call so it listens), `live_look` (a circle drawn with the
+/// `live_open` (the highlight keys held in Live: open the call so it listens), `live_cancel` (that hold was a shortcut:
+/// hang up the call it opened), `live_look` (a circle drawn with the
 /// highlight keys in Live, with the circled area) and `highlight` (a Classic circle with no words yet, with its area)
 /// pass as is; and `sleep` (the Mac is going to sleep) becomes `system_sleep`.
 fn live_line(msg: &Value) -> Option<Value> {
@@ -256,6 +257,8 @@ fn live_line(msg: &Value) -> Option<Value> {
         // The wake word heard in Live mode with no call open: the sidecar opens one.
         Some("live_wake") => Some(json!({ "type": "live_wake" })),
         Some("live_open") => Some(json!({ "type": "live_open" })),
+        // That hold was a shortcut after all: the sidecar hangs up the call it opened.
+        Some("live_cancel") => Some(json!({ "type": "live_cancel" })),
         // A circle drawn with the highlight keys in a call: the circled shot goes in as a look.
         Some("live_look") => Some(json!({ "type": "live_look", "area": msg.get("area") })),
         // Classic: a circle with nothing said yet; the sidecar listens for the question about it.
@@ -372,6 +375,11 @@ mod tests {
     #[test]
     fn a_highlight_hold_in_live_opens_the_call() {
         assert_eq!(live_line(&json!({ "type": "live_open" })), Some(json!({ "type": "live_open" })));
+    }
+
+    #[test]
+    fn a_highlight_hold_that_was_a_shortcut_cancels_the_call_it_opened() {
+        assert_eq!(live_line(&json!({ "type": "live_cancel" })), Some(json!({ "type": "live_cancel" })));
     }
 
     #[test]

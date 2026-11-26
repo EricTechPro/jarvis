@@ -35,7 +35,7 @@ import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions,
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
 import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setLiveVoice, setVoiceMode, voiceModeOf } from './voicemode.mjs';
-import { createLiveCall, lookAtArea, openForHighlight } from './livecall.mjs';
+import { cancelHighlightOpen, createLiveCall, lookAtArea, openForHighlight } from './livecall.mjs';
 import { listenThenAsk } from './areaask.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream, ThoughtFilter } from './reply.mjs';
@@ -3000,6 +3000,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
   // Holding the highlight keys in Live: the call opens straight away, so she listens while the circle is drawn.
   else if (m.type === 'live_open') { if (voiceModeOf(config) === 'live') openForHighlight(liveCall, { quiet: () => { interruptQuietly('live'); speech.stop(); } }).catch((e) => console.error('live', e)); }
+  // That hold was a shortcut after all (⌃⌘Q, a ⌃⌘-click): the call it opened is hung up.
+  else if (m.type === 'live_cancel') cancelHighlightOpen(liveCall);
   // A circle drawn with the highlight keys in a call: the circled area goes in as a look (the call stays as it is, or opens).
   else if (m.type === 'live_look') { if (voiceModeOf(config) === 'live') lookAtArea(liveCall, m.area, { prepare: fitImage, read: (f) => fs.readFile(f), remove: (f) => { fs.unlink(f).catch(() => {}); }, quiet: () => { interruptQuietly('live'); speech.stop(); } }).catch((e) => say(problem('screen', e).text, 'concerned')); else if (typeof m.area?.file === 'string') fs.unlink(m.area.file).catch(() => {}); }
   else if (m.type === 'live_hangup') { if (!liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap')) ui({ kind: 'live', state: 'closed' }); }

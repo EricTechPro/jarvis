@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createLiveBrain } from '../livebrain.mjs';
-import { createLiveCall, liveErrorText, lookAtArea, openForHighlight } from '../livecall.mjs';
+import { cancelHighlightOpen, createLiveCall, liveErrorText, lookAtArea, openForHighlight } from '../livecall.mjs';
 import { holdAfterLaunch } from '../agents.mjs';
 
 const fakeTransport = () => {
@@ -448,6 +448,29 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn, now } = {}) => {
   assert.match(src, /m\.type === 'live_open'\) \{ if \(voiceModeOf\(config\) === 'live'\) openForHighlight\(liveCall, \{ quiet: \(\) => \{ interruptQuietly\('live'\); speech\.stop\(\); \} \}\)/);
   const rust = fs.readFileSync(new URL('../../src-tauri/src/voice.rs', import.meta.url), 'utf8');
   assert.match(rust, /Some\("live_open"\) => Some\(json!\(\{ "type": "live_open" \}\)\)/, 'the shell passes live_open straight to the sidecar');
+}
+
+{ // A highlight hold that turns out to be a shortcut (a slow ⌃⌘Q, a ⌃⌘-click; the helper's live_cancel): the call that
+  // hold opened is hung up, so it never stays connected with the mic streaming. A call already open stays.
+  const { call } = setup();
+  assert.equal(await openForHighlight(call), true);
+  assert.equal(cancelHighlightOpen(call), true, 'the call the hold opened is hung up');
+  assert.equal(call.open, false);
+  assert.equal(cancelHighlightOpen(call), false, 'a second cancel does nothing');
+  await call.toggle(); // a call opened by a tap
+  assert.equal(await openForHighlight(call), false);
+  assert.equal(cancelHighlightOpen(call), false, 'a shortcut never hangs up a call the hold did not open');
+  assert.equal(call.open, true);
+  call.hangUp('tap');
+  // Cancelled while it was still connecting: no call is left behind.
+  const p = openForHighlight(call);
+  assert.equal(cancelHighlightOpen(call), true);
+  await p;
+  assert.equal(call.open, false, 'a cancel while connecting leaves no call');
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  assert.match(src, /m\.type === 'live_cancel'\) cancelHighlightOpen\(liveCall\)/);
+  const rust = fs.readFileSync(new URL('../../src-tauri/src/voice.rs', import.meta.url), 'utf8');
+  assert.match(rust, /Some\("live_cancel"\) => Some\(json!\(\{ "type": "live_cancel" \}\)\)/, 'the shell passes live_cancel straight to the sidecar');
 }
 
 console.log('livecall tests passed');
