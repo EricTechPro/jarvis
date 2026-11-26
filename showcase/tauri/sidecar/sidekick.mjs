@@ -1402,7 +1402,7 @@ const liveSystem = () => { const l = livePrompt('', { live: true }); return `${s
 const liveCall = createLiveCall({
   makeBrain: async (emit) => {
     const [key] = await voiceKey('gemini').catch(() => [null]);
-    return createLiveBrain({ emit, key, model: config.liveModel || DEFAULT_LIVE_MODEL, voice: liveVoiceOf(config, geminiVoice()), tools, system: liveSystem });
+    return createLiveBrain({ emit, key, model: config.liveModel || DEFAULT_LIVE_MODEL, voice: liveVoiceOf(config, geminiVoice()), tools, system: liveSystem, speechLang: speechLangId });
   },
   ui, send, ask, anim: (name) => anim(name),
   toClassic: () => switchVoiceMode('classic'),

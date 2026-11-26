@@ -36,10 +36,10 @@ const until = async (fn, ms = 2000) => {
 };
 const responses = (s) => s.sent.filter((m) => m.tool).flatMap((m) => m.tool.functionResponses);
 const callTool = (s, id, name, args) => s.server({ toolCall: { functionCalls: [{ id, name, args }] } });
-const setup = ({ tools, system = () => 'You are Jarvis.' } = {}) => {
+const setup = ({ tools, system = () => 'You are Jarvis.', ...more } = {}) => {
   const t = fakeTransport();
   const out = [];
-  const brain = createLiveBrain({ connect: t.connect, emit: (e) => out.push(e), key: 'k', tools, system });
+  const brain = createLiveBrain({ connect: t.connect, emit: (e) => out.push(e), key: 'k', tools, system, ...more });
   return { t, out, brain };
 };
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'livebrain-'));
@@ -66,6 +66,37 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'livebrain-'));
   assert.ok(config.systemInstruction.startsWith('You are Jarvis. Memory: likes tea.'));
   assert.match(config.systemInstruction, /out loud/i);
   assert.equal(config.tools[0].functionDeclarations.length, tools.length);
+  brain.stop();
+}
+
+{ // Her reply follows the language they speak (English when unsure), so an English call never gets a Spanish or Chinese reply.
+  const { tools } = createTools({ ...base, ask: async () => null });
+  const { t, brain } = setup({ tools, voice: 'Charon' });
+  await brain.start();
+  const { config } = t.calls[0].params;
+  assert.match(config.systemInstruction, /reply in the language they're speaking/i);
+  assert.match(config.systemInstruction, /not sure, use English/i);
+  assert.doesNotMatch(config.systemInstruction, /set their language/i, "'auto' (the default) pins no language");
+  assert.equal(config.speechConfig.languageCode, undefined, "'auto': no language code");
+  brain.stop();
+}
+
+{ // A chosen speech language (Voice settings) is named in the prompt, read on every connect; the voice is untouched.
+  // Native-audio Live models pick their language from the conversation and the system instruction (Live API guide), so
+  // no speechConfig.languageCode is sent.
+  const { tools } = createTools({ ...base, ask: async () => null });
+  let lang = 'ar-SA';
+  const { t, brain } = setup({ tools, voice: 'Charon', speechLang: () => lang });
+  await brain.start();
+  let { config } = t.calls[0].params;
+  assert.match(config.systemInstruction, /set their language to Arabic \(Saudi Arabia\)/);
+  assert.equal(config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Charon');
+  assert.equal(config.speechConfig.languageCode, undefined);
+  brain.stop();
+  lang = 'auto';
+  await brain.start();
+  ({ config } = t.calls[1].params);
+  assert.doesNotMatch(config.systemInstruction, /set their language/i, 'back to auto: read again on the next connect');
   brain.stop();
 }
 

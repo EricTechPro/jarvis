@@ -12,7 +12,7 @@ import { unknownToolMessage } from '@kenkaiiii/gg-agent';
 import { createLive, val } from './live.mjs';
 import { SLOW_TOOLS } from './tools.mjs';
 
-export const LIVE_GUIDANCE = `You're in a live voice call: everything you say is heard out loud, the moment you say it, and they can cut in any time. Talk like on the phone: one to three short sentences, plain words, contractions. No markdown, lists, emoji, links, code, file paths, bracketed cues or tags like [happy]: they'd be read aloud. Name the site, file or app instead. Before anything slow (the web, a page, the screen, an app, a command), say a short beat like "On it, one sec." and keep talking with them while it runs. When a result comes back, tell them briefly.`;
+export const LIVE_GUIDANCE = `You're in a live voice call: everything you say is heard out loud, the moment you say it, and they can cut in any time. Talk like on the phone: one to three short sentences, plain words, contractions. No markdown, lists, emoji, links, code, file paths, bracketed cues or tags like [happy]: they'd be read aloud. Name the site, file or app instead. Before anything slow (the web, a page, the screen, an app, a command), say a short beat like "On it, one sec." and keep talking with them while it runs. When a result comes back, tell them briefly. Reply in the language they're speaking; if you're not sure, use English.`;
 
 /** The tools as Live function declarations: [{functionDeclarations}] for the session's config.tools. */
 export function liveDeclarations(tools, slow = SLOW_TOOLS) {
@@ -33,19 +33,29 @@ const parse = (tool, args) => {
   }
 };
 
+// A chosen speech language (a locale like 'ar-SA'), as a prompt line; '' for 'auto'.
+export const langLine = (code) => {
+  if (!code || code === 'auto') return '';
+  let name = code;
+  try { name = new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch {}
+  return `\nThey've set their language to ${name}: reply in it unless they speak another.`;
+};
+
 /**
  * tools: the tool array (or a function returning it, read on every connect and call). system: a function returning the
  * prompt Classic would send (personality, memory, second brain, focus, crew). The rest goes to createLive (key, model,
- * voice, connect).
+ * voice, connect). speechLang: 'auto' or a locale like 'ar-SA' (a value or a function, read on every connect); a locale
+ * is named in the prompt. Native-audio Live models take their language from the conversation and the system
+ * instruction (the Live API guide), so it isn't sent as speechConfig.languageCode.
  */
-export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, ...liveOpts }) {
+export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, speechLang = 'auto', ...liveOpts }) {
   const running = new Map(); // call id → AbortController
   const held = []; // agent news waiting for a quiet moment
   const quiet = () => live.state === 'listening' && !running.size;
   const flush = () => { while (held.length && quiet()) live.pushNote(held.shift()); };
   const live = createLive({
     ...liveOpts,
-    systemInstruction: () => `${val(system) ?? ''}\n\n${LIVE_GUIDANCE}`,
+    systemInstruction: () => `${val(system) ?? ''}\n\n${LIVE_GUIDANCE}${langLine(val(speechLang))}`,
     tools: () => liveDeclarations(val(tools), slow),
     emit: (e) => {
       if (e.type === 'toolCall') return e.calls.forEach(run);
