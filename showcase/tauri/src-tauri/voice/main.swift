@@ -1449,6 +1449,25 @@ if args.contains("--test-livemic") {
     check("whole 16-bit samples", out.count % 2 == 0)
     check("16 kHz: one second is about 16000 samples (got \(out.count / 2))", abs(out.count / 2 - 16000) <= 160)
     check("mono, half scale stays half scale (peak \(peak))", abs(Int(peak) - 16384) < 1200)
+    // Regression: the built-in mic reports 3 discrete channels (9 with voice processing on), and AVAudioConverter's
+    // downmix turns a discrete layout into silence, so every Live call streamed zeros and Gemini never heard a word.
+    func discretePeak(_ channels: UInt32, live: Set<Int>) -> Int16 {
+        let f = AVAudioFormat(standardFormatWithSampleRate: 48000, channelLayout: AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | channels)!)
+        let p = LivePCM(from: f)!
+        var o = Data(), top: Int16 = 0
+        for k in 0 ..< 20 {
+            let buf = AVAudioPCMBuffer(pcmFormat: f, frameCapacity: 480)!
+            buf.frameLength = 480
+            for c in 0 ..< Int(channels) { for i in 0 ..< 480 { buf.floatChannelData![c][i] = live.contains(c) ? 0.5 * sin(2 * .pi * 440 * Float(k * 480 + i) / 48000) : 0 } }
+            o.append(p.convert(buf))
+        }
+        o.withUnsafeBytes { raw in for v in raw.bindMemory(to: Int16.self) { top = max(top, Int16(littleEndian: v)) } }
+        return top
+    }
+    let vp = discretePeak(9, live: Set(0 ..< 9))
+    check("9 discrete channels (voice processing): half scale stays half scale (peak \(vp))", abs(Int(vp) - 16384) < 1200)
+    let one = discretePeak(3, live: [0])
+    check("3 discrete channels, one with signal: still heard (peak \(one))", one > 3000)
     let msg = LivePCM.message(Data([1, 0, 2, 0]))
     check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
     check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))

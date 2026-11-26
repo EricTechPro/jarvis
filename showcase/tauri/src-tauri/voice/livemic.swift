@@ -10,24 +10,44 @@ import Foundation
 final class LivePCM {
     static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
     private let converter: AVAudioConverter
+    private let mono: AVAudioFormat
 
     init?(from input: AVAudioFormat) {
-        guard let c = AVAudioConverter(from: input, to: Self.format) else { return nil }
-        c.downmix = true
+        // The channels are averaged here, not by the converter: mics report a discrete layout (the built-in one 3
+        // channels, 9 with voice processing on) and AVAudioConverter's downmix turns that into silence.
+        guard input.commonFormat == .pcmFormatFloat32, !input.isInterleaved || input.channelCount == 1,
+              let m = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: input.sampleRate, channels: 1, interleaved: false),
+              let c = AVAudioConverter(from: m, to: Self.format) else { return nil }
+        mono = m
         converter = c
+    }
+
+    /// The buffer's channels averaged into one.
+    private func mixed(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let n = Int(buffer.format.channelCount), frames = Int(buffer.frameLength)
+        guard let src = buffer.floatChannelData, let out = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength),
+              let dst = out.floatChannelData?[0] else { return nil }
+        out.frameLength = buffer.frameLength
+        for i in 0 ..< frames {
+            var sum: Float = 0
+            for c in 0 ..< n { sum += src[c][i] }
+            dst[i] = sum / Float(n)
+        }
+        return out
     }
 
     /// One mic buffer in, its PCM bytes out (the resampler may hold a few samples back for the next buffer).
     func convert(_ buffer: AVAudioPCMBuffer) -> Data {
         let room = AVAudioFrameCount(Double(buffer.frameLength) * Self.format.sampleRate / buffer.format.sampleRate) + 64
         guard let out = AVAudioPCMBuffer(pcmFormat: Self.format, frameCapacity: room) else { return Data() }
+        guard let one = mixed(buffer) else { return Data() }
         var given = false
         var error: NSError?
         converter.convert(to: out, error: &error) { _, status in
             if given { status.pointee = .noDataNow; return nil }
             given = true
             status.pointee = .haveData
-            return buffer
+            return one
         }
         guard error == nil, out.frameLength > 0, let samples = out.int16ChannelData else { return Data() }
         return Data(bytes: samples[0], count: Int(out.frameLength) * MemoryLayout<Int16>.size)

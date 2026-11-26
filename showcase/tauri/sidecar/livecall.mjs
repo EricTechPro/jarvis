@@ -83,6 +83,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     if (me !== call) return; // a call already hung up
     switch (e.type) {
       case 'turn':
+        stats.turns++;
         newTurn();
         return;
       case 'state':
@@ -92,6 +93,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         if (e.state !== 'speaking') ui({ kind: 'live', state: e.state, hint: e.state === 'listening' ? `Live · Listening… ${typeof hangUpHint === 'function' ? hangUpHint() : hangUpHint}`.trim() : undefined });
         return;
       case 'audio':
+        stats.voice++;
         if (e.id === cutId) return;
         for (const [id, h] of [...held]) if (h.answered) release(id, true);
         speechId = e.id;
@@ -110,6 +112,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         endTurn();
         return;
       case 'caption':
+        if (e.who === 'user') stats.heard = Math.max(stats.heard, e.text.length);
         if (e.who === 'user') { if (!e.done) ui({ kind: 'live', heard: e.text }); return; }
         startTurn();
         if (e.text.length > turn.shown.length && e.text.startsWith(turn.shown)) {
@@ -135,6 +138,13 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
   // A call still being made: dropped before it opens (whatever it makes is stopped), and its crops with it.
   const dropOpening = () => { opening = false; call++; pending = []; ui({ kind: 'live', state: 'closed' }); };
 
+  // What each call heard, for the log (no words, only counts and levels): mic seconds and level, Gemini's turns,
+  // how many characters it transcribed from him, and how many chunks of her voice came back.
+  const newStats = () => ({ ms: 0, sq: 0, peak: 0, turns: 0, heard: 0, voice: 0 });
+  let stats = newStats();
+  const callStats = () => ({ micSecs: +(stats.ms / 1000).toFixed(1), micRms: +(stats.ms ? Math.sqrt(stats.sq / stats.ms) : 0).toFixed(4),
+    micPeak: +stats.peak.toFixed(4), turns: stats.turns, heardChars: stats.heard, voiceChunks: stats.voice });
+
   function hangUp(why = 'tap') {
     if (opening) { dropOpening(); return true; }
     if (!brain) return false;
@@ -142,7 +152,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     brain = null; call++;
     b.stop();
     closed();
-    log('live_end', { why });
+    log('live_end', { why, ...callStats() });
     return true;
   }
 
@@ -170,6 +180,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       if (me !== call) return b.stop(); // hung up (a mode switch, sleep) while it was being made
       opening = false;
       brain = b;
+      stats = newStats();
       log('live_start', {});
       await b.start();
     },
@@ -179,8 +190,9 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     pcm(data) {
       if (!brain) return;
       brain.pushAudio(data);
-      if (!speechId) { loudMs = 0; return; }
       const { rms, ms } = frameLevel(data);
+      stats.ms += ms; stats.sq += rms * rms * ms; stats.peak = Math.max(stats.peak, rms);
+      if (!speechId) { loudMs = 0; return; }
       loudMs = rms >= cutIn.rms ? loudMs + ms : 0;
       if (loudMs < cutIn.holdMs) return;
       // He's talking over her: stop her now; Gemini's `interrupted` follows and ends the turn.
