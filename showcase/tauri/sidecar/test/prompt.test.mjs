@@ -128,3 +128,11 @@ assert.match(side, /\nSpeed: [^\n]*fewest, quickest steps[^\n]*same turn \(they 
 assert.ok(side.indexOf('\nSpeed: ') < side.indexOf('\nSeveral things in one request'), 'speed comes before the rules that lean on it');
 assert.ok(!/Be fast:|screenshot just that app/.test(side), 'no second copy of the speed rules');
 console.log('prompt (speed) tests: passed');
+// Live hands long app tasks to Classic's model (an operator agent) and checks each of its own steps with a look.
+const liveLine = side.slice(side.indexOf('const LIVE_VOICE_LINE'), side.indexOf('\n', side.indexOf('const LIVE_VOICE_LINE')));
+assert.match(liveLine, /take_screenshot after each step/, 'Live checks each step on screen');
+assert.match(liveLine, /send_agent with type operator/, 'Live hands a long app task to an operator');
+assert.match(liveLine, /one click, one scroll or opening a link[^\n]*yourself/, 'one-shot actions stay in Live');
+const agentsSrc = readFileSync(fileURLToPath(new URL('../agents.mjs', import.meta.url)), 'utf8');
+assert.match(agentsSrc, /operator \(works other apps on the screen/, 'send_agent names the operator');
+console.log('prompt (live handoff) tests: passed');

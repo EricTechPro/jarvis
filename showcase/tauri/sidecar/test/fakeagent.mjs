@@ -18,6 +18,16 @@ const ANSWER = [
   ['finish', { outcome: 'GPT-6 and Claude 6 came out this week.', report: 'GPT-6 and Claude 6 both came out this week.\nSources: https://example.com/news', place: 'https://example.com/news' }],
 ];
 
+// An operator (a long task in other apps, from a Live call): the same scroll four times on a window that never
+// changes, so the loop guard refuses the fourth, then a look and a report.
+const scroll = ['act_in_app', { target: 'front', steps: [{ do: 'scroll', direction: 'down' }] }];
+const OPERATOR = [
+  ['plan', { now: 'Filling in the cards' }],
+  scroll, scroll, scroll, scroll,
+  ['take_screenshot', { target: 'front' }],
+  ['finish', { outcome: 'The Cards editor needs Video + first.', report: 'The list behind the Cards window does not scroll; open Video + first.' }],
+];
+
 export default class FakeAgent {
   constructor(o) { this.o = o; this.running = false; }
   steer() {}
@@ -27,7 +37,7 @@ export default class FakeAgent {
     async function* run() {
       o.running = true;
       let i = 0;
-      for (const [name, args] of /wants an answer, not a file/.test(o.o.system) ? ANSWER : STEPS) {
+      for (const [name, args] of /You work other apps/.test(o.o.system) ? OPERATOR : /wants an answer, not a file/.test(o.o.system) ? ANSWER : STEPS) {
         const id = `t${++i}`;
         yield { type: 'tool_call_start', toolCallId: id, name, args };
         let isError = false, result;

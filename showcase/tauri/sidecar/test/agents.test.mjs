@@ -31,10 +31,20 @@ for (const t of ['what is an AI agent?', 'how do I create an agent in LangChain'
 
 // Tools: never the screen or the user's lists.
 const all = ['take_screenshot', 'read_file', 'write_file', 'run_command', 'web_search', 'web_fetch', 'list_files', 'search_files', 'draw', 'act_in_app', 'open', 'remember_commitment'].map((name) => ({ name }));
-for (const type of AGENT_TYPES) {
+for (const type of AGENT_TYPES.filter((t) => t !== 'operator')) {
   const names = toolsFor(type, all).map((t) => t.name);
   assert.deepEqual(names.sort(), ['list_files', 'read_file', 'run_command', 'search_files', 'web_fetch', 'web_search', 'write_file']);
   assert.ok(!names.some((n) => SCREEN_TOOLS.includes(n)));
+}
+// The operator: a long task in other apps, handed over from a Live call. It gets the same screen tools the chat has
+// (act_in_app with its own allowActions and Allow prompts), and nothing that edits files, runs commands or draws.
+assert.ok(AGENT_TYPES.includes('operator'));
+assert.deepEqual(toolsFor('operator', [...all, { name: 'read_window' }, { name: 'list_windows' }]).map((t) => t.name).sort(), ['act_in_app', 'list_windows', 'open', 'read_window', 'take_screenshot']);
+{
+  const s = agentSystem('operator', { dir: '/x/job', userName: 'Ken' });
+  assert.ok(!/can't see the screen/.test(s), 'the operator can see the screen');
+  assert.match(s, /take_screenshot after each step/);
+  assert.match(s, /Ken wants an answer, not a file/, 'it reports back instead of making files');
 }
 assert.deepEqual(toolsFor('hacker', all), [], 'an unknown type gets nothing');
 

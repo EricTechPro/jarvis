@@ -1,6 +1,16 @@
 {
   "updates": [
     {
+      "version": "0.2.6",
+      "date": "2026-11-26",
+      "items": [
+        { "kind": "fixed", "title": "Sees with actions off", "text": "With actions off, I can still look at your screen." },
+        { "kind": "fixed", "title": "No more loops", "text": "If a step changes nothing three times, I stop and look instead of repeating it." },
+        { "kind": "improved", "title": "Long app tasks handed off", "text": "In Live, long tasks across apps go to an operator agent while we keep talking." },
+        { "kind": "fixed", "title": "Clean updates", "text": "The installer now fully restarts Jarvis on update." }
+      ]
+    },
+    {
       "version": "0.2.5",
       "date": "2026-11-26",
       "items": [
