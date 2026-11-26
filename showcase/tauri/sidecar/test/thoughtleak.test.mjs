@@ -49,4 +49,28 @@ for (const real of [
 // Split into single characters, the same.
 for (const real of ['**Note:** the folder is read-only.', '**Checking In**\n\nAll three tasks are finished.']) assert.equal(run([...real]), real);
 assert.equal(run([...c2.join('')]), run(c2), 'one character at a time, the same as the recorded chunks');
+// A real answer under an -ing heading is never dropped, even with a triple-newline gap later in it: the prose under
+// the heading has to read as Gemini planning (it opens "I…", "My…" or "The user…") and be one paragraph.
+for (const real of [
+  '**Morning Briefing**\n\nYou have 3 meetings today.\n\n\nWeather: sunny.',
+  '**Shopping List**\n\n- eggs\n- milk\n\n\nAnything else?',
+  '**Checking In**\n\nI finished all three tasks.\n\nThe report is saved.\n\n\nAnything else?',
+]) {
+  assert.equal(run([real]), real, `kept: ${JSON.stringify(real)}`);
+  assert.equal(run([...real]), real, `kept, one character at a time: ${JSON.stringify(real)}`);
+}
+// And it streams: once the prose under the heading isn't planning, nothing waits for the turn's end.
+{
+  const f = new ThoughtFilter();
+  assert.equal(f.push('**Meeting Notes**\n\n'), '', 'a heading alone could still be a summary');
+  assert.equal(f.push('Here is a long answer. '), '**Meeting Notes**\n\nHere is a long answer. ');
+  assert.equal(f.push('More text. '), 'More text. ');
+  assert.equal(f.push('End.'), 'End.');
+  assert.equal(f.flush(), '');
+}
+{
+  const f = new ThoughtFilter();
+  assert.equal(f.push('**Checking In**\n\nI finished the first task.\n\n'), '');
+  assert.equal(f.push('Next'), '**Checking In**\n\nI finished the first task.\n\nNext', 'a second paragraph is an answer');
+}
 console.log('thoughtleak: reasoning summaries sent as text are dropped ok');

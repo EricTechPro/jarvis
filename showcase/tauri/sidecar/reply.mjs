@@ -53,10 +53,16 @@ export class EchoFilter {
 
 // Gemini's reasoning summary sent as plain reply text (no thought flag on the part, so gg-ai can't tell it from the
 // answer): a bold heading that starts with an -ing word, a blank line, its planning prose, then two blank lines and
-// the real answer. Dropped only at the start of a model turn and only in that exact shape; anything else streams
-// straight through, and a heading with no gap after its prose (a real answer) is let out at the turn's end.
+// the real answer. Dropped only at the start of a model turn and only in that exact shape: the prose is one paragraph
+// that reads as planning (it opens "I…", "My…" or "The user…"). A heading over anything else ("**Morning Briefing**",
+// "You have 3 meetings") streams straight on, and planning-like prose with no gap after it is let out at the turn's end.
 const HEADING = /^[A-Z][a-z]+ing(?: [^*\n]{1,80})?$/;
 const BODY_MAX = 4000;
+const PLANS = ['I ', "I'", 'I\u2019', 'My ', 'The user'];
+function planning(b) { // → 1 when the prose under a heading opens like Gemini's planning, 0 when not, -1 while unsure
+  if (PLANS.some((p) => b.startsWith(p))) return 1;
+  return PLANS.some((p) => p.startsWith(b)) ? -1 : 0;
+}
 function summaryHead(b) { // → the length of a summary heading at b's start, 0 when it isn't one, -1 while it could be
   const lead = b.length - b.replace(/^\s+/, '').length, s = b.slice(lead);
   if (s.length < 2) return '**'.startsWith(s) ? -1 : 0;
@@ -84,7 +90,11 @@ export class ThoughtFilter {
         if (n === 0) { this.state = 'pass'; out += this.buf; this.buf = ''; return out; }
         this.state = 'body'; this.held = this.buf.slice(0, n); this.buf = this.buf.slice(n);
       }
+      const plan = planning(this.buf);
+      if (plan < 0) return out;
+      const para = this.buf.search(/\n\n[^\n]/); // a second paragraph before any gap: an answer, not a summary
       const gap = this.buf.indexOf('\n\n\n');
+      if (!plan || (para >= 0 && (gap < 0 || para < gap))) { this.state = 'pass'; out += this.held + this.buf; this.buf = ''; this.held = ''; return out; }
       if (gap < 0) {
         if (this.held.length + this.buf.length > BODY_MAX) { this.state = 'pass'; out += this.held + this.buf; this.buf = ''; }
         return out;
