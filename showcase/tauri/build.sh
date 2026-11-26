@@ -34,9 +34,13 @@ case "$TRIPLE" in
 esac
 cd src-tauri
 # macOS signing: APPLE_SIGNING_IDENTITY if set, else the first Developer ID Application certificate in
-# the keychain, else ad-hoc. A stable identity keeps macOS permissions across rebuilds.
+# the keychain, else the "Jarvis Self-Signed" certificate (by its SHA-1, so a duplicate import isn't ambiguous), else
+# ad-hoc. A stable identity keeps macOS permissions across rebuilds: the designated requirement names the certificate,
+# not the build's cdhash. The self-signed one isn't trusted, so `find-identity -v` hides it; it's looked up without -v.
+# Tauri signs the app and every externalBin helper with this identity, the hardened runtime and Jarvis.entitlements.
 if [ "$(uname)" = "Darwin" ] && [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
   APPLE_SIGNING_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)"
+  [ -n "$APPLE_SIGNING_IDENTITY" ] || APPLE_SIGNING_IDENTITY="$(security find-identity -p codesigning 2>/dev/null | sed -n 's/^ *[0-9]*) \([0-9A-F]\{40\}\) "Jarvis Self-Signed".*/\1/p' | head -1 || true)"
   export APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}"
 fi
 # ./build.sh release --target <triple> builds for one target (used by the release workflow).
