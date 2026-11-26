@@ -325,11 +325,13 @@ final class Ink {
 
     /// The talk ended: shoot the marked part of the screen with the strokes still on it, then fade them.
     /// done: called on the main queue once the screen has been shot (straight away if nothing was drawn).
-    func capture(then done: @escaping () -> Void = {}) {
+    /// True: a circled area is being shot (take() gets it).
+    @discardableResult
+    func capture(then done: @escaping () -> Void = {}) -> Bool {
         setArmed(false)
         // Only loops that snapped shut count (end() above already dropped the rest).
         let loops = { (p: InkPanel) in p.view.strokes.filter(\.closed) }
-        guard let panel = panels.max(by: { loops($0).count < loops($1).count }), !loops(panel).isEmpty else { return done() }
+        guard let panel = panels.max(by: { loops($0).count < loops($1).count }), !loops(panel).isEmpty else { done(); return false }
         let o = origin(panel)
         let strokes = loops(panel)
         log("drawing: \(strokes.count) circled area(s) captured")
@@ -378,6 +380,7 @@ final class Ink {
                 self.fade(strokes, in: panel, after: 0.5)
             }
         }
+        return true
     }
 
     /// What was captured, once it's ready (nil: nothing was drawn, or the capture failed).

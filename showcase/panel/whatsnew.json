@@ -17,7 +17,9 @@
         { "kind": "fixed", "title": "Headed answers stream", "text": "Those answers now show and speak as they come, not only at the end." },
         { "kind": "fixed", "title": "Codex stops writing", "text": "Turn Allow actions off and a Codex Builder stops changing files on its next turn." },
         { "kind": "fixed", "title": "Your real Desktop", "text": "The new second brain goes on your real Desktop, even with OneDrive or another language." },
-        { "kind": "fixed", "title": "No call from a goodbye", "text": "After you hang up in Live, my last words can't wake me and start a new call." }
+        { "kind": "fixed", "title": "No call from a goodbye", "text": "After you hang up in Live, my last words can't wake me and start a new call." },
+        { "kind": "new", "title": "Circle in a call", "text": "In Live, hold ⌃⌥ and circle part of the screen to show it to me, just like in Classic." },
+        { "kind": "fixed", "title": "One voice at a time", "text": "In Live, a circle or ⌃⌥A stops a typed reply first, so we don't talk over each other." }
       ]
     },
     {
