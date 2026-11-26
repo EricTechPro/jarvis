@@ -2847,6 +2847,9 @@ function obBrain(m) {
   if (m.choice === 'existing') {
     const r = checkSecondBrain(String(m.root ?? '').slice(0, 1000), HOME);
     if (!r.ok) return done({ ok: false, error: r.why === 'empty' ? 'Choose a folder first.' : r.why });
+    // The saved folder again (the guide preselects it on a rerun): keep the locations picked on the Second brain page.
+    const had = migrateBrain(config.secondBrain), hadDir = had && checkSecondBrain(had.root, HOME);
+    if (hadDir?.ok && hadDir.dir === r.dir) return done({ ok: true, choice: 'existing', root: r.dir });
     config.secondBrain = Object.fromEntries(BRAIN_KEYS.map((k) => [k, k === 'root' ? r.dir : ''])); saveConfig(); agentStale = true; menu();
     return done({ ok: true, choice: 'existing', root: r.dir });
   }

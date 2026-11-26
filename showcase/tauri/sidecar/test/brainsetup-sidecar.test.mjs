@@ -137,6 +137,31 @@ try {
     assert.deepEqual(fs.readdirSync(notes), [], 'nothing is made in a chosen folder');
     await s.stop();
   }
+
+  // Running the guide again with a second brain already saved (from the menu's Setup entry, or after a re-prompt):
+  // Continue on the same folder keeps the locations picked by hand on the Second brain page, even one outside the
+  // root that can't be found again by name. Choosing a different folder starts that one fresh.
+  {
+    const home = tmp(); homes.push(home);
+    const notes = path.join(home, 'Notes'), wiki = path.join(home, 'Documents', 'Wiki'), other = path.join(home, 'Other');
+    for (const d of [notes, wiki, other]) fs.mkdirSync(d, { recursive: true });
+    const settings = path.join(home, 'data', 'Jarvis', 'Data', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    const layout = { root: notes, raw: '', context: wiki, research: '', projects: '', agents: '' };
+    fs.writeFileSync(settings, JSON.stringify({ onboarded: true, secondBrain: layout }));
+    const s = start(home);
+    const st = await s.hello();
+    assert.equal(st.brain.root, notes, 'the guide is told the saved root');
+    const r = await s.brain({ choice: 'existing', root: st.brain.root });
+    assert.equal(r.ok, true, `Continue on the saved folder is fine (${r.error ?? ''})`);
+    await settle();
+    assert.deepEqual(s.config().secondBrain, layout, 'the hand-picked locations are kept');
+    const r2 = await s.brain({ choice: 'existing', root: other });
+    assert.equal(r2.ok, true);
+    const c = await saved(s, (x) => x.secondBrain?.root === other, 'the other folder is saved');
+    assert.equal(c.secondBrain.context, '', 'a different folder starts fresh');
+    await s.stop();
+  }
 } finally {
   for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
 }

@@ -5,7 +5,8 @@
       "date": "2026-11-26",
       "items": [
         { "kind": "new", "title": "Second brain in setup", "text": "Setup asks where your notes live. I can make a Second Brain folder on your Desktop." },
-        { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts as Second Brain on your Desktop." }
+        { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts as Second Brain on your Desktop." },
+        { "kind": "fixed", "title": "Setup keeps your folders", "text": "Running setup again on the same second brain keeps the folders you picked." }
       ]
     },
     {
