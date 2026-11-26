@@ -35,7 +35,7 @@ import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions,
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
 import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setLiveVoice, setVoiceMode, voiceModeOf } from './voicemode.mjs';
-import { createLiveCall } from './livecall.mjs';
+import { createLiveCall, lookAtArea } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
@@ -2929,6 +2929,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
   else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
   // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
+  // A circle drawn with the talk chord in a call: the circled area goes in as a look (the call stays as it is, or opens).
+  else if (m.type === 'live_look') { if (voiceModeOf(config) === 'live') lookAtArea(liveCall, m.area, { prepare: fitImage, read: (f) => fs.readFile(f), remove: (f) => { fs.unlink(f).catch(() => {}); } }).catch((e) => say(problem('screen', e).text, 'concerned')); else if (typeof m.area?.file === 'string') fs.unlink(m.area.file).catch(() => {}); }
   else if (m.type === 'live_hangup') { if (!liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap')) ui({ kind: 'live', state: 'closed' }); }
   else if (m.type === 'live_pcm' && typeof m.data === 'string') liveCall.pcm(m.data);
   else if (m.type === 'system_sleep') liveCall.hangUp('sleep');

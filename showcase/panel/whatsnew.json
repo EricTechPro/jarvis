@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.2.7",
+      "date": "2026-11-26",
+      "items": [
+        { "kind": "new", "title": "Circle in a call", "text": "In Live, hold ⌃⌥ and circle part of the screen to show it to me, just like in Classic." }
+      ]
+    },
+    {
       "version": "0.2.6",
       "date": "2026-11-26",
       "items": [

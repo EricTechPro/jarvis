@@ -745,6 +745,10 @@ final class Voice {
     }
 
     // ---------- Live mode ----------
+    enum LiveRelease { case look, toggle }
+    /// Letting go of ⌃⌥ in Live: a closed circle drawn during the hold is a look at that area (the call is left as it
+    /// is, or opened by the look); anything else opens or hangs up the call.
+    static func liveRelease(circled: Bool) -> LiveRelease { circled ? .look : .toggle }
     // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
     // instead of starting a take, so there's no recogniser, no pause that ends a turn, no muted output and no wake word.
     // {"cmd":"live_capture"}: the open call's mic stream (livemic.swift).
@@ -844,9 +848,14 @@ final class Voice {
             // Only the first moment decides shortcut vs. talk: ⌃⌥ plus a key pressed since, ⇧ or ⌘ is a shortcut.
             if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: ⌃⌥ was part of a shortcut"); cancel(); blocked = true; return }
             if liveMode {
-                // A shortcut (⌃⌥A) was already caught above, so a release here is a tap that opens or hangs up the call;
-                // holding just waits for the release.
-                if released { phase = .idle; ink.clear(); emit(["type": "live_toggle"]) }
+                // A shortcut (⌃⌥A) was already caught above. On release, a circle drawn while holding is a look at that
+                // area (shot the same way as Classic's); otherwise it's a tap or hold that opens or hangs up the call.
+                guard released else { return }
+                phase = .idle
+                switch Self.liveRelease(circled: ink.capture()) {
+                case .look: ink.take { area in if let area { emit(["type": "live_look", "area": area]) } }
+                case .toggle: ink.clear(); emit(["type": "live_toggle"])
+                }
                 return
             }
             if released { phase = .handsFree; showListening("handsfree", now); return }
@@ -1471,6 +1480,9 @@ if args.contains("--test-livemic") {
     let msg = LivePCM.message(Data([1, 0, 2, 0]))
     check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
     check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))
+    // Circling in a call, the same gesture as Classic: a closed circle on release is a look, not a hang-up.
+    check("released after circling: the circled area is a look", Voice.liveRelease(circled: true) == .look)
+    check("released without a circle: a tap or hold opens or hangs up the call", Voice.liveRelease(circled: false) == .toggle)
     check("allowed: the call's mic opens", LiveMic.access(.authorized) == .open)
     // Not asked yet, or an ad-hoc update whose old grant no longer matches (macOS reports it as not asked): ask, as a take does.
     check("not asked yet: the call asks for the mic", LiveMic.access(.notDetermined) == .ask)

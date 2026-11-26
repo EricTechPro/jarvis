@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createLiveBrain } from '../livebrain.mjs';
-import { createLiveCall, liveErrorText } from '../livecall.mjs';
+import { createLiveCall, liveErrorText, lookAtArea } from '../livecall.mjs';
 import { holdAfterLaunch } from '../agents.mjs';
 
 const fakeTransport = () => {
@@ -309,6 +309,27 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
     assert.equal(t.calls.flatMap(frames).length, 0);
     call.hangUp('tap');
   }
+}
+
+{ // A circle drawn with ⌃⌥ in Live (the helper's live_look): the circled shot goes in through look, opening a call if
+  // none is open, and the temp file is removed. No file: nothing happens.
+  const img = Buffer.from([4, 2]);
+  const frames = (s) => s.sent.filter((m) => m.realtime?.video);
+  const { t, call } = setup();
+  const removed = [], fitted = [];
+  const io = { prepare: async (f) => { fitted.push(f); }, read: async (f) => (f === '/tmp/sidekick-marked-1.png' ? img : null), remove: (f) => removed.push(f) };
+  assert.equal(await lookAtArea(call, { file: '/tmp/sidekick-marked-1.png', rect: [0, 0, 320, 220] }, io), true);
+  assert.equal(call.open, true, 'a circle with no call open opens one');
+  assert.deepEqual(frames(t.calls[0]), [{ realtime: { video: { data: img.toString('base64'), mimeType: 'image/png' } } }]);
+  assert.deepEqual(fitted, ['/tmp/sidekick-marked-1.png']);
+  assert.deepEqual(removed, ['/tmp/sidekick-marked-1.png']);
+  assert.equal(await lookAtArea(call, null, io), false);
+  assert.equal(await lookAtArea(call, {}, io), false);
+  assert.equal(frames(t.calls[0]).length, 1, 'no area, no look');
+  call.hangUp('tap');
+  // sidekick.mjs routes the helper's live_look there, only in Live.
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  assert.match(src, /m\.type === 'live_look'\) \{ if \(voiceModeOf\(config\) === 'live'\) lookAtArea\(liveCall, m\.area,/);
 }
 
 { // sidekick.mjs: in Live the crop goes through liveCall.look and skips the Classic listen/ask; Escape returns before it.
