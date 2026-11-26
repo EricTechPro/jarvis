@@ -58,12 +58,20 @@ export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, speech
     systemInstruction: () => `${val(system) ?? ''}\n\n${LIVE_GUIDANCE}${langLine(val(speechLang))}`,
     tools: () => liveDeclarations(val(tools), slow),
     emit: (e) => {
-      if (e.type === 'toolCall') return e.calls.forEach(run);
+      if (e.type === 'toolCall') return batch(e.calls);
       if (e.type === 'toolCancel') return e.ids.forEach((id) => running.get(id)?.abort());
       emit(e);
       if (e.type === 'state') flush();
     },
   });
+
+  // Parallel calls in one turn are answered together, in one toolResponse once the last is done: one per result made
+  // her answer once per result. A cancelled call gets no answer; if every call was cancelled, nothing is sent.
+  async function batch(calls) {
+    const answers = (await Promise.all(calls.map(run))).filter(Boolean);
+    if (answers.length) live.respond(answers);
+    flush();
+  }
 
   async function run({ id, name, args }) {
     const ac = new AbortController();
@@ -85,8 +93,7 @@ export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, speech
     }
     running.delete(id);
     emit({ type: 'toolEnd', id, name, ok: ok && !ac.signal.aborted });
-    if (!ac.signal.aborted) live.respond([{ id, name, response }]);
-    flush();
+    return ac.signal.aborted ? null : { id, name, response };
   }
 
   return {

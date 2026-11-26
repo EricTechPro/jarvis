@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { LOOP_LIMIT, guardTools } from '../loopguard.mjs';
+import { FAIL_LIMIT, GOAL_LIMIT, LOOP_LIMIT, STUCK_MESSAGE, guardTools } from '../loopguard.mjs';
 
 // A fake act_in_app whose window text is whatever `screen` holds, so a test says when the screen moved.
 const setup = () => {
@@ -93,6 +93,7 @@ assert.equal(LOOP_LIMIT, 3);
   const side = readFileSync(fileURLToPath(new URL('../sidekick.mjs', import.meta.url)), 'utf8');
   assert.match(side, /\nguardTools\(tools, \{ log: [^\n]*request: \(\) => requestNo/, 'each request (a Classic message or a Live turn) counts from zero');
   assert.match(side, /tools, system: liveSystem/, 'the Live brain gets the same tools array');
+  assert.match(side, /\nguardTools\(tools, \{[^\n]*goals: true/, 'the chat and Live stop failing app steps by goal');
 }
 
 // Regression: looking is never refused. A screenshot's text is a fixed caption, so "what's on screen now?" asked four
@@ -130,6 +131,79 @@ assert.equal(LOOP_LIMIT, 3);
   const tools = guardTools([{ name: 'act_in_app', execute: async () => { state.runs++; return 'In Preview: scrolled.'; } }]);
   for (let i = 0; i < 5; i++) await tools[0].execute(scroll(), {});
   assert.equal(state.runs, 5);
+}
+
+// A failed call logs a short code for why, mapped from the helper's errors: never the error's own words, which hold
+// screen text and what was asked for.
+{
+  const { state, call, lines } = setup();
+  const cases = [
+    ['Step 1: no visible text "Public secret" in Google Chrome. Check the exact words with a screenshot or read_window.', 'no_visible_text'],
+    ['Step 2: no text "Visibility secret" on this page to find "Public" near.', 'no_visible_text'],
+    ['No matching window is open for secret.', 'no_window'],
+    ['Accessibility is off for Jarvis, so I can\'t read or control other apps yet.', 'permission'],
+    ['Jarvis needs Accessibility permission to control other apps.', 'permission'],
+    ['Window capture failed. Jarvis may need Screen Recording permission.', 'permission'],
+    ['timed out', 'timeout'],
+    ['Blocked for safety: that spot is on secret, and I never click in it.', 'blocked'],
+    ['Stopped before clicking "Delete secret": it could delete, pay, send or sign out, and the user hasn\'t said yes to that.', 'needs_yes'],
+    ['Step 1: no control with id 7. Call read_window again.', 'stale_id'],
+    ['The page changed since read_window, so that id is out of date. Call read_window again and use the new ids.', 'stale_id'],
+    ['Step 1: Safari is in front instead of Google Chrome, so I stopped before typing into the wrong app.', 'wrong_app'],
+    ['Step 1: no text field called "secret" here. Check its label with read_window.', 'no_field'],
+    ['Ken said no, so I didn\'t click "secret" (nothing after it ran either).', 'declined'],
+    ['Something nobody planned for: secret', 'error'],
+  ];
+  for (const [i, [msg]] of cases.entries()) { state.fail = msg; await call('act_in_app', { target: 'front', steps: [{ do: 'click_text', text: `t${i}` }] }, `e${i}`).catch(() => {}); }
+  const out = lines.filter((l) => l.kind === 'tool_outcome' && l.ok === false);
+  assert.deepEqual(out.map((l) => l.reason), cases.map(([, code]) => code));
+  assert.ok(!JSON.stringify(lines).includes('secret'), 'no screen or user text is logged');
+}
+
+// By goal (Eric's Live call, 2026-11-26): 12 act_in_app calls in one turn chasing one goal (tick Public, then Save),
+// each phrased differently, so no two were identical and the guard above never tripped. With goals on (the chat and
+// Live), the same first click failing twice, or three failed act_in_app calls in one request, stops act_in_app until
+// the next request; a screenshot still runs.
+{
+  const ct = (text) => ({ do: 'click_text', text });
+  const sc = (text, more = {}) => ({ do: 'scroll', direction: 'down', ...(text ? { text } : {}), ...more });
+  // Their shapes, in order, from the log; ok: the ones that worked.
+  const replay = [
+    [[ct('public'), ct('Save')]], [[ct('Public'), ct('Save')]], [[ct('Make your video'), sc('Make your video', { amount: 300 }), ct('public')]],
+    [[ct('Visibility'), sc('Visibility'), ct('Public')]], [[sc(null, { to_end: true })], 'ok'], [[ct('Private'), ct('Public'), ct('Save')]],
+    [[sc('Private'), ct('Public'), ct('Save')]], [[sc('Private'), ct('Private'), ct('Public'), ct('Done'), ct('Save')]],
+    [[sc('Dashboard'), ct('Dashboard')], 'ok'], [[ct('Content')], 'ok'], [[sc('Save as private'), ct('Save as private')]],
+    [[sc('Visibility'), ct('Private'), ct('Public'), ct('Save')]],
+  ];
+  const run = async (calls, { goals = true } = {}) => {
+    const lines = [], ran = []; let req = 17, shots = 0;
+    const tools = guardTools([
+      { name: 'act_in_app', execute: async (args) => { ran.push(args); if (!args.ok) throw new Error('Step 1: no visible text "x" in Google Chrome.'); return 'In Chrome: done.\nNow showing: Studio'; } },
+      { name: 'take_screenshot', execute: async () => { shots++; return 'Screenshot.'; } },
+    ], { log: (kind, data) => lines.push({ kind, ...data }), request: () => req, goals });
+    const results = [];
+    for (const [steps, ok] of calls) {
+      results.push(await tools[0].execute({ target: 'front', steps, ...(ok ? { ok: true } : {}) }, {}).then(() => 'ok', (e) => e.message));
+      await tools[1].execute({ target: 'front' }, {});
+    }
+    return { lines, ran, results, shots, next: () => { req++; }, tools };
+  };
+  assert.equal(GOAL_LIMIT, 2); assert.equal(FAIL_LIMIT, 3);
+  const r = await run(replay);
+  assert.equal(r.ran.length, 3, 'the 4th call is refused');
+  assert.equal(r.results[3], STUCK_MESSAGE);
+  assert.ok(r.results.slice(3).every((x) => x === STUCK_MESSAGE), 'and every act_in_app after it, this request');
+  assert.equal(r.shots, replay.length, 'screenshots are never refused');
+  assert.equal(r.lines.filter((l) => l.name === 'act_in_app' && l.reason === 'loop_guard').length, replay.length - 3);
+  assert.match(STUCK_MESSAGE, /stop[^.]*take_screenshot once[^.]*hand it to the operator \(send_agent with type operator[^)]*\) or tell the user what's blocking it/);
+  // The same goal failing twice: its third try is refused, whatever the wording.
+  const g = await run([[[ct('Public'), ct('Save')]], [[sc('Visibility'), ct('PUBLIC')]], [[ct('public ')]]]);
+  assert.equal(g.ran.length, 2, 'the 3rd try at "public" is refused');
+  // A new request starts over.
+  r.next();
+  assert.equal(await r.tools[0].execute({ target: 'front', steps: [ct('Public')], ok: true }, {}), 'In Chrome: done.\nNow showing: Studio');
+  // Without goals (the operator agent: its whole long job is one request), only identical calls count.
+  assert.equal((await run(replay, { goals: false })).ran.length, replay.length);
 }
 
 console.log('loop guard tests: passed');

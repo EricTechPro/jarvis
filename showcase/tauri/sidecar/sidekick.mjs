@@ -714,7 +714,7 @@ tools.push(...createMcpTools({
 let requestNo = 0; // the request being answered (nextTurn), for holdAfterLaunch
 holdAfterLaunch(tools, () => requestNo);
 // Every call's outcome in the log and a stop for loops (loopguard.mjs), for Classic and Live alike.
-guardTools(tools, { log: (kind, data) => logLine(kind, data), request: () => requestNo });
+guardTools(tools, { log: (kind, data) => logLine(kind, data), request: () => requestNo, goals: true });
 // A new request: Classic starts one per message, a Live call one per turn of theirs. Per-turn Allows, screenshot and
 // window freshness, the ink and the hold after send_agent all go by it.
 const startRequest = () => (requestNo = nextTurn());
@@ -843,7 +843,7 @@ let frontNow = ''; // set just before each request (whereNow)
 const crewLine = () => { const t = crewText(crewNow(), (sp) => modelName(sp.model), config.delegate); return t ? `${t}\n` : ''; };
 // live: for a Live call, with its own Voice line, and the facts the last Classic request used are left alone.
 // Other apps in a call: one-shot actions stay here; a long task goes to an operator agent on Classic's model (agents.mjs).
-const LIVE_VOICE_LINE = () => `- Voice: this is a Live call: ${userName} just talks, with nothing to hold, and you hear when they stop${HOTKEYS_OK ? `; a tap of ${talkWords()} hangs up` : ''}.${HANDS_OK ? `\n- Other apps in this call: do one click, one scroll or opening a link yourself, then take_screenshot after each step to check it worked before the next (nothing changed: try a different step, never the same one again). A task with many steps across apps or windows (filling a form, copying things from one app into another, several clicks in a row) is too long for a call: say one short line ("I'll hand that to my operator, I'll tell you when it's done"), then call send_agent with type operator and a complete brief (every app, page, name and value), and keep talking with ${userName}. While an operator works, don't use act_in_app yourself; when its news comes, tell them briefly.` : ''}`;
+const LIVE_VOICE_LINE = () => `- Voice: this is a Live call: ${userName} just talks, with nothing to hold, and you hear when they stop${HOTKEYS_OK ? `; a tap of ${talkWords()} hangs up` : ''}.${HANDS_OK ? `\n- Other apps in this call: do one click, one scroll or opening a link yourself, then take_screenshot after each step to check it worked before the next (nothing changed: try a different step, never the same one again). A task with many steps across apps or windows (filling a form, copying things from one app into another, several clicks in a row) is too long for a call: call send_agent with type operator and a complete brief (every app, page, name and value), and only once it has started say one short line ("My operator's on it, I'll tell you when it's done"); if it fails, say plainly that it didn't start and why. Then keep talking with ${userName}. While an operator works, don't use act_in_app yourself; when its news comes, tell them briefly.` : ''}`;
 const livePrompt = (context = '', { live = false } = {}) => {
   const facts = pickFacts(context, 40), total = listFacts().length;
   if (!live) lastFactIds = facts.map((f) => f.id);

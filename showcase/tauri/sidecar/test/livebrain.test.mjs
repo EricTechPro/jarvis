@@ -205,4 +205,26 @@ for (const { skipAllow, answer, runs, asks } of [
   brain.stop();
 }
 
+{ // Parallel calls in one turn get ONE toolResponse holding every answer, sent once the last is done: one per result
+  // made her answer once per result (she said the same thing twice). A cancelled one is left out of the batch.
+  const gates = {};
+  const mk = (name) => ({ name, description: name, parameters: z.object({}), execute: (args, { signal, toolCallId }) => new Promise((res, rej) => { gates[toolCallId] = res; signal.addEventListener('abort', () => rej(new Error('aborted'))); }) });
+  const { t, brain } = setup({ tools: [mk('read_window'), mk('list_windows'), mk('web_fetch')] });
+  await brain.start();
+  const s = t.calls[0];
+  s.server({ toolCall: { functionCalls: [{ id: 'p1', name: 'read_window', args: {} }, { id: 'p2', name: 'list_windows', args: {} }, { id: 'p3', name: 'web_fetch', args: {} }] } });
+  await until(() => gates.p1 && gates.p2 && gates.p3);
+  gates.p1('window one');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(s.sent.filter((m) => m.tool).length, 0, 'nothing sent while one of the batch still runs');
+  s.server({ toolCallCancellation: { ids: ['p3'] } });
+  gates.p2('two windows');
+  await until(() => s.sent.some((m) => m.tool));
+  await new Promise((r) => setTimeout(r, 20));
+  const sent = s.sent.filter((m) => m.tool);
+  assert.equal(sent.length, 1, 'one toolResponse');
+  assert.deepEqual(sent[0].tool.functionResponses.map((r) => [r.id, r.response.output]), [['p1', 'window one'], ['p2', 'two windows']]);
+  brain.stop();
+}
+
 console.log('livebrain: ok');
