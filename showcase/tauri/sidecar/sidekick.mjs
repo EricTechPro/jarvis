@@ -34,7 +34,7 @@ import { briefNote } from './brief.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
 import { cleanWakeName, wakeName } from './wakename.mjs';
-import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setVoiceMode, voiceModeOf } from './voicemode.mjs';
+import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setLiveVoice, setVoiceMode, voiceModeOf } from './voicemode.mjs';
 import { createLiveCall } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
 import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
@@ -2823,6 +2823,7 @@ function obState() {
     replies: VOICE_ON() ? 'voice' : 'text', // voice only when it can really speak: a service picked without its key yet shows as text
     tts: tts().id, fishKey: hasVoiceKey('fish'), geminiKey: hasVoiceKey('gemini'),
     geminiVoice: geminiVoice(), geminiVoices: GEMINI_VOICES, geminiShared: ttsKeys.gemini === 'shared',
+    liveVoice: liveVoiceOf(config, geminiVoice()), // the voice a Live call speaks in (the reply step in Live picks it)
     studio: tts().local ? studioState() : null,
   });
 }
@@ -2860,6 +2861,7 @@ async function onGuide(m) {
   // A service picked in the guide that already has its key: it speaks from now on (voice goes on if it was text).
   else if (m.type === 'ob_tts') { await setTts(m.provider); if (speech.on && tts().id === m.provider) await setReplies('voice'); }
   else if (m.type === 'ob_geminivoice') setGeminiVoice(m.voice);
+  else if (m.type === 'ob_livevoice') { if (setLiveVoice(config, m.voice, GEMINI_VOICES)) saveConfig(); obState(); } // the next Live call speaks in it
   else if (m.type === 'ob_studiovoice' && typeof m.voice === 'string') setStudioVoice(m.voice);
   else if (m.type === 'ob_studiocheck') { await speech.checkLocal(); obState(); }
   else if ((m.type === 'ob_fishkey' || m.type === 'ob_geminikey') && typeof m.key === 'string') {

@@ -16,3 +16,10 @@ export function setVoiceMode(config, mode) {
 
 // The Gemini Live voice: the one in config, else the Gemini voice the current look speaks in (closest to Jarvis today).
 export const liveVoiceOf = (config, lookVoice) => config?.liveVoice || lookVoice;
+
+// Picks the Live voice (setup's reply step in Live); false (nothing changed) for a name not in the prebuilt list.
+export function setLiveVoice(config, voice, voices) {
+  if (!voices.some((v) => v.id === voice)) return false;
+  config.liveVoice = voice;
+  return true;
+}

@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_VOICE_MODE, DEFAULT_LIVE_MODEL, voiceModeOf, setVoiceMode, liveVoiceOf } from '../voicemode.mjs';
+import { DEFAULT_VOICE_MODE, DEFAULT_LIVE_MODEL, voiceModeOf, setVoiceMode, liveVoiceOf, setLiveVoice } from '../voicemode.mjs';
+import { GEMINI_VOICES } from '../gemini.mjs';
 
 const src = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
 
@@ -26,6 +27,12 @@ assert.equal(c.voiceMode, 'classic');
 assert.equal(liveVoiceOf({ liveVoice: 'Kore' }, 'Charon'), 'Kore');
 assert.equal(liveVoiceOf({ liveVoice: null }, 'Charon'), 'Charon');
 assert.equal(liveVoiceOf({}, 'Puck'), 'Puck');
+// Picking the Live voice saves a prebuilt one to liveVoice (what a Live call reads); anything else changes nothing.
+const lv = {};
+assert.equal(setLiveVoice(lv, 'Puck', GEMINI_VOICES), true);
+assert.equal(liveVoiceOf(lv, 'Charon'), 'Puck');
+assert.equal(setLiveVoice(lv, 'Nobody', GEMINI_VOICES), false);
+assert.equal(lv.liveVoice, 'Puck');
 
 // Wiring (sidekick.mjs runs at import, so it is read as text): defaults, menu pick that saves, panel state, panel row.
 const side = src('../sidekick.mjs'), panel = src('../../../panel/panel.js');
@@ -57,4 +64,18 @@ assert.match(guide, /if \(live\) ai\.key = 'gemini';/, 'Live shows the Gemini ke
 assert.match(guide, /\.\.\.\(gem \? \[ai\.geminiCard\(gem\)\] : \[\]\)/, 'Classic lists a Gemini card after the sign-ins');
 assert.match(guide, /name: 'ai',[^\n]*ready: \(\) => ai\.ready\(\)/);
 assert.match(guide, /'sizes', 'ai-version'\]\)/, 'arrow keys move between Classic and Live');
+// Setup's "How should I reply?" step in Live: no Text or Voice pick, Continue on, and the voice picker saves the Live
+// voice (ob_livevoice → setLiveVoice → config.liveVoice, which the Live call reads), shown from obState's liveVoice.
+assert.match(side, /m\.type === 'ob_livevoice'\) \{ if \(setLiveVoice\(config, m\.voice, GEMINI_VOICES\)\) saveConfig\(\); obState\(\); \}/);
+assert.match(ob, /liveVoice: liveVoiceOf\(config, geminiVoice\(\)\)/, 'obState reports the voice Live speaks in');
+assert.match(side, /voice: liveVoiceOf\(config, geminiVoice\(\)\), tools, system: liveSystem/, 'the Live call speaks in that same voice');
+assert.match(guide, /ready: \(\) => replies\.live\(\) \|\| replies\.mode\(\) === 'text' \|\| replies\.on\(\)/, 'Live continues straight away');
+assert.match(guide, /if \(replies\.live\(\)\) return replies\.renderLive\(\);/);
+const rl = guide.slice(guide.indexOf('renderLive() {'), guide.indexOf('choose(id) {'));
+assert.match(rl, /\$\('replies'\)\.hidden = true;/, 'Live hides Text only and Voice + text');
+assert.match(rl, /\['tts-row', 'studio-row', 'fish-form', 'fish-change'\]/, 'and the services and key field');
+assert.match(rl, /\$\('gvoice'\)\.value = state\.liveVoice/);
+assert.match(guide, /if \(replies\.live\(\)\) \{ state\.liveVoice = v; send\(\{ type: 'ob_livevoice', voice: v \}\); \}/);
+assert.match(page, /<p class="lead" id="voice-lead">/);
+assert.match(src('../../../onboarding/onboarding.css'), /\.rows\[hidden\] \{ display: none; \}/, 'Live hides the mic rows (a grid ignores hidden)');
 console.log('voice mode tests: passed');

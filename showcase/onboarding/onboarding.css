@@ -191,6 +191,7 @@ h2 { margin: 0; font: 700 13px/1.35 var(--mono); font-stretch: 87.5%; color: var
 
 /* ---------- permission rows ---------- */
 .rows { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.rows[hidden] { display: none; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px 6px 14px; min-height: 46px; }
 .row.focus { --bc: var(--line-hi); }
 .row.granted { --bc: #24675f; }

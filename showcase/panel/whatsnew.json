@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.2.3",
+      "date": "2026-11-25",
+      "items": [
+        { "kind": "improved", "title": "Live voice in setup", "text": "In Live, the reply step skips Text and Voice. Just pick the Gemini voice I talk in." }
+      ]
+    },
+    {
       "version": "0.2.2",
       "date": "2026-11-25",
       "items": [

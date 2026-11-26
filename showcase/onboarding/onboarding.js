@@ -573,8 +573,14 @@
     hasKey: (p = replies.tts()) => (TTS[p]?.local ? state?.tts === p && !!state?.studio?.ok : !!state?.[`${p}Key`]),
     // Voice is on with the service shown here.
     on: () => state?.replies === 'voice' && replies.hasKey() && (state?.tts ?? 'fish') === replies.tts(),
-    ready: () => replies.mode() === 'text' || replies.on(),
+    // Live (picked on the brain step) talks back itself in Gemini's voice: no Text or Voice pick, no service, no key
+    // (Live already has its Gemini key), just which voice. It's saved as the Live voice (ob_livevoice).
+    live: () => state?.voiceMode === 'live',
+    ready: () => replies.live() || replies.mode() === 'text' || replies.on(),
     render() {
+      if (replies.live()) return replies.renderLive();
+      $('voice-lead').textContent = 'Text shows in my bubbles. Voice also says it out loud. Change it any time in the Jarvis panel.';
+      $('replies').hidden = false;
       const mode = replies.mode(), on = replies.on(), t = TTS[replies.tts()];
       const CARDS = [
         ['text', 'Text only', 'Answers in my bubbles'],
@@ -622,6 +628,19 @@
       $('wake-switch').setAttribute('aria-checked', String(!!state?.wakeWord));
       nav();
     },
+    renderLive() {
+      $('voice-lead').textContent = "In Live I talk back in real time with Gemini's voice. Pick the one you like.";
+      $('replies').hidden = true;
+      for (const id of ['tts-row', 'studio-row', 'fish-form', 'fish-change']) showRow($(id), false);
+      $('fish-error').hidden = true;
+      showRow($('gvoice-row'), true);
+      const voices = (state?.geminiVoices ?? []).map((v) => ({ id: v.id, label: `${v.id} · ${v.style}` }));
+      const list = JSON.stringify(voices);
+      if ($('gvoice').dataset.list !== list) { $('gvoice').dataset.list = list; $('gvoice').replaceChildren(...voices.map((v) => el('option', { value: v.id, textContent: v.label }))); }
+      if (state?.liveVoice) $('gvoice').value = state.liveVoice;
+      $('talk-rows').hidden = true; // Classic's mic options: a Live call keeps the mic open itself
+      nav();
+    },
     choose(id) {
       if (replies.mode() === id && (id === 'text' || state?.replies === 'voice')) return;
       replies.pick = id; $('fish-error').hidden = true;
@@ -648,8 +667,8 @@
     enter() {
       replies.render();
       poseFn = POSE.point(1.7, 0.05);
-      aim($('replies'));
-      setTimeout(() => at('voice') && quip('Should I talk out loud?', 3), 700);
+      aim(replies.live() ? $('gvoice') : $('replies'));
+      setTimeout(() => at('voice') && quip(replies.live() ? 'Pick my voice!' : 'Should I talk out loud?', 3), 700);
     },
     leave() { poseFn = null; },
   };
@@ -668,7 +687,8 @@
   $('fish-link').addEventListener('click', () => { send({ type: 'open_link', url: TTS[replies.tts()].link }); quip('Copy it, then paste here'); });
   $('gvoice').addEventListener('change', () => {
     const v = $('gvoice').value;
-    if (TTS[replies.tts()].local) { if (state.studio) state.studio.voice = v === 'default' ? null : v; send({ type: 'ob_studiovoice', voice: v }); }
+    if (replies.live()) { state.liveVoice = v; send({ type: 'ob_livevoice', voice: v }); }
+    else if (TTS[replies.tts()].local) { if (state.studio) state.studio.voice = v === 'default' ? null : v; send({ type: 'ob_studiovoice', voice: v }); }
     else { state.geminiVoice = v; send({ type: 'ob_geminivoice', voice: v }); }
   });
   $('find-show').addEventListener('click', () => { invoke('open_settings', { pane: 'taskbar' }); quip('Switch me on under Other system tray icons', 4); });
@@ -1382,7 +1402,7 @@
       bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/Jarvis 0.1.33.AppImage' --${k}`])) : null,
       // &voicemode=live: Live picked in an earlier run (the Gemini key field shows straight away).
       voiceMode: q.get('voicemode') === 'live' ? 'live' : 'classic',
-      tts: q.get('tts') === 'gemini' ? 'gemini' : 'fish', geminiKey: q.get('gemini') === '1', geminiVoice: 'Kore',
+      tts: q.get('tts') === 'gemini' ? 'gemini' : 'fish', geminiKey: q.get('gemini') === '1', geminiVoice: 'Kore', liveVoice: 'Kore',
       geminiVoices: [['Zephyr', 'Bright'], ['Puck', 'Upbeat'], ['Charon', 'Informative'], ['Kore', 'Firm']].map(([id, style]) => ({ id, style })),
       keys: q.get('platform') === 'win32' ? { talk: ['control', 'option'], write: ['control', 'shift'], summon: 'Control+Shift+KeyS', snap: 'Control+Shift+KeyA' } : { talk: ['control', 'option'], write: win ? ['control', 'shift'] : ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' }, connected: null,
       voiceModel: win ? { status: q.get('model') || 'missing', done: q.get('model') === 'downloading' ? 281601575 : 0, total: 670479942, error: q.get('model') === 'error' ? 'Download failed. Check your internet.' : null, size: '670 MB' } : null,
@@ -1450,6 +1470,7 @@
       }
       else if (m.type === 'ob_studiocheck') reply({ ...st }, 600);
       else if (m.type === 'ob_studiovoice') { st.studio.voice = m.voice === 'default' ? null : m.voice; reply({ ...st }); reply({ kind: 'say', text: 'This is my new voice.' }, 50); }
+      else if (m.type === 'ob_livevoice') { st.liveVoice = m.voice; reply({ ...st }); }
       else if (m.type === 'ob_geminivoice') { st.geminiVoice = m.voice; reply({ ...st }); reply({ kind: 'say', text: 'This is how I sound.' }, 50);
       } else if (m.type === 'set_keys') {
         // As the sidecar does: talk and type never share a pair, so picking the other one's pair swaps them.
