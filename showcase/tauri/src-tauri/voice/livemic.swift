@@ -41,6 +41,18 @@ final class LiveMic {
     private var engine: AVAudioEngine?
     var running: Bool { engine != nil }
 
+    enum Access { case open, ask, refused }
+    /// What the call does with the mic permission it finds.
+    static func access(_ status: AVAuthorizationStatus) -> Access {
+        switch status {
+        case .authorized: return .open
+        // Never asked, or an update re-signed ad hoc so the old grant no longer matches (macOS reports that as
+        // never asked while Settings still shows Jarvis on): ask, which shows the prompt and grants this build.
+        case .notDetermined: return .ask
+        default: return .refused
+        }
+    }
+
     /// Opens the mic (the picked one, else the usual fallbacks). Returns why it couldn't, or nil once it streams.
     func start() -> String? {
         if engine != nil { return nil }

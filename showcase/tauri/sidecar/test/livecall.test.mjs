@@ -153,6 +153,12 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.equal(uis.filter((m) => m.kind === 'live').at(-1).state, 'closed');
 }
 
+{ // The mic card names the cause: a refused permission points to the Privacy settings, any other mic trouble stays general.
+  assert.match(liveErrorText('mic_permission'), /Privacy settings/);
+  assert.match(liveErrorText('mic_permission'), /Classic/);
+  assert.doesNotMatch(liveErrorText('mic'), /Privacy/);
+}
+
 { // "Not now" leaves the mode alone; no key at all gives the key card too.
   const { call, asks, switched } = setup({ key: null, answer: null });
   await call.toggle();

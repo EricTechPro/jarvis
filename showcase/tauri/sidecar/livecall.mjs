@@ -13,6 +13,7 @@ const ERRORS = {
   network: "I couldn't reach Gemini Live. Check the internet, or switch to Classic.",
   dropped: 'The Live call dropped. Switch to Classic to keep talking?',
   mic: "I can't use the microphone for the Live call. Switch to Classic?",
+  mic_permission: "macOS isn't letting me use the microphone for the Live call. Turn on Jarvis in the Privacy settings I just opened, or switch to Classic.",
 };
 export const liveErrorText = (reason) => ERRORS[reason] ?? ERRORS.dropped;
 export const SWITCH_TO_CLASSIC = 'Switch to Classic';
