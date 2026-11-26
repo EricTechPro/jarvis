@@ -322,6 +322,46 @@ assert.match(opened, /no app called "NoSuchAppJarvisTest"/, 'treated as a link o
   assert.equal(await gone(), '', 'a change after a missed first read still clears it');
   fs.rmSync(path.join(dir, 'front.json'));
 }
+// Regression: act_in_app's pin on the window read earlier ("front" means that exact window this request) must not
+// outlive a switch: after a screenshot shows another window in front, or an open, keystrokes go to the front window,
+// not the one read before (an operator job is one long request, so the pin used to last the whole job).
+{
+  if (fs.existsSync(path.join(dir, 'front.json'))) fs.rmSync(path.join(dir, 'front.json'));
+  const made = createTools({ allowActions: () => true, ui: () => {}, ask: async () => 'Allow', openUrl: noop, onCommitments: noop, showList: noop, fmtWhen: String, commitmentsText: () => '', userName: 'Test' });
+  const T = (n) => made.tools.find((t) => t.name === n);
+  const lastPlan = () => JSON.parse(calls().filter((c) => c[0] === 'act').at(-1)[1]);
+  const typeFront = () => T('act_in_app').execute({ target: 'front', steps: [{ do: 'type', text: 'hi' }] }, ctx);
+  made.nextTurn(); fs.writeFileSync(log, '');
+  await T('read_window').execute({ target: 'front' }, ctx);
+  await typeFront();
+  assert.equal(lastPlan().window, 7, 'same request, same window: pinned to the one read');
+  await T('take_screenshot').execute({ target: 'front' }, ctx);
+  await typeFront();
+  assert.equal(lastPlan().window, 7, 'a screenshot of that same window keeps the pin');
+  fs.writeFileSync(path.join(dir, 'front.json'), JSON.stringify({ id: 11, app: 'Notes', title: 'y', bounds: [0, 0, 800, 600] }));
+  await T('take_screenshot').execute({ target: 'front' }, ctx);
+  await typeFront();
+  assert.equal(lastPlan().window, undefined, 'another window in front: no pin to the old one');
+  fs.rmSync(path.join(dir, 'front.json'));
+  if (process.platform === 'darwin') {
+    await T('read_window').execute({ target: 'front' }, ctx);
+    await assert.rejects(T('open').execute({ target: 'NoSuchAppJarvisTest' }, ctx), /no app called/);
+    await typeFront();
+    assert.equal(lastPlan().window, undefined, 'after an open: no pin to the window read before it');
+  }
+}
+// One Allow covers that kind of risky click in that app for the rest of the request; rememberAllow: false (the
+// operator agent, whose whole job is one request) asks every time.
+{
+  for (const [opts, want] of [[{}, 1], [{ rememberAllow: false }, 2]]) {
+    let asks = 0;
+    const made = createTools({ allowActions: () => true, ui: () => {}, ask: async () => { asks++; return 'Allow'; }, openUrl: noop, onCommitments: noop, showList: noop, fmtWhen: String, commitmentsText: () => '', userName: 'Test', ...opts });
+    made.nextTurn();
+    const send = () => made.tools.find((t) => t.name === 'act_in_app').execute({ target: 'TextEdit', steps: [{ do: 'click_text', text: 'Send' }] }, ctx);
+    await send(); await send();
+    assert.equal(asks, want, `${JSON.stringify(opts)}: ${want} yes asked for two sends`);
+  }
+}
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('hands tests: passed');
 

@@ -73,6 +73,8 @@ async function run({ agent: a, model: md, content }) {
     // The overlay hears an operator take the cursor (and where each step lands), as it does for the chat's own act_in_app.
     allowActions: () => allow, ui: (m) => { if (m?.kind === 'hands') send({ t: 'ui', m }); }, openUrl: () => {}, onCommitments: () => {}, showList: () => {}, fmtWhen: (ms) => new Date(ms).toLocaleString(),
     commitmentsText: () => '', userName: a.userName || 'The user', workdir: a.dir, own: a.dir, readOnly: () => a.readOnly ?? [], pointScale: () => pointScale(md.model ?? ''),
+    // Its whole job is one request (nothing here starts a new one), so a yes covers one risky click, never the rest of the run.
+    rememberAllow: false,
     ask: (opts, signal) => request({ t: 'ask', question: String(opts?.placeholder ?? '').slice(0, 300) }, signal).then((yes) => (yes ? 'yes' : null)),
     // web_search's side search runs on the same Anthropic sign-in as this agent; other providers use the keyless engines.
     sideSearch: async () => {

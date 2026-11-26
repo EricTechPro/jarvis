@@ -19,12 +19,15 @@ const ANSWER = [
 ];
 
 // An operator (a long task in other apps, from a Live call): the same scroll four times on a window that never
-// changes, so the loop guard refuses the fourth, then a look and a report.
+// changes, so the loop guard refuses the fourth, then a look, two sends and a report.
 const scroll = ['act_in_app', { target: 'front', steps: [{ do: 'scroll', direction: 'down' }] }];
 const OPERATOR = [
   ['plan', { now: 'Filling in the cards' }],
   scroll, scroll, scroll, scroll,
   ['take_screenshot', { target: 'front' }],
+  // Two sends in one app, minutes apart in a long job: each needs its own yes (one Allow never covers the whole run).
+  ['act_in_app', { target: 'Chrome', steps: [{ do: 'click_text', text: 'Send' }] }],
+  ['act_in_app', { target: 'Chrome', steps: [{ do: 'click_text', text: 'Send' }] }],
   ['finish', { outcome: 'The Cards editor needs Video + first.', report: 'The list behind the Cards window does not scroll; open Video + first.' }],
 ];
 
