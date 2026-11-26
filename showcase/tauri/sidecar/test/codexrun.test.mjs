@@ -16,7 +16,7 @@ delete process.env.JARVIS_FAKE_AGENT;
 const fake = fileURLToPath(new URL('./fakecodex.mjs', import.meta.url));
 const { agentsRoot, createAgents } = await import('../agents.mjs');
 const { checkOpen, checkRead, checkWrite } = await import('../safety.mjs');
-const { probeCodex } = await import('../codex.mjs');
+const { CODEX_MODELS, codexModels, probeCodex } = await import('../codex.mjs');
 
 let model = 'gpt-5.5';
 const events = [];
@@ -45,11 +45,15 @@ const state = JSON.parse(fs.readFileSync(path.join(a.dir, '.agent.json'), 'utf8'
 assert.deepEqual(state.tokens, { in: 1200, out: 80 });
 const log = codexLog();
 const { argv } = log[0];
-// How it was run: headless JSON, our model, in its folder, Codex's own shell off and its sandbox read-only.
+// How it was run: headless JSON, our model, in its folder, Codex's own shell off. A maker (the Builder's type) with
+// actions allowed can write, but only in its own folder: workspace-write with -C its folder, no /tmp, no $TMPDIR and
+// no network.
+const CONFINED = ['sandbox_workspace_write.exclude_slash_tmp=true', 'sandbox_workspace_write.exclude_tmpdir_env_var=true', 'sandbox_workspace_write.network_access=false', 'sandbox_workspace_write.writable_roots=[]'];
 assert.deepEqual(argv.slice(0, 2), ['exec', '--json']);
 assert.equal(argv[argv.indexOf('-m') + 1], 'gpt-5.5');
 assert.equal(argv[argv.indexOf('-C') + 1], a.dir);
-assert.equal(argv[argv.indexOf('--sandbox') + 1], 'read-only');
+assert.equal(argv[argv.indexOf('--sandbox') + 1], 'workspace-write', 'a maker gets the write sandbox');
+for (const c of CONFINED) assert.ok(argv.includes(c), `confined to its folder: ${c}`);
 assert.ok(argv.includes('--skip-git-repo-check'));
 // Every Codex built-in that could reach files, commands, the web or other apps is switched off, and only those.
 assert.deepEqual(argv.filter((x) => x.startsWith('features.')).sort(), [
@@ -62,6 +66,17 @@ assert.deepEqual([...log[1].tools].sort(), ['finish', 'list_files', 'plan', 'rea
 assert.match(log[1].input, /Brief from Ken:\nWrite a short note\./);
 assert.ok(log[1].input.includes(`Your folder is ${a.dir}.`), 'our agent prompt goes in');
 assert.equal(log[2].write.isError, undefined, 'write_file worked');
+
+// A researcher (the Scout's and Reviewer's type) stays read-only. (With actions off no agent starts at all.)
+{
+  fs.rmSync(process.env.FAKE_CODEX_LOG);
+  done = ended();
+  await mgr.start({ type: 'researcher', title: 'A look', brief: 'Write a short note.' });
+  await done;
+  const av = codexLog()[0].argv;
+  assert.equal(av[av.indexOf('--sandbox') + 1], 'read-only', 'a researcher: read-only');
+  assert.ok(!av.some((x) => x.startsWith('sandbox_workspace_write.')), 'and nothing about writing');
+}
 
 // A model the account can't use: a clear failure that says what to do.
 fs.rmSync(process.env.FAKE_CODEX_LOG);
@@ -95,7 +110,18 @@ assert.deepEqual(await probeCodex({ bin: path.join(tmp, 'no-codex-here') }), { o
 process.env.FAKE_CODEX_SIGNED_OUT = '1';
 assert.deepEqual(await probeCodex({ bin: process.execPath, args: [fake] }), { ok: false, reason: 'Codex is signed out. Run codex login in a terminal.' });
 delete process.env.FAKE_CODEX_SIGNED_OUT;
-assert.deepEqual(await probeCodex({ bin: process.execPath, args: [fake] }), { ok: true, version: '0.155.1' });
+// Ready: the models offered are the ones this account's catalog lists (codex debug models, visibility "list"), in
+// its order; hidden ones aren't offered.
+const ready = await probeCodex({ bin: process.execPath, args: [fake] });
+assert.deepEqual(ready, { ok: true, version: '0.155.1', models: [{ id: 'gpt-6-astra', name: 'GPT-6-Astra' }, { id: 'gpt-5.6-sol', name: 'GPT-5.6-Sol' }, { id: 'gpt-5.5', name: 'GPT-5.5' }] });
+assert.deepEqual(codexModels(ready), ready.models);
+// No catalog from this Codex: the built-in list, which leaves out gpt-5.5 (not on every account).
+process.env.FAKE_CODEX_NO_MODELS = '1';
+const plain = await probeCodex({ bin: process.execPath, args: [fake] });
+delete process.env.FAKE_CODEX_NO_MODELS;
+assert.deepEqual(plain, { ok: true, version: '0.155.1' });
+assert.equal(codexModels(plain), CODEX_MODELS);
+assert.ok(!CODEX_MODELS.some((m) => m.id === 'gpt-5.5'), 'gpt-5.5 is not offered by default');
 
 // sidekick.mjs runs at import, so it is read as text: the check runs once at startup too, not only when the panel
 // opens, so a crew slot set to Codex still runs after a restart.

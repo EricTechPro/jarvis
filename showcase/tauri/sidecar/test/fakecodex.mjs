@@ -1,7 +1,7 @@
 // A stand-in for the Codex CLI (`codex exec --json …`), in Node so it runs on Windows CI too. It starts the MCP server
 // it was given with -c mcp_servers.jarvis={…} the way Codex does, calls our tools through it, and prints --json events.
 // The model picks the script: 'gpt-5.5' plans and finishes, 'gpt-nope' is refused, 'gpt-slow' works until stopped.
-// `--version` and `login status` answer like the real one; FAKE_CODEX_SIGNED_OUT=1 makes it signed out.
+// `--version`, `login status` and `debug models` answer like the real one (FAKE_CODEX_NO_MODELS=1: no catalog); FAKE_CODEX_SIGNED_OUT=1 makes it signed out.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 
@@ -10,6 +10,17 @@ if (argv[0] === '--version') { console.log('codex-cli 0.155.1'); process.exit(0)
 if (argv[0] === 'login' && argv[1] === 'status') {
   if (process.env.FAKE_CODEX_SIGNED_OUT) { console.error('Not logged in'); process.exit(1); }
   console.error('Logged in using ChatGPT'); process.exit(0);
+}
+// The account's model catalog, as `codex debug models` prints it (refreshed from the server).
+if (argv[0] === 'debug' && argv[1] === 'models') {
+  if (process.env.FAKE_CODEX_NO_MODELS) { console.error("error: unrecognized subcommand 'debug'"); process.exit(2); }
+  console.log(JSON.stringify({ models: [
+    { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide', priority: 1 },
+    { slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list', priority: 9 },
+    { slug: 'gpt-6-astra', display_name: 'GPT-6-Astra', visibility: 'list', priority: 2 },
+    { slug: 'gpt-5.6-sol', display_name: 'GPT-5.6-Sol', visibility: 'list', priority: 5 },
+  ] }));
+  process.exit(0);
 }
 const out = (e) => process.stdout.write(`${JSON.stringify(e)}\n`);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
