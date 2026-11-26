@@ -30,7 +30,7 @@ const until = async (fn, ms = 2000) => {
   while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 5)); }
 };
 
-const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
+const setup = ({ tools = [], key = 'k', answer = null, newTurn, now } = {}) => {
   const t = fakeTransport();
   const uis = [], sends = [], asks = [], switched = [];
   const call = createLiveCall({
@@ -41,7 +41,7 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
     toClassic: () => switched.push('classic'),
     anim: (name) => ({ tool: 'read', label: name }),
     hangUpHint: 'tap ⌃⌥ to hang up',
-    newTurn,
+    newTurn, now,
   });
   return { t, call, uis, sends, asks, switched, agentEvents: () => uis.filter((m) => m.kind === 'agent').map((m) => m.e) };
 };
@@ -334,8 +334,8 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
   // "Hey Jarvis" in Live (wake word on): the helper reports live_wake, which opens a call like a tap when none is
-  // open, and is ignored during one (never a hang-up).
-  assert.match(src, /m\.type === 'live_wake'\) \{ if \(voiceModeOf\(config\) === 'live' && !liveCall\.open\) \{ interruptQuietly\('live'\); speech\.stop\(\); liveCall\.toggle\(\)/, 'the wake word opens a Live call, never hangs one up');
+  // open (and her last words have played out: wakeOk), and is ignored during one (never a hang-up).
+  assert.match(src, /m\.type === 'live_wake'\) \{ if \(voiceModeOf\(config\) === 'live' && liveCall\.wakeOk\(\)\) \{ interruptQuietly\('live'\); speech\.stop\(\); liveCall\.toggle\(\)/, 'the wake word opens a Live call, never hangs one up');
   const swift = fs.readFileSync(new URL('../../src-tauri/voice/main.swift', import.meta.url), 'utf8');
   assert.match(swift, /private func wakeAllowed[^]{0,300}!\(liveMode && liveWanted\)/, 'the helper listens for the wake word in Live while no call has the mic');
   assert.doesNotMatch(swift.slice(swift.indexOf('private func wakeAllowed'), swift.indexOf('private func startWake')), /&& !liveMode &&/, 'not only in Classic');
@@ -365,6 +365,27 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /const startRequest = \(\) => \(requestNo = nextTurn\(\)\);/);
   assert.match(src, /const turn = startRequest\(\);/, 'Classic starts its request through it');
   assert.match(src.slice(src.indexOf('const liveCall = createLiveCall(')), /^[^]{0,900}newTurn: startRequest,/, 'Live starts each turn through it');
+}
+
+{ // "Hey Jarvis" right after a hang-up doesn't open a new call while her last words may still be coming out of the
+  // speakers (the wake word hears her say "Jarvis"): wakeOk() stays false until her voice so far has had time to play
+  // out, plus a moment. Before any call, and once that's over, a wake opens one.
+  let t0 = 1_000_000;
+  const { t, call } = setup({ now: () => t0 });
+  assert.equal(call.wakeOk(), true, 'no call yet: a wake opens one');
+  await call.toggle();
+  await until(() => t.calls.length === 1);
+  assert.equal(call.wakeOk(), false, 'a call is open');
+  // Two seconds of her voice (24 kHz s16le mono: 96,000 bytes) arrive at once, as Gemini sends it ahead of playback.
+  const pcm = Buffer.alloc(96_000).toString('base64');
+  t.calls[0].server({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: pcm } }] }, outputTranscription: { text: 'Very good, Jarvis signing off.' } } });
+  t0 += 200;
+  await call.toggle(); // the hang-up
+  assert.equal(call.open, false);
+  t0 += 1500;
+  assert.equal(call.wakeOk(), false, 'her goodbye may still be playing');
+  t0 += 1500; // past the end of her voice (1.8 s after the hang-up) and the moment after it
+  assert.equal(call.wakeOk(), true, 'then a wake opens a call again');
 }
 
 console.log('livecall tests passed');

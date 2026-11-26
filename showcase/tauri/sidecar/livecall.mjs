@@ -26,6 +26,9 @@ export const DRAW_HOLD_MS = 5000;
 // reply plays stops it before Gemini's `interrupted` arrives. A guess: needs a real-mic calibration pass by Eric (echo
 // cancellation leaves some of her own voice in; too low and she cuts herself off, too high and she talks over him).
 export const CUT_IN = { rms: 0.04, holdMs: 150 };
+// After a hang-up the wake word waits until her voice sent so far has had time to play, plus this long, so her goodbye
+// ("Very good, Jarvis signing off") can't open a new call.
+export const WAKE_SETTLE_MS = 1000;
 
 // RMS of a base64 16 kHz s16le mono frame, as a fraction of full scale, and its length in ms.
 const frameLevel = (data) => {
@@ -41,12 +44,13 @@ const frameLevel = (data) => {
  * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
  * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent).
  */
-export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN }) {
+export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN, now = Date.now }) {
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
   let request; // the request their turn started (newTurn's), for the log
   let speechId = null; // the reply audio playing now
+  let playEnd = 0, wakeAfter = 0; // when her voice received so far ends playing; no wake opens a call before wakeAfter
   let cutId = null, loudMs = 0; // cutId: the reply he cut in on (its late audio is dropped); loudMs: how long he's been loud
   // draw in the call: its lines are said by her after the tool answers, so its overlay segments are held here (by
   // tool call id) and released when her voice after that answer starts. answered: the answer went out.
@@ -100,6 +104,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         if (e.id === cutId) return;
         for (const [id, h] of [...held]) if (h.answered) release(id, true);
         speechId = e.id;
+        playEnd = Math.max(playEnd, now()) + (Buffer.byteLength(e.pcm ?? '', 'base64') / 2 / (e.rate || 24000)) * 1000;
         if (turn) turn.speech ??= e.id;
         ui({ kind: 'speech', id: e.id, rate: e.rate, pcm: e.pcm });
         return;
@@ -155,6 +160,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     const b = brain;
     brain = null; call++;
     b.stop();
+    wakeAfter = Math.max(now(), playEnd) + WAKE_SETTLE_MS;
     closed();
     log('live_end', { why, ...callStats() });
     return true;
@@ -168,6 +174,8 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
 
   return {
     get open() { return !!brain || opening; },
+    /** Whether a wake word may open a call now: none is open, and her last voice has had time to play out. */
+    wakeOk() { return !brain && !opening && now() >= wakeAfter; },
     /** Opens the call, or hangs up the open one. */
     async toggle() {
       if (brain) return hangUp('tap');
