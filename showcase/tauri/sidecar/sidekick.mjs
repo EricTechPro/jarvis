@@ -2924,7 +2924,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (m.type === 'snap') areaSnap();
   // Live mode: a tap of the talk chord opens or hangs up the call, the call's mic frames, and the Mac going to sleep.
   else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
-  else if (m.type === 'live_hangup') liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap'); // the overlay's Esc in a call
+  // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
+  else if (m.type === 'live_hangup') { if (!liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap')) ui({ kind: 'live', state: 'closed' }); }
   else if (m.type === 'live_pcm' && typeof m.data === 'string') liveCall.pcm(m.data);
   else if (m.type === 'system_sleep') liveCall.hangUp('sleep');
   else if (m.type === 'write_tap') onWriteTap();

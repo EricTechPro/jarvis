@@ -290,6 +290,13 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(fn, /if \(res\.cancelled\) return;[^]*voiceModeOf\(config\) === 'live'[^]*liveCall\.look\(/);
 }
 
+{ // A fresh sidecar (respawned mid-call) has no call: hangUp says so and sends nothing, so sidekick.mjs must tell the overlay.
+  const { call, uis, sends } = setup();
+  assert.equal(call.hangUp('esc'), false);
+  assert.deepEqual(uis, []);
+  assert.deepEqual(sends, []);
+}
+
 { // sidekick.mjs wires it up: a mode switch, sleep and quit hang up; the helper hears the mode with its settings.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
   const menuBranch = src.slice(src.indexOf('function switchVoiceMode(mode)'), src.indexOf('function switchVoiceMode(mode)') + 400);
@@ -299,7 +306,8 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /\.on\('close', \(\) => \{[^]{0,200}liveCall\.hangUp\('quit'\)/);
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
-  assert.match(src, /m\.type === 'live_hangup'\) liveCall\.hangUp\(m\.via === 'esc' \? 'esc' : 'tap'\)/, "the overlay's Esc hangs up through the same path");
+  assert.match(src, /m\.type === 'live_hangup'\) \{ if \(!liveCall\.hangUp\(m\.via === 'esc' \? 'esc' : 'tap'\)\) ui\(\{ kind: 'live', state: 'closed' \}\); \}/,
+    "the overlay's Esc hangs up through the same path, and with no call left (a respawned sidecar) it still tells the overlay the call is closed so Esc is let go");
   // Live mode starts the helper even with Classic talking off (macOS: the only helper with a Live mic).
   assert.match(src, /const liveTalk = \(\) => MAC && voiceModeOf\(config\) === 'live';/);
   assert.match(src, /type: 'voice_config', enabled: VOICE_OK && \(liveTalk\(\) \|\| \(config\.voice && voiceReady\(\)\)\),/);
