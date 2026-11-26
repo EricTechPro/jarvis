@@ -1,6 +1,14 @@
 {
   "updates": [
     {
+      "version": "0.2.4",
+      "date": "2026-11-25",
+      "items": [
+        { "kind": "fixed", "title": "Live asks for the mic", "text": "After an update, Live said it couldn't use the mic. Now it asks, like Classic does." },
+        { "kind": "improved", "title": "Permissions stick", "text": "Updates now keep your Mic, Screen and Accessibility OKs. Give them once more after this." }
+      ]
+    },
+    {
       "version": "0.2.3",
       "date": "2026-11-25",
       "items": [

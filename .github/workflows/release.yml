@@ -5,8 +5,11 @@
 # Windows for every push and pull request.
 #
 # Signing is optional. With the Apple secrets (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD, and
-# APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID for notarizing) the Mac builds are signed and notarized; without them they're
-# ad-hoc signed, which get.sh installs fine (curl downloads carry no quarantine flag). With TAURI_SIGNING_PRIVATE_KEY
+# APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID for notarizing) the Mac builds are signed and notarized. Without them but with
+# MACOS_CERT_P12 and MACOS_CERT_PASSWORD (the "Jarvis Self-Signed" code-signing certificate, a base64 .p12) they're
+# signed with that certificate: not notarized, but the designated requirement names the certificate instead of each
+# build's cdhash, so Microphone, Screen Recording and Accessibility grants survive updates. With neither (forks) they're
+# ad-hoc signed. get.sh installs all three fine (curl downloads carry no quarantine flag). With TAURI_SIGNING_PRIVATE_KEY
 # and createUpdaterArtifacts on, each build also uploads a signed update bundle and the manifest job writes latest.json;
 # without them there's no latest.json.
 #
@@ -54,6 +57,7 @@ jobs:
     timeout-minutes: 60
     env:
       HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      HAS_SELF_CERT: ${{ secrets.APPLE_CERTIFICATE == '' && secrets.MACOS_CERT_P12 != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_ID != '' }}
     defaults:
       run:
@@ -118,6 +122,31 @@ jobs:
           rm "$RUNNER_TEMP/cert.p12"
           ID=$(security find-identity -v -p codesigning "$KC" | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
           [ -n "$ID" ] || { echo "No Developer ID Application identity in the certificate"; exit 1; }
+          echo "APPLE_SIGNING_IDENTITY=$ID" >> "$GITHUB_ENV"
+
+      # No Developer ID: the stable self-signed certificate into a throwaway keychain (removed at the end of the job).
+      # It's untrusted, so `find-identity -v` hides it; it's found without -v and passed to Tauri by SHA-1, and Tauri
+      # signs the app and every helper in Contents/MacOS with it (hardened runtime, Jarvis.entitlements).
+      - name: Import the self-signed signing certificate
+        if: runner.os == 'macOS' && env.HAS_SELF_CERT == 'true'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/build.keychain-db"
+          KCPW=$(openssl rand -hex 24)
+          echo "::add-mask::$KCPW"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          ID=$(security find-identity -p codesigning "$KC" | sed -n 's/^ *[0-9]*) \([0-9A-F]\{40\}\) "Jarvis Self-Signed".*/\1/p' | head -1)
+          [ -n "$ID" ] || { echo "::error::No \"Jarvis Self-Signed\" code-signing identity in MACOS_CERT_P12"; exit 1; }
+          echo "Signing with Jarvis Self-Signed ($ID)"
           echo "APPLE_SIGNING_IDENTITY=$ID" >> "$GITHUB_ENV"
 
       # The Windows installer needs NSIS, which the bundler downloads from GitHub release links; those can time out
@@ -237,6 +266,15 @@ jobs:
         run: |
           APP=$(ls -d src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app | head -1)
           codesign --verify --deep --strict --verbose=2 "$APP"
+          # Signed with a certificate (not ad-hoc): the app and every helper must name it in their designated
+          # requirement, or macOS drops the privacy grants on the next update.
+          if [ "$HAS_APPLE_CERT" = true ] || [ "$HAS_SELF_CERT" = true ]; then
+            for f in "$APP" "$APP"/Contents/MacOS/*; do
+              DR=$(codesign -d -r- "$f" 2>&1 | sed -n 's/^designated => //p')
+              echo "$(basename "$f"): $DR"
+              case "$DR" in *"certificate leaf"*|*"anchor apple generic"*) ;; *) echo "::error::$f isn't signed with the certificate"; exit 1 ;; esac
+            done
+          fi
           # The installer window layout lives in .DS_Store; without it the DMG opens as a plain folder.
           DMG=$(ls src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg | head -1)
           MNT=$(mktemp -d)
@@ -248,7 +286,7 @@ jobs:
           [ $ok -eq 1 ]
 
       - name: Remove the signing keychain
-        if: always() && runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        if: always() && runner.os == 'macOS' && (env.HAS_APPLE_CERT == 'true' || env.HAS_SELF_CERT == 'true')
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
 
       - name: Attach to a draft release
