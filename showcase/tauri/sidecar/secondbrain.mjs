@@ -224,11 +224,25 @@ export function createBrain(locations, home) {
         mkdirSync(d, { recursive: true }); made.push(d);
       }
     }
+    // Their rules in a CLAUDE.md stay the ones in use: no AGENTS.md is added beside it (rulesOf reads AGENTS.md first).
+    const ownRules = finder(l.root)('CLAUDE.md', false);
     for (const [f, text] of starters(l)) {
+      if (ownRules && f === path.join(l.root, 'AGENTS.md')) { kept.push(ownRules); continue; }
       try { writeFileSync(f, text, { flag: 'wx' }); made.push(f); } catch (e) { if (e.code === 'EEXIST') kept.push(f); else throw e; }
     }
   } catch (e) { return { ok: false, why: `I couldn't make it: ${e.message}`, made }; }
   return { ok: true, locations: l, made, kept };
+}
+
+// ---------- the setup guide's default ----------
+/** Where the setup guide's default one goes: ~/Desktop/Second Brain. */
+export const desktopBrainDir = (home) => path.join(home, 'Desktop', 'Second Brain');
+/** Makes (or fills in) ~/Desktop/Second Brain: when it's already there, the locations found in it by name are kept
+ *  and only the missing folders and starter files are added, never over a file. → createBrain's result. */
+export function makeDesktopBrain(home) {
+  const root = desktopBrainDir(home), found = detectLocations(root), l = { root };
+  for (const k of SUBS) l[k] = found[k] || path.join(root, LOC[k].name);
+  return createBrain(l, home);
 }
 
 // ---------- what it holds, for the prompt ----------

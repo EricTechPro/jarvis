@@ -1230,6 +1230,78 @@
   $('chat-form').addEventListener('submit', (e) => { e.preventDefault(); chat.send(); });
   $('chat-input').addEventListener('input', () => nav());
 
+  // ---------------------------------------------------------------- second brain
+  // A folder of their notes the chat works from (secondbrain.mjs). Create one on the Desktop is the default: the
+  // sidecar makes ~/Desktop/Second Brain, or fills in what's missing when it's already there. Continue saves the
+  // pick (ob_brain) and moves on once the sidecar says it's done; a folder it refuses shows why and stays.
+  const BRAIN_CHOICES = [['desktop', 'Create one on the Desktop'], ['existing', 'Use an existing folder'], ['skip', 'Skip for now']];
+  const brain = {
+    choice: null, folder: '', saving: false,
+    enter() {
+      // A saved one (setup resumed): that folder, picked. Otherwise the default.
+      const saved = state?.brain?.root;
+      if (brain.choice == null) { brain.choice = saved ? 'existing' : 'desktop'; brain.folder = saved || ''; }
+      brain.render();
+      aim($('brain-choices'));
+      setTimeout(() => at('secondbrain') && quip('Where should I keep notes?', 3), 650);
+    },
+    ready: () => !brain.saving && (brain.choice !== 'existing' || !!brain.folder),
+    sub(id) {
+      if (id === 'desktop') return state?.brain?.desktop ? state.brain.desktop.replace(/^\/(Users|home)\/[^/]+/, '~') : 'A new Second Brain folder';
+      return id === 'existing' ? 'An Obsidian vault or notes folder' : 'Set one up later in the Jarvis panel';
+    },
+    render() {
+      $('brain-choices').replaceChildren(...BRAIN_CHOICES.map(([id, name]) => {
+        const checked = brain.choice === id;
+        const b = el('button', { className: 'px prov', type: 'button', tabIndex: checked ? 0 : -1, disabled: brain.saving },
+          el('span', { textContent: name }), led(checked ? 'on' : ''), el('small', { textContent: brain.sub(id) }));
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(checked));
+        b.onclick = () => brain.pick(id);
+        return b;
+      }));
+      $('brain-pick').hidden = brain.choice !== 'existing';
+      $('brain-folder').textContent = brain.folder || 'None chosen yet';
+      $('brain-folder').title = brain.folder;
+      $('brain-choose').disabled = brain.saving;
+      nav();
+    },
+    pick(id) {
+      if (brain.saving || brain.choice === id) return;
+      brain.choice = id; $('brain-error').hidden = true;
+      brain.render();
+      $('brain-choices').querySelector('[aria-checked="true"]')?.focus();
+    },
+    async choose() {
+      const dir = await invoke('pick_folder', { title: 'Choose your second brain folder', start: brain.folder || null }).catch(() => null);
+      if (!dir) return;
+      brain.folder = dir; $('brain-error').hidden = true;
+      brain.render();
+    },
+    next() {
+      if (brain.saving) return true;
+      brain.saving = true; $('brain-error').hidden = true;
+      send({ type: 'ob_brain', choice: brain.choice, ...(brain.choice === 'existing' ? { root: brain.folder } : {}) });
+      brain.render();
+      return true;
+    },
+    on(msg) {
+      if (!brain.saving) return;
+      brain.saving = false;
+      if (!msg.ok) { showError('brain-error', msg.error || "That folder didn't work. Try another."); quip('Hmm, not that one.'); brain.render(); return; }
+      if (msg.choice === 'desktop') quip('Made it!');
+      brain.render();
+      if (at('secondbrain')) forward();
+    },
+  };
+  $('brain-choose').addEventListener('click', () => brain.choose());
+  $('brain-choices').addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const i = BRAIN_CHOICES.findIndex(([id]) => id === brain.choice), d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : BRAIN_CHOICES.length - 1;
+    brain.pick(BRAIN_CHOICES[(i + d) % BRAIN_CHOICES.length][0]);
+  });
+
   // ---------------------------------------------------------------- flow
   // ---------------------------------------------------------------- step 0: look and size
   // Picked here, previewed on the guide right away, saved by the app (Settings has the same choices).
@@ -1263,6 +1335,8 @@
     { name: 'demo', enter: 'crt', next: 'Continue', onEnter: demo.enter, onLeave: demo.leave },
     { name: 'keys', enter: 'materialize', next: 'Continue', onEnter: keys.enter, onLeave: keys.leave },
     { name: 'chat', enter: 'crt', next: 'Send', onEnter: () => chat.enter(), onLeave: () => chat.leave(), nav: () => chat.nav(), onNext: () => chat.next(), onSkip: () => chat.skip() },
+    // Before Find me, so a straight run through makes the default one on the Desktop.
+    { name: 'secondbrain', enter: 'materialize', next: 'Continue', onEnter: brain.enter, ready: () => brain.ready(), onNext: () => brain.next() },
     { name: 'find', enter: 'drop', next: 'Done', onEnter: find.enter, onLeave: find.leave },
   ];
   // ?mode=chat: only the get-to-know-you chat (from the menu's Get to Know Me…).
@@ -1349,6 +1423,7 @@
         break;
       }
       case 'login': ai.onLogin(msg); break;
+      case 'brain': brain.on(msg); break;
       case 'fish': replies.onFish(msg); break;
       case 'ask':
         askId = msg.id;

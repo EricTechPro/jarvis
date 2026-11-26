@@ -9,8 +9,9 @@ import { parseHTML } from 'linkedom';
 const ROOT = new URL('../../../onboarding/', import.meta.url);
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
-// One guide, as opened by the app on a Mac with every permission already allowed.
-function openGuide() {
+// One guide, as opened by the app on a Mac with every permission already allowed. pick: the folder the system's
+// folder dialog returns; brainAuto: the sidecar answers each ob_brain with ok (false: the test answers itself).
+function openGuide({ pick = null, brainAuto = true } = {}) {
   const html = fs.readFileSync(new URL('index.html', ROOT), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
   const w = parseHTML(html);
   // Jarvis (the Sidekick's drawing kit) and the canvas: anything they're asked for is a harmless no-op.
@@ -27,6 +28,8 @@ function openGuide() {
       if (cmd === 'sidecar_send') sent.push(JSON.parse(JSON.stringify(args.msg))); // out of the vm realm, so deepEqual compares plain objects
       if (cmd === 'perm_status') return { type: 'perms', mic: 'granted', speech: 'granted', screen: 'granted', accessibility: 'granted' };
       if (cmd === 'screen_check') return { seen: true };
+      if (cmd === 'pick_folder') return pick;
+      if (cmd === 'sidecar_send' && args.msg.type === 'ob_brain' && brainAuto) setTimeout(() => page.__onboard({ kind: 'brain', ok: true, choice: args.msg.choice }), 0);
       return undefined;
     } } },
   };
@@ -58,7 +61,7 @@ const state = (over = {}) => ({
   kind: 'state', platform: 'darwin', step: 0, sound: true, look: 'jarvis', size: 'default', voice: true, actions: false, login: true,
   filesAsked: true, replies: 'text', voiceMode: 'classic', tts: 'fish', geminiKey: false, geminiVoice: 'Kore', liveVoice: 'Kore',
   geminiVoices: [{ id: 'Kore', style: 'Firm' }], keys: { talk: ['control', 'option'], write: ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' },
-  connected: null, voiceModel: null,
+  connected: null, voiceModel: null, brain: { root: null, desktop: '/Users/sam/Desktop/Second Brain' },
   oauth: [{ id: 'anthropic', name: 'Claude', company: 'Anthropic', connected: false }, { id: 'openai', name: 'ChatGPT', company: 'OpenAI', connected: false }],
   apikey: [['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['gemini', 'Gemini'], ['deepseek', 'DeepSeek']].map(([id, name]) => ({ id, name, connected: false, link: `https://example.com/${id}` })),
   ...over,
@@ -79,10 +82,11 @@ const FAKE_KEY = 'sk-cp12-GUIDE-0123456789abcdef';
     g.click(g.$('next').disabled ? 'skip' : 'next');
     await tick(5);
   }
-  const order = ['step-welcome', 'step-perms', 'step-brain', 'step-ai', 'step-voice', 'step-demo', 'step-keys', 'step-chat', 'step-find'];
+  const order = ['step-welcome', 'step-perms', 'step-brain', 'step-ai', 'step-voice', 'step-demo', 'step-keys', 'step-chat', 'step-secondbrain', 'step-find'];
   assert.deepEqual(g.steps(), order.map((_, i) => i), 'CP-11: every step, in order, none skipped or repeated');
   assert.deepEqual(g.visible(), ['step-find'], 'CP-11: ends on Find me');
   assert.ok(g.sent.some((m) => m.type === 'ob_done'), 'CP-11: Done finishes setup');
+  assert.deepEqual(g.sent.filter((m) => m.type === 'ob_brain'), [{ type: 'ob_brain', choice: 'desktop' }], 'CP-11: going straight through makes the default second brain');
   await tick();
   assert.ok(g.calls.indexOf('onboarding_finish') > -1, 'CP-11: and hands over to the app');
 }
@@ -180,5 +184,73 @@ const FAKE_KEY = 'sk-cp12-GUIDE-0123456789abcdef';
   assert.equal(g.$('key-save').disabled, false, 'CP-12: Save is back for another try');
   assert.equal(g.$('next').disabled, true, 'CP-12: still not connected');
   assert.ok(!g.logs.some((l) => l.includes('bad')), 'CP-12: the bad key is not logged');
+}
+// Your second brain: just before Find me. Create one on the Desktop is picked by default (where it goes shown),
+// and Continue makes it (ob_brain), waiting for the sidecar before moving on.
+{
+  const g = openGuide({ brainAuto: false });
+  await tick();
+  g.reply(state({ step: 8 }));
+  await tick();
+  assert.deepEqual(g.visible(), ['step-secondbrain'], 'the second brain step is step 8');
+  assert.match(g.$('h-secondbrain').textContent, /Your second brain/);
+  const radios = [...g.$('brain-choices').querySelectorAll('[role="radio"]')];
+  assert.deepEqual(radios.map((b) => b.querySelector('span').textContent), ['Create one on the Desktop', 'Use an existing folder', 'Skip for now'], 'three choices');
+  assert.deepEqual(radios.map((b) => b.getAttribute('aria-checked')), ['true', 'false', 'false'], 'Create one on the Desktop is picked by default');
+  assert.match(radios[0].textContent, /Desktop\/Second Brain/, 'and says where it goes');
+  assert.equal(g.$('next').disabled, false, 'the default is ready to go');
+  g.click('next');
+  assert.deepEqual(g.sent.at(-1), { type: 'ob_brain', choice: 'desktop' }, 'Continue makes it');
+  assert.equal(g.$('next').disabled, true, 'and waits while it is made');
+  await tick(5);
+  assert.deepEqual(g.visible(), ['step-secondbrain'], 'without moving on yet');
+  g.reply({ kind: 'brain', ok: true, choice: 'desktop', root: '/Users/sam/Desktop/Second Brain', made: [], kept: [] });
+  await tick(5);
+  assert.deepEqual(g.visible(), ['step-find'], 'made: on to Find me');
+}
+
+// Use an existing folder: Continue waits for a folder, Choose Folder opens the system's dialog, a folder the sidecar
+// refuses shows its reason and stays; Skip for now sends skip and moves on.
+{
+  const g = openGuide({ brainAuto: false, pick: '/Users/sam/Notes' });
+  await tick();
+  g.reply(state({ step: 8 }));
+  await tick();
+  const radio = (name) => [...g.$('brain-choices').querySelectorAll('[role="radio"]')].find((b) => b.textContent.startsWith(name));
+  radio('Use an existing folder').onclick();
+  assert.equal(radio('Use an existing folder').getAttribute('aria-checked'), 'true');
+  assert.equal(g.$('brain-pick').hidden, false, 'the folder row shows');
+  assert.equal(g.$('next').disabled, true, 'no folder yet: Continue waits');
+  g.click('brain-choose');
+  await tick();
+  assert.ok(g.calls.includes('pick_folder'), 'Choose Folder opens the folder dialog');
+  assert.match(g.$('brain-folder').textContent, /\/Users\/sam\/Notes/, 'and shows the folder chosen');
+  assert.equal(g.$('next').disabled, false, 'a folder: Continue unlocks');
+  g.click('next');
+  assert.deepEqual(g.sent.at(-1), { type: 'ob_brain', choice: 'existing', root: '/Users/sam/Notes' }, 'Continue saves the chosen folder');
+  g.reply({ kind: 'brain', ok: false, error: 'The second brain folder has to be inside your home folder.' });
+  await tick(5);
+  assert.deepEqual(g.visible(), ['step-secondbrain'], 'refused: stays on the step');
+  assert.equal(g.$('brain-error').hidden, false);
+  assert.match(g.$('brain-error').textContent, /inside your home folder/, "in the sidecar's words");
+  assert.equal(g.$('next').disabled, false, 'ready to try again');
+  radio('Skip for now').onclick();
+  assert.equal(g.$('brain-pick').hidden, true, 'Skip hides the folder row');
+  assert.equal(g.$('brain-error').hidden, true, 'and the old error');
+  g.click('next');
+  assert.deepEqual(g.sent.at(-1), { type: 'ob_brain', choice: 'skip' }, 'Skip for now saves nothing');
+  g.reply({ kind: 'brain', ok: true, choice: 'skip' });
+  await tick(5);
+  assert.deepEqual(g.visible(), ['step-find']);
+
+  // Back on it with one already saved (a resumed setup): that folder, picked.
+  const h = openGuide();
+  await tick();
+  h.reply(state({ step: 8, brain: { root: '/Users/sam/Notes', desktop: '/Users/sam/Desktop/Second Brain' } }));
+  await tick();
+  const checked = [...h.$('brain-choices').querySelectorAll('[role="radio"]')].find((b) => b.getAttribute('aria-checked') === 'true');
+  assert.match(checked.textContent, /^Use an existing folder/, 'a saved one opens as Use an existing folder');
+  assert.match(h.$('brain-folder').textContent, /\/Users\/sam\/Notes/, 'with its folder');
+  assert.equal(h.$('next').disabled, false);
 }
 console.log('cp11-12-guide: CP-11 onboarding flow and CP-12 pasted keys ok');

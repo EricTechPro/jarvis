@@ -1,6 +1,14 @@
 {
   "updates": [
     {
+      "version": "0.2.7",
+      "date": "2026-11-26",
+      "items": [
+        { "kind": "new", "title": "Second brain in setup", "text": "Setup asks where your notes live. I can make a Second Brain folder on your Desktop." },
+        { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts as Second Brain on your Desktop." }
+      ]
+    },
+    {
       "version": "0.2.6",
       "date": "2026-11-26",
       "items": [

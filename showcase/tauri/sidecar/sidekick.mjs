@@ -68,7 +68,7 @@ import { createMcp, createMcpTools } from './mcp.mjs';
 import { createLiveBrain } from './livebrain.mjs';
 import { guardTools } from './loopguard.mjs';
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
-import { brainLayout, checkForm, checkSecondBrain, createBrain, KEYS as BRAIN_KEYS, layoutFound, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
+import { brainLayout, checkForm, checkSecondBrain, createBrain, desktopBrainDir, KEYS as BRAIN_KEYS, layoutFound, makeDesktopBrain, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
 import { z } from 'zod';
 
@@ -2829,7 +2829,27 @@ function obState() {
     geminiVoice: geminiVoice(), geminiVoices: GEMINI_VOICES, geminiShared: ttsKeys.gemini === 'shared',
     liveVoice: liveVoiceOf(config, geminiVoice()), // the voice a Live call speaks in (the reply step in Live picks it)
     studio: tts().local ? studioState() : null,
+    // The "Your second brain" step: the one saved (its root, or null) and where the default one goes.
+    brain: { root: migrateBrain(config.secondBrain)?.root || null, desktop: desktopBrainDir(HOME) },
   });
+}
+// The "Your second brain" step's Continue: make (or fill in) the default one on the Desktop, use a chosen folder as
+// it is (its locations found in it at each chat), or skip (nothing saved). Answered with kind 'brain'.
+function obBrain(m) {
+  const done = (r) => { ob({ kind: 'brain', ...r }); obState(); };
+  if (m.choice === 'skip') return done({ ok: true, choice: 'skip' });
+  if (m.choice === 'desktop') {
+    const r = makeDesktopBrain(HOME);
+    if (!r.ok) return done({ ok: false, error: r.why });
+    config.secondBrain = r.locations; saveConfig(); agentStale = true; menu();
+    return done({ ok: true, choice: 'desktop', root: r.locations.root, made: r.made, kept: r.kept });
+  }
+  if (m.choice === 'existing') {
+    const r = checkSecondBrain(String(m.root ?? '').slice(0, 1000), HOME);
+    if (!r.ok) return done({ ok: false, error: r.why === 'empty' ? 'Choose a folder first.' : r.why });
+    config.secondBrain = Object.fromEntries(BRAIN_KEYS.map((k) => [k, k === 'root' ? r.dir : ''])); saveConfig(); agentStale = true; menu();
+    return done({ ok: true, choice: 'existing', root: r.dir });
+  }
 }
 
 // Desktop, Documents and Downloads are protected on macOS. The first read shows the system prompt
@@ -2859,7 +2879,7 @@ async function onGuide(m) {
   else if (m.type === 'chat_skip') { endIntro(); config.introDone = true; saveConfig(); menu(); }
   else if (m.type === 'chat_forget' && typeof m.id === 'string') { await forgetFact(m.id); ob({ kind: 'chat_facts', facts: introFacts() }); menu(); }
   else if (m.type === 'ob_voicemode') { switchVoiceMode(m.mode); obState(); } // Classic or Live, picked on step 2
-  else if (m.type === 'ob_step') { config.onboardStep = Math.max(0, Math.min(8, m.step | 0)); saveConfig(); }
+  else if (m.type === 'ob_step') { config.onboardStep = Math.max(0, Math.min(9, m.step | 0)); saveConfig(); } // 0 to 9: the guide's ten steps
   // Voice needs a working key first: without one, the guide asks for it (ob_fishkey or ob_geminikey) instead.
   else if (m.type === 'ob_replies' && (m.mode === 'text' || (m.mode === 'voice' && speech.on))) { await voiceKeysLoaded; await setReplies(m.mode); }
   // A service picked in the guide that already has its key: it speaks from now on (voice goes on if it was text).
@@ -2878,6 +2898,7 @@ async function onGuide(m) {
   else if (m.type === 'ob_files') ob({ kind: 'files', status: await filesStatus(!!m.request) });
   else if (m.type === 'set_actions') { config.allowActions = !!m.on; agents.setAllow(config.allowActions); saveConfig(); menu(); obState(); }
   else if (m.type === 'set_login') setLogin(!!m.on);
+  else if (m.type === 'ob_brain') obBrain(m);
   else if (m.type === 'ob_lite') { config.lite = !!m.on; saveConfig(); agentStale = true; menu(); obState(); }
   else if (m.type === 'ob_autolisten') { config.autoListen = !!m.on; saveConfig(); menu(); obState(); }
   else if (m.type === 'ob_wake' && WAKE_OK) { config.wakeWord = !!m.on; saveConfig(); agentStale = true; voiceConfig(); menu(); obState(); }
