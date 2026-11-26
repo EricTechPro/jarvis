@@ -78,6 +78,28 @@ assert.equal(log[2].write.isError, undefined, 'write_file worked');
   assert.ok(!av.some((x) => x.startsWith('sandbox_workspace_write.')), 'and nothing about writing');
 }
 
+// Allow actions turned off mid-run: every later Codex turn is read-only, so apply_patch can't keep writing.
+{
+  fs.rmSync(process.env.FAKE_CODEX_LOG);
+  model = 'gpt-twoturn';
+  process.env.FAKE_CODEX_GO = path.join(tmp, 'go');
+  done = ended();
+  await mgr.start({ type: 'maker', title: 'Two turns', brief: 'Write a short note.' });
+  await new Promise((resolve) => { const t = setInterval(() => { if (events.some((e) => e.type === 'update' && e.agent.step === 'First turn')) { clearInterval(t); resolve(); } }, 50); });
+  mgr.setAllow(false);
+  await new Promise((r) => setTimeout(r, 200)); // the worker has the message before the turn ends
+  fs.writeFileSync(process.env.FAKE_CODEX_GO, '');
+  end = await done;
+  assert.equal(end.type, 'done', end.agent.reason);
+  const runs = codexLog().filter((l) => l.argv).map((l) => l.argv);
+  assert.equal(runs.length, 2, 'two codex turns');
+  assert.equal(runs[0][runs[0].indexOf('--sandbox') + 1], 'workspace-write', 'the first turn could write');
+  assert.equal(runs[1][runs[1].indexOf('--sandbox') + 1], 'read-only', 'after actions were turned off: read-only');
+  assert.ok(!runs[1].some((x) => x.startsWith('sandbox_workspace_write.')), 'and nothing about writing');
+  mgr.setAllow(true);
+  delete process.env.FAKE_CODEX_GO;
+}
+
 // A model the account can't use: a clear failure that says what to do.
 fs.rmSync(process.env.FAKE_CODEX_LOG);
 model = 'gpt-nope';

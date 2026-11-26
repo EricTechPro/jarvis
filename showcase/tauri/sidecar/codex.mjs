@@ -183,7 +183,8 @@ function mapEvent(e, push) {
   }
 }
 
-/** prompt(content) → AgentStream. Options: model, system, tools, signal, cwd, write (codexArgs), codex ({ bin, args }). */
+/** prompt(content) → AgentStream. Options: model, system, tools, signal, cwd, write (codexArgs; a function is read
+ *  again for every turn, so turning Allow actions off reaches the next one), codex ({ bin, args }). */
 export class CodexAgent {
   #running = false;
   #threadId = null;
@@ -203,7 +204,7 @@ export class CodexAgent {
     const sock = await listenBridge(bridge);
     const timeoutSec = Math.ceil(bridge.config.timeout / 1000);
     const { bin, args: pre = [] } = o.codex ?? resolveCodex();
-    const args = [...pre, ...codexArgs({ model: o.model, cwd: o.cwd, write: !!o.write, threadId: this.#threadId, mcp: { command: process.execPath, args: ['-e', RELAY, sock.where], timeoutSec } })];
+    const args = [...pre, ...codexArgs({ model: o.model, cwd: o.cwd, write: !!(typeof o.write === 'function' ? o.write() : o.write), threadId: this.#threadId, mcp: { command: process.execPath, args: ['-e', RELAY, sock.where], timeoutSec } })];
     hookExit();
     const child = spawn(bin, args, { cwd: o.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     children.add(child);

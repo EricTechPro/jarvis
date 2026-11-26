@@ -1,6 +1,7 @@
 // A stand-in for the Codex CLI (`codex exec --json …`), in Node so it runs on Windows CI too. It starts the MCP server
 // it was given with -c mcp_servers.jarvis={…} the way Codex does, calls our tools through it, and prints --json events.
-// The model picks the script: 'gpt-5.5' plans and finishes, 'gpt-nope' is refused, 'gpt-slow' works until stopped.
+// The model picks the script: 'gpt-5.5' plans and finishes, 'gpt-nope' is refused, 'gpt-slow' works until stopped,
+// 'gpt-twoturn' ends its first turn once FAKE_CODEX_GO exists and finishes on the next.
 // `--version`, `login status` and `debug models` answer like the real one (FAKE_CODEX_NO_MODELS=1: no catalog); FAKE_CODEX_SIGNED_OUT=1 makes it signed out.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -68,7 +69,19 @@ const call = async (tool, args) => {
 out({ type: 'thread.started', thread_id: 't-1' });
 out({ type: 'turn.started' });
 if (process.env.FAKE_CODEX_LOG) fs.appendFileSync(process.env.FAKE_CODEX_LOG, `${JSON.stringify({ input, tools: tools.map((t) => t.name), resume })}\n`);
-if (model === 'gpt-slow') {
+if (model === 'gpt-twoturn' && !resume) {
+  // Plans, waits until the test says go (FAKE_CODEX_GO exists), then ends its turn without finishing.
+  await call('plan', { now: 'First turn' });
+  while (!fs.existsSync(process.env.FAKE_CODEX_GO)) await new Promise((r) => setTimeout(r, 50));
+  out({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 1 } });
+  mcp.kill();
+  process.exit(0);
+} else if (model === 'gpt-twoturn') {
+  await call('finish', { outcome: 'Done on the second turn.' });
+  out({ type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 1 } });
+  mcp.kill();
+  process.exit(0);
+} else if (model === 'gpt-slow') {
   await call('plan', { now: 'Working for a long time' });
   setInterval(() => out({ type: 'item.updated', item: { id: 'r', type: 'reasoning', text: '…' } }), 200);
 } else {
