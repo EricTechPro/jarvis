@@ -330,12 +330,29 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   // sidekick.mjs routes the helper's live_look there, only in Live.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
   assert.match(src, /m\.type === 'live_look'\) \{ if \(voiceModeOf\(config\) === 'live'\) lookAtArea\(liveCall, m\.area,/);
+  // A Classic reply still streaming or speaking is stopped before the circle opens a call, like a plain tap does.
+  assert.match(src, /m\.type === 'live_look'\)[^\n]*quiet: \(\) => \{ interruptQuietly\('live'\); speech\.stop\(\); \}/);
+}
+
+{ // A circle that opens a call first quiets whatever Classic is doing (quiet runs before the call opens); one drawn
+  // in an open call leaves it alone, the same as a tap of the talk chord.
+  const { call } = setup();
+  const order = [];
+  const io = { read: async () => { order.push(`read:${call.open}`); return Buffer.from([1]); }, quiet: () => order.push(`quiet:${call.open}`) };
+  await lookAtArea(call, { file: '/tmp/sidekick-marked-2.png' }, io);
+  assert.deepEqual(order, ['quiet:false', 'read:false'], 'no call open: quiet first, before the call opens');
+  order.length = 0;
+  await lookAtArea(call, { file: '/tmp/sidekick-marked-3.png' }, io);
+  assert.deepEqual(order, ['read:true'], 'a call already open: nothing to quiet');
+  call.hangUp('tap');
 }
 
 { // sidekick.mjs: in Live the crop goes through liveCall.look and skips the Classic listen/ask; Escape returns before it.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
   const fn = src.slice(src.indexOf('async function areaSnap()'), src.indexOf('let snapping = false'));
   assert.match(fn, /if \(res\.cancelled\) return;[^]*voiceModeOf\(config\) === 'live'[^]*liveCall\.look\(/);
+  assert.match(fn, /voiceModeOf\(config\) === 'live'\) \{[^]*if \(!liveCall\.open\) \{ interruptQuietly\('live'\); speech\.stop\(\); \}[^]*liveCall\.look\(/,
+    'a crop that opens a call stops a Classic reply first');
 }
 
 { // A fresh sidecar (respawned mid-call) has no call: hangUp says so and sends nothing, so sidekick.mjs must tell the overlay.

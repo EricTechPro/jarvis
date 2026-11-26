@@ -4,7 +4,8 @@
       "version": "0.2.7",
       "date": "2026-11-26",
       "items": [
-        { "kind": "new", "title": "Circle in a call", "text": "In Live, hold ⌃⌥ and circle part of the screen to show it to me, just like in Classic." }
+        { "kind": "new", "title": "Circle in a call", "text": "In Live, hold ⌃⌥ and circle part of the screen to show it to me, just like in Classic." },
+        { "kind": "fixed", "title": "One voice at a time", "text": "In Live, showing me the screen with ⌃⌥A or a circle stops a typed reply first, so we don't talk over each other." }
       ]
     },
     {

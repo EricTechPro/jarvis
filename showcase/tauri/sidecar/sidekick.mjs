@@ -2694,6 +2694,7 @@ async function areaSnap() {
     if (res.cancelled) return;
     await fitImage(file);
     if (voiceModeOf(config) === 'live') { // into the open call, or opens one; she's already listening, so no Classic listen or ask
+      if (!liveCall.open) { interruptQuietly('live'); speech.stop(); }
       await liveCall.look(await fs.readFile(file), 'image/png');
       return;
     }
@@ -2930,7 +2931,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   else if (m.type === 'live_toggle') { if (voiceModeOf(config) === 'live') { if (!liveCall.open) { interruptQuietly('live'); speech.stop(); } liveCall.toggle().catch((e) => console.error('live', e)); } }
   // The overlay's Esc in a call. No call to hang up (the sidecar respawned mid-call): still say closed, so Esc is let go.
   // A circle drawn with the talk chord in a call: the circled area goes in as a look (the call stays as it is, or opens).
-  else if (m.type === 'live_look') { if (voiceModeOf(config) === 'live') lookAtArea(liveCall, m.area, { prepare: fitImage, read: (f) => fs.readFile(f), remove: (f) => { fs.unlink(f).catch(() => {}); } }).catch((e) => say(problem('screen', e).text, 'concerned')); else if (typeof m.area?.file === 'string') fs.unlink(m.area.file).catch(() => {}); }
+  else if (m.type === 'live_look') { if (voiceModeOf(config) === 'live') lookAtArea(liveCall, m.area, { prepare: fitImage, read: (f) => fs.readFile(f), remove: (f) => { fs.unlink(f).catch(() => {}); }, quiet: () => { interruptQuietly('live'); speech.stop(); } }).catch((e) => say(problem('screen', e).text, 'concerned')); else if (typeof m.area?.file === 'string') fs.unlink(m.area.file).catch(() => {}); }
   else if (m.type === 'live_hangup') { if (!liveCall.hangUp(m.via === 'esc' ? 'esc' : 'tap')) ui({ kind: 'live', state: 'closed' }); }
   else if (m.type === 'live_pcm' && typeof m.data === 'string') liveCall.pcm(m.data);
   else if (m.type === 'system_sleep') liveCall.hangUp('sleep');
