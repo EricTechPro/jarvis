@@ -2,7 +2,7 @@
 // It talks to the sidecar over Node's IPC channel and exits when the sidecar goes away.
 //
 // in:  {t:'start', agent, model, content} {t:'reply', id, value} {t:'steer', text} {t:'allow', on}
-// out: {t:'beat'} {t:'tick'} {t:'tool', name} {t:'turn', usage} {t:'plan', text} {t:'ask', id, question} {t:'ask_cancel', id}
+// out: {t:'beat'} {t:'tick'} {t:'tool', name} {t:'ui', m} (an operator's {kind:'hands'} overlay message) {t:'turn', usage} {t:'plan', text} {t:'ask', id, question} {t:'ask_cancel', id}
 //      {t:'creds', id} {t:'finish', result} {t:'end', ok, error?}
 import { Agent } from '@kenkaiiii/gg-agent';
 import { pointScale, registerRuntimeModels } from '@kenkaiiii/gg-core';
@@ -12,6 +12,7 @@ import { ClaudeCodeAgent } from './claudecode.mjs';
 import { CodexAgent } from './codex.mjs';
 import { agentEvents } from './agentstream.mjs';
 import { createTools } from './tools.mjs';
+import { guardTools } from './loopguard.mjs';
 import { agentSystem, checkFinish, steersAfterTurn, toolsFor } from './agents.mjs';
 
 // stdout isn't the app's protocol here, but the sidecar only reads stderr from this process.
@@ -69,8 +70,11 @@ async function run({ agent: a, model: md, content }) {
   route = steersAfterTurn(md.route) ? md.route : 'api';
   let result = null;
   const { tools: all } = createTools({
-    allowActions: () => allow, ui: () => {}, openUrl: () => {}, onCommitments: () => {}, showList: () => {}, fmtWhen: (ms) => new Date(ms).toLocaleString(),
+    // The overlay hears an operator take the cursor (and where each step lands), as it does for the chat's own act_in_app.
+    allowActions: () => allow, ui: (m) => { if (m?.kind === 'hands') send({ t: 'ui', m }); }, openUrl: () => {}, onCommitments: () => {}, showList: () => {}, fmtWhen: (ms) => new Date(ms).toLocaleString(),
     commitmentsText: () => '', userName: a.userName || 'The user', workdir: a.dir, own: a.dir, readOnly: () => a.readOnly ?? [], pointScale: () => pointScale(md.model ?? ''),
+    // Its whole job is one request (nothing here starts a new one), so a yes covers one risky click, never the rest of the run.
+    rememberAllow: false,
     ask: (opts, signal) => request({ t: 'ask', question: String(opts?.placeholder ?? '').slice(0, 300) }, signal).then((yes) => (yes ? 'yes' : null)),
     // web_search's side search runs on the same Anthropic sign-in as this agent; other providers use the keyless engines.
     sideSearch: async () => {
@@ -81,7 +85,7 @@ async function run({ agent: a, model: md, content }) {
     },
   });
   const tools = [
-    ...toolsFor(a.type, all),
+    ...guardTools(toolsFor(a.type, all)),
     {
       name: 'plan', description: 'Say what you are doing now, in one short line (under 60 characters). It shows on your row in the corner of their screen. Call it at the start of each new stage.',
       parameters: z.object({ now: z.string().min(1).max(120) }),

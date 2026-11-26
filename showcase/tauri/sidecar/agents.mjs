@@ -12,18 +12,21 @@ import { withRole } from './subagents.mjs';
 
 // ~/Jarvis (datadir.mjs): one visible folder, so no macOS privacy prompt; JARVIS_DATA_DIR moves it for tests.
 export const agentsRoot = jarvisRoot;
-export const AGENT_TYPES = ['maker', 'researcher', 'organizer'];
+export const AGENT_TYPES = ['maker', 'researcher', 'organizer', 'operator'];
 // What it hands back: files when something was asked to be made, a written answer (to the chat) otherwise.
 export const RETURNS = ['files', 'answer'];
-export const DEFAULT_RETURNS = { maker: 'files', researcher: 'answer', organizer: 'answer' };
+export const DEFAULT_RETURNS = { maker: 'files', researcher: 'answer', organizer: 'answer', operator: 'answer' };
 const returnsOf = (a) => (RETURNS.includes(a?.returns) ? a.returns : DEFAULT_RETURNS[a?.type] ?? 'files');
-// Every type works with files, commands and the web; the screen and the user's lists stay the chat's.
+// Every type works with files, commands and the web; the screen and the user's lists stay the chat's. The operator is
+// the exception: a long task in other apps, handed over from a Live call, with the chat's own screen tools (their
+// allowActions and Allow prompts come with them, through agentrun.mjs) and nothing else.
 const WORK_TOOLS = ['read_file', 'list_files', 'search_files', 'write_file', 'run_command', 'web_search', 'web_fetch'];
-export const TYPE_TOOLS = { maker: WORK_TOOLS, researcher: WORK_TOOLS, organizer: WORK_TOOLS };
+export const OPERATOR_TOOLS = ['take_screenshot', 'list_windows', 'read_window', 'act_in_app', 'open'];
+export const TYPE_TOOLS = { maker: WORK_TOOLS, researcher: WORK_TOOLS, organizer: WORK_TOOLS, operator: OPERATOR_TOOLS };
 export const SCREEN_TOOLS = ['take_screenshot', 'list_windows', 'read_window', 'act_in_app', 'draw', 'open', 'see_photo',
   'remember_commitment', 'update_commitment', 'forget_fact', 'plan_steps', 'show_list', 'list_commitments', 'about_jarvis'];
 /** The tools an agent of this type gets, from the full set createTools made. */
-export const toolsFor = (type, all) => all.filter((t) => (TYPE_TOOLS[type] ?? []).includes(t.name) && !SCREEN_TOOLS.includes(t.name));
+export const toolsFor = (type, all) => all.filter((t) => (TYPE_TOOLS[type] ?? []).includes(t.name) && (type === 'operator' || !SCREEN_TOOLS.includes(t.name)));
 
 const pad = (n) => String(n).padStart(2, '0');
 export const dayOf = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -218,6 +221,7 @@ export function agentSystem(type, { dir, userName = 'the user', deliverTo = null
     researcher: answer
       ? 'You find things out. Search the web and read pages, then finish with the answer in report: the answer first, then the key points, then the sources as links. Keep it short and specific. The outcome you finish with is the one-line answer itself.'
       : 'You find things out. Search the web and read pages, then write the answer to files/notes.md: the answer first, then the key points, then the sources as links. Keep it short and specific. The outcome you finish with is the one-line answer itself.',
+    operator: `You work other apps on ${userName}'s screen for them: the task in the brief, start to finish, with read_window, act_in_app, open and take_screenshot. Look before you act (read_window or take_screenshot), and take_screenshot after each step to check it really happened before the next one. Nothing changed? Don't repeat the step: look at what's actually on screen and try a different one (open the menu or control first, scroll the panel the item is in, pick another button). Never submit payments, send messages or delete things unless the brief clearly asks for exactly that. If you're stuck after a few different tries, stop and say what's in the way in report.`,
     organizer: `You tidy files and folders. Look first, then write every move or rename you plan to work/plan.md, then do the whole batch in one run_command (one mv -n per line), so ${userName} gives one yes for all of it. Never delete anything: put duplicates and junk in a folder named "To check" instead. ${answer ? 'Your report says what moved where; place is the folder you tidied.' : 'Write what you did to files/changes.md.'}`,
   }[type] ?? '';
   const mode = answer
@@ -226,7 +230,7 @@ export function agentSystem(type, { dir, userName = 'the user', deliverTo = null
   const done = answer
     ? `When you're done, call finish once: outcome is one plain sentence under 90 characters; report is what you found or did, in plain text under 1,200 characters, the answer first and complete on its own; place (optional) is the folder, file or http(s) web address you worked on (the folder you tidied, the site you checked); files only if the brief asked for a file (paths from your folder, each with a few words on what it is); needs_you (under 70 characters) only if they must do something. Then stop: finish is all they see.`
     : `When you're done, call finish once: outcome is one plain sentence under 90 characters, files lists what they should open (paths from your folder, each with a few words on what it is), report (optional, under 1,200 characters) only for something they should know, place (optional) only if the result lives somewhere else (a folder, file or http(s) web address), and needs_you (under 70 characters) only if they must do something. Then stop: finish is all they see.`;
-  return `You are a background agent working for ${userName} in Jarvis, a desktop app. You work alone: nobody reads your messages while you work, and you can't see the screen. The brief is all you know about the request, so do what it says without asking questions.
+  return `You are a background agent working for ${userName} in Jarvis, a desktop app. You work alone: nobody reads your messages while you work${type === 'operator' ? '' : ", and you can't see the screen"}. The brief is all you know about the request, so do what it says without asking questions.
 ${how}
 ${mode}
 Your folder is ${dir}. What you make for ${userName} goes in files/ (only finished things, with clear names); scratch work, downloads and installed libraries go in work/; anything they sent you is in inputs/. Save what you make with paths starting files/ (like files/poem.md), and save each thing once: no second copies. Relative paths and run_command start in your folder.${deliverTo ? ` When you finish, a copy of what you list is also put in ${deliverTo} for them; don't copy it there yourself.` : ''}
@@ -240,7 +244,7 @@ Today is ${now.toDateString()}.`;
 
 // ---------- the manager ----------
 const LIMITS = { running: 3, local: 1, workMs: 30 * 60_000, turns: 80, beatMs: 60_000, stuckMs: 3 * 60_000, killMs: 3000 };
-const GLYPH = { write_file: 'pen', web_fetch: 'lens', web_search: 'lens', run_command: 'gear', read_file: 'eye', list_files: 'eye', search_files: 'eye' };
+const GLYPH = { act_in_app: 'gear', read_window: 'eye', take_screenshot: 'eye', list_windows: 'eye', write_file: 'pen', web_fetch: 'lens', web_search: 'lens', run_command: 'gear', read_file: 'eye', list_files: 'eye', search_files: 'eye' };
 const IMAGE = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 const one = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 const exists = (p) => fs.promises.stat(p).then(() => true, () => false);
@@ -310,6 +314,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     const md = await config.model(sub ? { spec: sub.spec, slot: sub.slot } : modelName ? String(modelName) : undefined); // a model they named for it, else the usual
     // What they said this turn, verbatim (sidekick.mjs); a scheduled run belongs to no turn.
     const words = scheduled ? '' : String(config.userWords?.() ?? '').trim();
+    if (type === 'operator' && running().some((x) => x.type === 'operator')) throw new Error(`An operator is already working on the screen, and two would fight over the mouse and keys. Tell ${userName}: wait for it, or stop it and ask again.`);
     const cap = md.provider === 'local' ? LIMITS.local : LIMITS.running, busy = running().length;
     if (busy >= cap) throw new Error(`${busy} agent${busy === 1 ? ' is' : 's are'} already working, and ${cap} at once is the most${md.provider === 'local' ? ' on a local model' : ''}. Tell ${userName}: they can stop one (or wait for one to finish) and ask again.`);
     let to = null;
@@ -390,6 +395,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
     p.beat = now();
     if (m.t === 'tick') p.event = now();
     else if (m.t === 'tool') { p.event = now(); a.tool = GLYPH[m.name] ?? null; update(a); }
+    else if (m.t === 'ui' && m.m?.kind === 'hands') ui(m.m); // an operator acting: clicks go through the overlay
     else if (m.t === 'turn') {
       p.event = now(); a.turns++; a.tokens.in += m.usage?.in ?? 0; a.tokens.out += m.usage?.out ?? 0;
       if (a.turns > LIMITS.turns) stop(a.id, { state: 'failed', reason: `Used all its ${LIMITS.turns} turns` });
@@ -531,7 +537,7 @@ export function createAgents({ fork, ui, config, root, userName = 'The user', ru
   const tools = [
     {
       name: 'send_agent',
-      description: `Start a background agent: it works on its own in its own folder (~/Jarvis/Agents) while you keep talking, and shows as a row in the top-right corner of the screen. Use it when ${userName} asks for an agent or for work in the background, or for long hands-off work (a website, a document or slides, deep research, tidying a folder) after offering it and hearing yes. Never for a quick answer or anything on the screen. type: maker (makes files: pages, documents, code, pictures), researcher (finds things out on the web and writes notes), organizer (moves and renames files, with one yes for the batch). title: 2 to 5 words for its row. brief: everything it needs, complete and specific, because it sees none of this conversation: what to make or find, for whom, the style, every name and detail ${userName} gave (quote their own words where they matter, never reword a name or a number), and what done looks like. Their exact words are attached to the brief for you, so the agent always has them. subagent: a specialist from the Subagents list in the live state (its type and model are then set for you, so type and model can be left out); give it a prompt for its own part of the job. model: only when they named a model for this agent ("use Gemini for it", "have Opus do it"): its name as they said it; otherwise leave it out. inputs: paths of files it should have, or "snap" for the picture sent with this request. deliver_to: a folder they named for the result ("on my Desktop" → ~/Desktop). continue: the id of a finished agent, to carry on in its folder. returns: files when they asked for something made (a page, a document, slides, a picture, "save it as…"); answer when they want something found out or done (a question, a check, tidying, a lookup), and then it reports back to you, with no file. Left out: files for a maker, answer otherwise. Once it starts, say nothing more: its launch on screen is your reply.`,
+      description: `Start a background agent: it works on its own in its own folder (~/Jarvis/Agents) while you keep talking, and shows as a row in the top-right corner of the screen. Use it when ${userName} asks for an agent or for work in the background, or for long hands-off work (a website, a document or slides, deep research, tidying a folder) after offering it and hearing yes. Never for a quick answer or anything on the screen. type: maker (makes files: pages, documents, code, pictures), researcher (finds things out on the web and writes notes), organizer (moves and renames files, with one yes for the batch), operator (works other apps on the screen for a long multi-step task, with the same Allow prompts: only when the live state says to use one). title: 2 to 5 words for its row. brief: everything it needs, complete and specific, because it sees none of this conversation: what to make or find, for whom, the style, every name and detail ${userName} gave (quote their own words where they matter, never reword a name or a number), and what done looks like. Their exact words are attached to the brief for you, so the agent always has them. subagent: a specialist from the Subagents list in the live state (its type and model are then set for you, so type and model can be left out); give it a prompt for its own part of the job. model: only when they named a model for this agent ("use Gemini for it", "have Opus do it"): its name as they said it; otherwise leave it out. inputs: paths of files it should have, or "snap" for the picture sent with this request. deliver_to: a folder they named for the result ("on my Desktop" → ~/Desktop). continue: the id of a finished agent, to carry on in its folder. returns: files when they asked for something made (a page, a document, slides, a picture, "save it as…"); answer when they want something found out or done (a question, a check, tidying, a lookup), and then it reports back to you, with no file. Left out: files for a maker, answer otherwise. Once it starts, say nothing more: its launch on screen is your reply.`,
       parameters: z.object({
         type: z.enum(AGENT_TYPES).optional(), subagent: z.string().max(40).optional(), title: z.string().min(1).max(60), brief: z.string().min(1).max(8000),
         inputs: z.array(z.string().max(500)).max(10).optional(), deliver_to: z.string().max(500).optional(), continue: z.string().max(12).optional(),
