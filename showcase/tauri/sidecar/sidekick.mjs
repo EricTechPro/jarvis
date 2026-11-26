@@ -37,7 +37,7 @@ import { cleanWakeName, wakeName } from './wakename.mjs';
 import { DEFAULT_LIVE_MODEL, DEFAULT_VOICE_MODE, liveVoiceOf, setLiveVoice, setVoiceMode, voiceModeOf } from './voicemode.mjs';
 import { createLiveCall } from './livecall.mjs';
 import { KEY_NAME as SYNC_KEY, MIN_PASSPHRASE, checkFolder, folderReady, merge as syncMerge, newDevice, prepareFolder, readRemotes, suggestFolders, tooMuchGone, writeOwn } from './sync.mjs';
-import { EMOTES, EchoFilter, ReplyStream } from './reply.mjs';
+import { EMOTES, EchoFilter, ReplyStream, ThoughtFilter } from './reply.mjs';
 import { downloadModel, isReady, modelDir, sizeLabel, totalBytes } from './voicemodel.mjs';
 import { SLOW_TOOLS, copyText, createTools, expand, fitImage, imageBlock, oneYesNoAtATime, winOpen } from './tools.mjs';
 import { describeMarks } from './marks.mjs';
@@ -1469,6 +1469,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
     };
     const cues = voice ? new CueFilter() : null; // voice cues are for the voice only, never shown
     const echo = new EchoFilter(); // tool calls written out as text never reach the screen or the voice
+    const thoughts = new ThoughtFilter(); // Gemini's reasoning summary sent as reply text, dropped (reply.mjs)
     const reply = new ReplyStream((ev) => {
       if (spoken && ev.type === 'emote') spoken.emote(ev.action);
       if (spoken && ev.type === 'text') spoken.push(ev.text);
@@ -1511,18 +1512,26 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       const h = hold; hold = null; hatchOff();
       if (h) { reply.push(h); lastReply = h; fresh = false; }
     };
+    // A heading ThoughtFilter held to the end of a model turn turned out to be the answer: it goes out as text would.
+    const heldThought = () => {
+      const t = echo.push(thoughts.flush());
+      if (!t || launched) return;
+      if (hold != null) { hold += t; return; }
+      reply.push(t); if (fresh) { lastReply = ''; fresh = false; } lastReply += t;
+    };
     const ctl = controller;
     watch = stallWatch(STALL_MS, () => { stalled = true; logLine('stalled', { turn, ms: Date.now() - use.t }); ctl.abort(); });
     for await (const e of agentEvents(agent.prompt(content))) {
       watch.event(e);
       if (e.type === 'text_delta') {
-        const t = echo.push(e.text);
+        const t = echo.push(thoughts.push(e.text));
         if (launched) continue;
         if (hold != null) { hold += t; continue; }
         reply.push(t); if (fresh) { lastReply = ''; fresh = false; } lastReply += t;
       }
       else if (e.type === 'turn_end') {
         doneWriting();
+        heldThought();
         if (hold != null) { hold += echo.flush(); if (e.stopReason !== 'tool_use') release(); }
         fresh = true;
         { const t = echo.flush(); if (!launched) { reply.push(t); lastReply += t; } }
@@ -1572,6 +1581,7 @@ async function prompt(text, image = null, note = '', byVoice = false, news = nul
       else if (e.type === 'error') throw e.error;
     }
     doneWriting();
+    heldThought();
     if (hold != null) { hold += echo.flush(); release(); }
     { const t = echo.flush(); if (!launched) { reply.push(t); lastReply += t; } }
     reply.finish();
