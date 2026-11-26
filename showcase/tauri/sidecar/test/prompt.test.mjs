@@ -133,6 +133,8 @@ const liveLine = side.slice(side.indexOf('const LIVE_VOICE_LINE'), side.indexOf(
 assert.match(liveLine, /take_screenshot after each step/, 'Live checks each step on screen');
 assert.match(liveLine, /send_agent with type operator/, 'Live hands a long app task to an operator');
 assert.match(liveLine, /one click, one scroll or opening a link[^\n]*yourself/, 'one-shot actions stay in Live');
+assert.match(liveLine, /send_agent with type operator[^\n]*only once it has started[^\n]*say[^\n]*didn't start and why/, 'Live says it handed off only after the launch worked');
+assert.ok(!/hand that to my operator", I'll tell you when it's done"\), then call send_agent/.test(liveLine), 'no promise said before the launch');
 const agentsSrc = readFileSync(fileURLToPath(new URL('../agents.mjs', import.meta.url)), 'utf8');
 assert.match(agentsSrc, /operator \(works other apps on the screen/, 'send_agent names the operator');
 console.log('prompt (live handoff) tests: passed');

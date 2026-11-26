@@ -508,6 +508,10 @@ assert.match(agentSystem('maker', { dir: '/x', returns: 'answer' }), /report is 
   assert.ok(liveAgentsText(mgr.list(), { now: 2, userName: 'Ken' }).includes('(Scout subagent, researcher'));
   // Not on the crew: refused, so the chat doesn't think it launched
   await assert.rejects(mgr.start({ subagent: 'writer', title: 'x', brief: 'y' }), /no subagent "writer"/i);
+  // A failed handoff says so plainly, and why, so the chat never claims it handed off (Live said "I'll hand that to my
+  // operator" over one that never started).
+  const send = mgr.tools.find((t) => t.name === 'send_agent');
+  await assert.rejects(send.execute({ subagent: 'writer', title: 'x', brief: 'y' }), /no subagent "writer".*The launch failed, so there is no agent: say plainly that the handoff didn't start and why, never that it's handed off or on its way/s);
   // A continued run stays with its specialist; if the crew is gone it carries on as an ordinary agent
   children[0].emit('message', { t: 'finish', result: { outcome: 'Done', files: [], report: 'r' } });
   children[0].emit('message', { t: 'end', ok: true }); children[0].emit('close', 0, null);
@@ -520,6 +524,12 @@ assert.match(agentSystem('maker', { dir: '/x', returns: 'answer' }), /report is 
   crewOn = false;
   await mgr.start({ continue: a.id, type: 'researcher', title: 'Chairs', brief: 'And reviews.' });
   assert.equal(asked[2], undefined);
+  // A type name given as subagent (Gemini Live sent {subagent: "operator"} with no type): that type, not a refusal.
+  children[2].emit('message', { t: 'end', ok: true }); children[2].emit('close', 0, null);
+  await new Promise((r) => setTimeout(r, 400));
+  const op = await mgr.start({ subagent: 'operator', title: 'Set to Public', brief: 'In YouTube Studio, set the video to Public and save.' });
+  assert.equal(op.type, 'operator', 'an operator started');
+  assert.equal(op.sub, undefined, 'not a crew specialist');
 }
 
 console.log('agents tests: passed');
