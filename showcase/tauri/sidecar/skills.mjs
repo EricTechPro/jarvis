@@ -4,9 +4,10 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { redactKeys } from './diagnostics.mjs';
-import { BLOCK, checkFetch, checkSkill } from './safety.mjs';
+import { BLOCK, checkFetch, checkRead, checkSkill } from './safety.mjs';
 import { jarvisRoot } from './store.mjs';
 
 export const SKILLS_DIR = path.join(jarvisRoot(), 'Skills');
@@ -35,8 +36,9 @@ export function parseSkillFile(text, fallback = '') {
 export const skillText = ({ name, description, steps }) => `---\nname: ${JSON.stringify(oneLine(name, 60))}\ndescription: ${JSON.stringify(oneLine(description, MAX_DESC))}\n---\n\n${String(steps).trim()}\n`;
 
 const fileOf = (slug) => path.join(SKILLS_DIR, slug, 'SKILL.md');
-// Read-only skills from the second brain's <agents>/skills (secondbrain.mjs): listed after the user's own, within
-// MAX_SKILLS in all, by folder name; one with the same slug as their own is hidden. Never saved over or removed here.
+// Read-only skills from the second brain's <agents>/skills (secondbrain.mjs): listed after the user's own, all of them
+// (MAX_SKILLS caps only their own), by folder name; one with the same slug as their own is hidden. Never saved over or
+// removed here.
 // The folder, or a function giving it (the second brain's locations are looked at again when they change).
 let extraOf = () => '';
 export const setExtraSkillsDir = (dir) => { extraOf = typeof dir === 'function' ? dir : () => (dir ? String(dir) : ''); };
@@ -55,14 +57,13 @@ function ownSkills() {
   }
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
-function extraSkills(skip, room) {
+function extraSkills(skip) {
   const extraDir = extraOf() || '';
-  if (!extraDir || room <= 0) return [];
+  if (!extraDir) return [];
   let names = [];
   try { names = readdirSync(extraDir).sort(); } catch { return []; }
   const out = [];
   for (const folder of names) {
-    if (out.length >= room) break;
     const slug = slugOf(folder);
     if (folder.startsWith('.') || !slug || skip.has(slug)) continue;
     const file = path.join(extraDir, folder, 'SKILL.md');
@@ -76,20 +77,38 @@ function extraSkills(skip, room) {
   }
   return out;
 }
-/** Every skill: the user's own, newest change first, then the second brain's (readonly: true); at most MAX_SKILLS. */
+/** Every skill: the user's own (at most MAX_SKILLS), newest change first, then all the second brain's (readonly: true). */
 export function listSkills() {
   const own = ownSkills().slice(0, MAX_SKILLS);
-  return [...own, ...extraSkills(new Set(own.map((s) => s.slug)), MAX_SKILLS - own.length)];
+  return [...own, ...extraSkills(new Set(own.map((s) => s.slug)))];
 }
 const findSkill = (slug) => listSkills().find((s) => s.slug === slug) ?? null;
-
-/** One skill by name or slug, with its steps; null when there's none. */
-export function readSkill(name) {
+// A name that could lead out of a skills folder ('..', a slash, a hidden folder) is never a skill.
+const badName = (name) => { const n = String(name ?? '').trim(); return !n || n.startsWith('.') || /[/\\]|\.\./.test(n); };
+// The second brain's <skills>/<name>/SKILL.md by its folder name, found even when the index leaves it out: inside the
+// folder, a file, not too big, and nothing checkRead refuses. → { slug, path, readonly } or null.
+function extraByFolder(name) {
+  const dir = extraOf() || '', folder = String(name ?? '').trim();
+  if (!dir || badName(folder)) return null;
+  const root = path.resolve(dir), file = path.resolve(root, folder, 'SKILL.md');
+  if (!file.startsWith(root + path.sep) || checkRead(file, os.homedir()).level === BLOCK) return null;
+  try { const st = statSync(file); if (!st.isFile() || st.size > MAX_SKILL_MD) return null; } catch { return null; }
+  return { slug: folder, path: file, readonly: true };
+}
+// Where a skill is: their own of that slug, else the second brain's folder of that name, else the index's.
+function locate(name) {
+  if (badName(name)) return null;
   const slug = slugOf(name);
   if (!slug) return null;
-  const k = existsSync(fileOf(slug)) ? { slug, path: fileOf(slug) } : findSkill(slug);
+  if (existsSync(fileOf(slug))) return { slug, path: fileOf(slug) };
+  return extraByFolder(name) ?? findSkill(slug);
+}
+
+/** One skill by name, slug or (the second brain's) folder name, with its steps; null when there's none. */
+export function readSkill(name) {
+  const k = locate(name);
   if (!k) return null;
-  try { return { slug, path: k.path, ...parseSkillFile(readFileSync(k.path, 'utf8'), slug), ...(k.readonly ? { readonly: true } : {}) }; } catch { return null; }
+  try { return { slug: k.slug, path: k.path, ...parseSkillFile(readFileSync(k.path, 'utf8'), k.slug), ...(k.readonly ? { readonly: true } : {}) }; } catch { return null; }
 }
 
 /** Creates or replaces a skill. Throws (with a reason fit to pass on) when it's empty, too big, unsafe or one too many. */
@@ -279,8 +298,8 @@ export async function installSkill(sk) {
   return { slug, path: fileOf(slug), created: !had };
 }
 
-// A skill's folder: the user's own, or the second brain's one of that slug.
-const skillRoot = (slug) => { const own = path.join(SKILLS_DIR, slugOf(slug)); if (existsSync(own)) return own; const k = findSkill(slugOf(slug)); return k ? path.dirname(k.path) : own; };
+// A skill's folder: the user's own, or the second brain's one (by folder name or slug), as readSkill finds it.
+const skillRoot = (slug) => { const k = locate(slug); return k ? path.dirname(k.path) : path.join(SKILLS_DIR, slugOf(slug)); };
 
 /** The other files in a skill's folder (relative paths), for use_skill to mention. */
 export function skillFiles(slug) {

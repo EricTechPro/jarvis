@@ -107,6 +107,33 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.deepEqual(ev.find((e) => e.type === 'tool_end'), { type: 'tool_end', id: 'c1', isError: false });
 }
 
+{ // A Live tool call is logged as Classic logs one: 'tool' with { turn, id, name, args }, typed text as its length.
+  const { z } = await import('zod');
+  const tools = [{ name: 'write_file', description: 'Write.', parameters: z.object({ path: z.string(), content: z.string() }), execute: async () => 'Wrote it.' }];
+  const t = fakeTransport();
+  const logs = [];
+  let requestNo = 0;
+  const call = createLiveCall({
+    makeBrain: async (emit) => createLiveBrain({ emit, connect: t.connect, key: 'k', tools, system: () => '' }),
+    ui: () => {}, send: () => {}, ask: async () => null, toClassic: () => {},
+    newTurn: () => ++requestNo, log: (kind, data) => logs.push([kind, data]),
+  });
+  await call.toggle();
+  await until(() => t.calls.length === 1);
+  const s = t.calls[0];
+  s.server({ serverContent: { inputTranscription: { text: 'Save a note.' } } });
+  s.server({ toolCall: { functionCalls: [{ id: 'w1', name: 'write_file', args: { path: 'a.md', content: 'secret words' } }] } });
+  await until(() => s.sent.some((m) => m.tool));
+  assert.deepEqual(logs.find(([k]) => k === 'tool'), ['tool', { turn: 1, id: 'w1', name: 'write_file', args: { path: 'a.md', content: '[12 chars]' } }]);
+  assert.ok(!JSON.stringify(logs).includes('secret words'), 'no file contents in the log');
+  call.hangUp('tap');
+}
+{ // Classic and Live log tool calls through the same helper.
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  assert.match(src, /logLine\('tool', toolLog\(\{ turn, id: e\.toolCallId, name: e\.name, args: e\.args \}\)\)/);
+  assert.match(fs.readFileSync(new URL('../livecall.mjs', import.meta.url), 'utf8'), /log\('tool', toolLog\(/);
+}
+
 { // Each of their turns in the call is a new request, as in Classic: after send_agent the rest of that turn is held,
   // and a tool in their next turn runs.
   const { z } = await import('zod');

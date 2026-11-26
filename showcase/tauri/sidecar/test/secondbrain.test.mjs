@@ -170,14 +170,31 @@ await assert.rejects(K.deleteSkill('sync-kb'), /second brain/, "the second brain
 assert.ok(fs.existsSync(path.join(sk, 'sync-kb', 'SKILL.md')));
 assert.match(K.skillIndex(), /- sync-kb: When syncing the knowledge base\./);
 
-// The cap: MAX_SKILLS in all, their own first; the second brain's never stop them saving their own.
+// No cap on the second brain's: every one is listed (a real .agents/skills holds 150+), their own first; MAX_SKILLS
+// still caps their own, and the second brain's never stop them saving their own.
 for (let i = 0; i < K.MAX_SKILLS + 5; i++) addExtra(`extra-${String(i).padStart(2, '0')}`, `Extra ${i}.`);
 list = K.listSkills();
-assert.equal(list.length, K.MAX_SKILLS, 'at most MAX_SKILLS listed');
+assert.equal(list.filter((s) => s.readonly).length, K.MAX_SKILLS + 5 + 2, "every second brain skill listed, past MAX_SKILLS");
 assert.equal(list[0].slug, 'mine');
+assert.match(K.skillIndex(), new RegExp(`- extra-${K.MAX_SKILLS + 4}: Extra ${K.MAX_SKILLS + 4}\\.`), 'the last one is in the index too');
+assert.ok(K.readSkill(`extra-${K.MAX_SKILLS + 4}`), 'and readable');
 await K.saveSkill({ name: 'another', description: 'Another of mine.', steps: 'Go.' });
 assert.deepEqual(K.listSkills().slice(0, 2).map((s) => s.slug).sort(), ['another', 'mine'], 'their own still come first');
-assert.equal(K.listSkills().length, K.MAX_SKILLS);
+assert.equal(K.listSkills().length, 2 + K.MAX_SKILLS + 5 + 2);
+
+// use_skill finds a second brain skill by its folder even when the index left it out (here: a second folder with the
+// same slug); a name that leads out of the folder is no skill at all.
+addExtra('deploy-app', 'The indexed one.');
+addExtra('deploy_app', 'Left out of the index.', { 'notes.md': 'Hidden notes.' });
+assert.equal(K.listSkills().filter((s) => s.slug === 'deploy-app').length, 1);
+assert.ok(!K.skillIndex().includes('Left out of the index'));
+const hidden = K.readSkill('deploy_app');
+assert.equal(hidden?.description, 'Left out of the index.', 'read from <skills>/deploy_app/SKILL.md');
+assert.equal(hidden.readonly, true);
+assert.deepEqual(K.skillFiles(hidden.slug), ['notes.md'], 'its own files, not the indexed twin');
+assert.equal(K.readSkillFile(hidden.slug, 'notes.md'), 'Hidden notes.');
+assert.equal(K.readSkill('deploy-app').description, 'The indexed one.');
+for (const bad of ['../alpha', '..', 'x/alpha', 'alpha/', 'x\\alpha', '../../.agents/skills/alpha']) assert.equal(K.readSkill(bad), null, `${bad} is refused`);
 
 K.setExtraSkillsDir('');
 assert.deepEqual(K.listSkills().map((s) => s.slug).sort(), ['another', 'mine'], 'cleared: only their own');

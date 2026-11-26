@@ -98,6 +98,8 @@ export function redactArgs(name, args = {}) {
   if (name === 'schedule_job') return { ...args, brief: len(args.brief) };
   return args;
 }
+/** A tool call's 'tool' line in the activity log, the same for Classic and Live: its arguments through redactArgs. */
+export const toolLog = ({ turn, id, name, args }) => ({ turn, id, name, args: redactArgs(name, args ?? {}) });
 
 /** read_file / list_files / search_files. Returns { level, reason, path }. */
 export function checkRead(p, home, { recursive = false } = {}) {

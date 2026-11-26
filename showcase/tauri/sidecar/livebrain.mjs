@@ -3,7 +3,7 @@
 // through that tool's own execute, so Allow prompts, allowActions, skipAllow and read-only folders work as in Classic.
 // Everything else (the hotkey, playback, captions, the panel) stays with the caller, which hears it through emit():
 // every live.mjs event except toolCall/toolCancel (handled here), plus
-//   {type:'tool', id, name}            a tool started
+//   {type:'tool', id, name, args}      a tool started (args as Gemini sent them)
 //   {type:'toolEnd', id, name, ok}     it finished (ok false: it failed, was refused or was cancelled)
 // A cancelled call (they cut in) is aborted and gets no answer. A picture in a tool's result (a screenshot) goes into
 // the call as an image, its text as the answer. news() holds a background agent's report until the call is quiet.
@@ -58,7 +58,7 @@ export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, ...liv
   async function run({ id, name, args }) {
     const ac = new AbortController();
     running.set(id, ac);
-    emit({ type: 'tool', id, name });
+    emit({ type: 'tool', id, name, args });
     let response, ok = false;
     try {
       const tool = val(tools).find((t) => t.name === name);

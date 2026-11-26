@@ -7,6 +7,8 @@
 //   {kind:'live', heard}        what they're saying, so far
 //   {kind:'live', turn:true}    she's answering: the listening bubble makes way for her reply
 // The helper hears {type:'live_capture', on} (through send) to start and stop the call's mic.
+import { toolLog } from './safety.mjs';
+
 const ERRORS = {
   key: 'Live mode needs a Gemini key. Add one on the Speaking page in Settings, or switch to Classic.',
   quota: 'Gemini Live is out of quota for now. Switch to Classic to keep talking?',
@@ -43,6 +45,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
+  let request; // the request their turn started (newTurn's), for the log
   let speechId = null; // the reply audio playing now
   let cutId = null, loudMs = 0; // cutId: the reply he cut in on (its late audio is dropped); loudMs: how long he's been loud
   // draw in the call: its lines are said by her after the tool answers, so its overlay segments are held here (by
@@ -84,7 +87,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     switch (e.type) {
       case 'turn':
         stats.turns++;
-        newTurn();
+        request = newTurn();
         return;
       case 'state':
         if (e.state === 'closed') return; // closed() runs once, from hangUp or the error
@@ -122,6 +125,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         if (e.done) endTurn();
         return;
       case 'tool':
+        log('tool', toolLog({ turn: request, id: e.id, name: e.name, args: e.args }));
         startTurn();
         ui({ kind: 'agent', e: { type: 'tool', id: e.id, anim: anim(e.name) } });
         return;
