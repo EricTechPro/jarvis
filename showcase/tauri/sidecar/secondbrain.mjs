@@ -258,12 +258,32 @@ export function brainName({ full, user } = {}) {
   const first = folderSafe(String(full ?? '').trim().split(/\s+/)[0]) || folderSafe(user);
   return first ? `${first} OS` : 'Second Brain';
 }
-/** Where the setup guide's default one goes: ~/Desktop/<name> (brainName). */
-export const desktopBrainDir = (home, name = 'Second Brain') => path.join(home, 'Desktop', name);
-/** Makes (or fills in) ~/Desktop/<name>: when it's already there, the locations found in it by name are kept
+const SHELL_FOLDERS = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders';
+/** The user's real Desktop folder. Windows: the registry's User Shell Folders value (OneDrive backup moves it),
+ *  %USERPROFILE% being `home`. Linux: XDG_DESKTOP_DIR (the environment, then user-dirs.dirs; localised, like
+ *  ~/Schreibtisch), $HOME being `home`. macOS, or nothing usable: ~/Desktop. */
+const pathOf = (platform = process.platform) => (platform === 'win32' ? path.win32 : path.posix);
+export function desktopDir(home, { platform = process.platform, env = process.env, run = runText, read = (f) => readFileSync(f, 'utf8') } = {}) {
+  const p = pathOf(platform), plain = p.join(home, 'Desktop');
+  let dir = '';
+  try {
+    if (platform === 'win32') {
+      const raw = String(run('reg', ['query', SHELL_FOLDERS, '/v', 'Desktop']) ?? '').match(/^\s*Desktop\s+REG_(?:EXPAND_)?SZ\s+(.+?)\s*$/m)?.[1] ?? '';
+      const envOf = (k) => (k.toUpperCase() === 'USERPROFILE' ? home : Object.entries(env).find(([n]) => n.toUpperCase() === k.toUpperCase())?.[1]);
+      dir = raw.replace(/%([^%]+)%/g, (m, k) => envOf(k) ?? m);
+    } else if (platform !== 'darwin') {
+      dir = env.XDG_DESKTOP_DIR || String(read(p.join(env.XDG_CONFIG_HOME || p.join(home, '.config'), 'user-dirs.dirs')) ?? '').match(/^\s*XDG_DESKTOP_DIR="([^"]+)"/m)?.[1] || '';
+      dir = dir.replace(/^\$HOME(?=\/|$)/, home);
+    }
+  } catch { dir = ''; }
+  return dir && !dir.includes('%') && p.isAbsolute(dir) ? p.normalize(dir) : plain;
+}
+/** Where the setup guide's default one goes: <Desktop>/<name> (desktopDir, brainName). */
+export const desktopBrainDir = (home, name = 'Second Brain', opts) => pathOf(opts?.platform).join(desktopDir(home, opts), name);
+/** Makes (or fills in) <Desktop>/<name>: when it's already there, the locations found in it by name are kept
  *  and only the missing folders and starter files are added, never over a file. → createBrain's result. */
-export function makeDesktopBrain(home, name) {
-  const root = desktopBrainDir(home, name), found = detectLocations(root), l = { root };
+export function makeDesktopBrain(home, name, opts) {
+  const root = desktopBrainDir(home, name, opts), found = detectLocations(root), l = { root };
   for (const k of SUBS) l[k] = found[k] || path.join(root, LOC[k].name);
   return createBrain(l, home);
 }
