@@ -63,10 +63,10 @@ install_macos() {
 
   # Quit a running copy first so the new one replaces it cleanly.
   osascript -e 'tell application id "com.erictech.jarvis" to quit' >/dev/null 2>&1 || true
-  # The menu bar app keeps running after that quit, so the old version would stay in memory: end it (its helpers go
-  # with it, they exit when it does), waiting up to 5 s.
-  pkill -f '/Jarvis\.app/Contents/MacOS/jarvis$' >/dev/null 2>&1 || true
-  for _ in 1 2 3 4 5; do pgrep -f '/Jarvis\.app/Contents/MacOS/jarvis$' >/dev/null 2>&1 || break; sleep 1; done
+  # The menu bar app keeps running after that quit, so the old version would stay in memory: end it and its helpers
+  # (the Node sidecar leads its own process group and outlives it otherwise), waiting up to 5 s.
+  pkill -f '/Jarvis\.app/Contents/MacOS/' >/dev/null 2>&1 || true
+  for _ in 1 2 3 4 5; do pgrep -f '/Jarvis\.app/Contents/MacOS/' >/dev/null 2>&1 || break; sleep 1; done
 
   say "-> installing to $dest/Jarvis.app"
   rm -rf "$dest/Jarvis.app"
