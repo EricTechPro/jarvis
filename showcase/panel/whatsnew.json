@@ -4,9 +4,15 @@
       "version": "0.2.7",
       "date": "2026-11-26",
       "items": [
-        { "kind": "new", "title": "Second brain in setup", "text": "Setup asks where your notes live. I can make a Second Brain folder on your Desktop." },
-        { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts as Second Brain on your Desktop." },
-        { "kind": "fixed", "title": "Setup keeps your folders", "text": "Running setup again on the same second brain keeps the folders you picked." }
+        { "kind": "new", "title": "Second brain in setup", "text": "Setup asks where your notes live. I can make a folder for them on your Desktop." },
+        { "kind": "improved", "title": "Named after you", "text": "A new second brain is named after you, with OS on the end, like EricTech OS." },
+        { "kind": "improved", "title": "Quicker new second brain", "text": "Create a New One now starts on your Desktop, with that name." },
+        { "kind": "fixed", "title": "Setup keeps your folders", "text": "Running setup again on the same second brain keeps the folders you picked." },
+        { "kind": "new", "title": "Hey Jarvis in Live", "text": "With the wake word on, saying Hey Jarvis in Live opens a call, like a tap of the keys." },
+        { "kind": "fixed", "title": "No stray thinking", "text": "Gemini's planning notes no longer show up or get read out before my answer." },
+        { "kind": "fixed", "title": "Codex builders can write", "text": "A Codex Builder can now make files, in its own folder only." },
+        { "kind": "fixed", "title": "Codex models that work", "text": "The Codex models offered are the ones your account can use." },
+        { "kind": "fixed", "title": "Straight to the app", "text": "Asked to work an app, I use the screen right away instead of reading my own code." }
       ]
     },
     {
