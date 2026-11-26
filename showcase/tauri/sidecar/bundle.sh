@@ -23,6 +23,8 @@ WEB_EXT=(--external:@mozilla/readability --external:turndown --external:turndown
   --external:@huggingface/transformers --external:ogg-opus-decoder "${WEB_EXT[@]}" \
   --banner:js="import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" \
   --log-level=warning
+# The sign-in pages GG Coder's libraries show in the browser say Jarvis (rebrand.mjs); fails if their words moved.
+node rebrand.mjs dist/sidekick.mjs dist/agentrun.mjs
 # The readers and their dependencies, laid out as npm installed them (a nested copy travels with its parent).
 # One that's missing only costs web_fetch its Markdown: it falls back to plain text.
 node - linkedom @mozilla/readability turndown turndown-plugin-gfm unpdf <<'EOF'
