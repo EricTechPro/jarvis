@@ -106,7 +106,9 @@ assert.deepEqual([...logC[0].tools].sort(), ['act_in_app', 'finish', 'list_windo
 const acts = logC.filter((l) => l.name === 'act_in_app');
 assert.deepEqual(acts.map((l) => l.isError), [false, false, false, true], 'the fourth identical scroll is refused');
 assert.match(acts[3].result, /nothing changed after 3 tries: stop, take_screenshot/);
-assert.equal(logC.find((l) => l.name === 'take_screenshot').isError, false, 'it can look at the screen');
+// Screenshots go through the hands helper on macOS and Windows; on Linux the app takes them, so an agent can't (and Live
+// never offers an operator there: its line needs the helper).
+if (['darwin', 'win32'].includes(process.platform)) assert.equal(logC.find((l) => l.name === 'take_screenshot').isError, false, 'it can look at the screen');
 assert.ok(handsUi.some((m) => m.on === true) && handsUi.at(-1).on === false, 'the overlay heard it take and give back the cursor');
 assert.equal(mgr.news().find((n) => n.id === c.id).report, 'The list behind the Cards window does not scroll; open Video + first.');
 assert.equal(c.returns, 'answer');
