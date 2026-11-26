@@ -1,0 +1,97 @@
+// Jarvis's own brain inside a Gemini Live call (live.mjs): the same prompt Classic builds, plus a few lines for talking
+// out loud, and the same tools. The tools are declared to Gemini here, in one place, and every call Gemini makes runs
+// through that tool's own execute, so Allow prompts, allowActions, skipAllow and read-only folders work as in Classic.
+// Everything else (the hotkey, playback, captions, the panel) stays with the caller, which hears it through emit():
+// every live.mjs event except toolCall/toolCancel (handled here), plus
+//   {type:'tool', id, name}            a tool started
+//   {type:'toolEnd', id, name, ok}     it finished (ok false: it failed, was refused or was cancelled)
+// A cancelled call (they cut in) is aborted and gets no answer. A picture in a tool's result (a screenshot) goes into
+// the call as an image, its text as the answer. news() holds a background agent's report until the call is quiet.
+import { resolveToolSchema } from '@kenkaiiii/gg-ai';
+import { unknownToolMessage } from '@kenkaiiii/gg-agent';
+import { createLive, val } from './live.mjs';
+import { SLOW_TOOLS } from './tools.mjs';
+
+export const LIVE_GUIDANCE = `You're in a live voice call: everything you say is heard out loud, the moment you say it, and they can cut in any time. Talk like on the phone: one to three short sentences, plain words, contractions. No markdown, lists, emoji, links, code, file paths, bracketed cues or tags like [happy]: they'd be read aloud. Name the site, file or app instead. Before anything slow (the web, a page, the screen, an app, a command), say a short beat like "On it, one sec." and keep talking with them while it runs. When a result comes back, tell them briefly.`;
+
+/** The tools as Live function declarations: [{functionDeclarations}] for the session's config.tools. */
+export function liveDeclarations(tools, slow = SLOW_TOOLS) {
+  const functionDeclarations = [];
+  for (const t of tools) {
+    let schema;
+    try { schema = resolveToolSchema(t); } catch { continue; } // unconvertible schema: left out
+    functionDeclarations.push({ name: t.name, description: t.description, parametersJsonSchema: schema, ...(slow.has(t.name) ? { behavior: 'NON_BLOCKING' } : {}) });
+  }
+  return [{ functionDeclarations }];
+}
+
+const stripNulls = (v) => (Array.isArray(v) ? v.map(stripNulls)
+  : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== null).map(([k, x]) => [k, stripNulls(x)])) : v);
+const parse = (tool, args) => {
+  try { return tool.parameters.parse(args); } catch (first) {
+    try { return tool.parameters.parse(stripNulls(args)); } catch { throw first; }
+  }
+};
+
+/**
+ * tools: the tool array (or a function returning it, read on every connect and call). system: a function returning the
+ * prompt Classic would send (personality, memory, second brain, focus, crew). The rest goes to createLive (key, model,
+ * voice, connect).
+ */
+export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, ...liveOpts }) {
+  const running = new Map(); // call id → AbortController
+  const held = []; // agent news waiting for a quiet moment
+  const quiet = () => live.state === 'listening' && !running.size;
+  const flush = () => { while (held.length && quiet()) live.pushNote(held.shift()); };
+  const live = createLive({
+    ...liveOpts,
+    systemInstruction: () => `${val(system) ?? ''}\n\n${LIVE_GUIDANCE}`,
+    tools: () => liveDeclarations(val(tools), slow),
+    emit: (e) => {
+      if (e.type === 'toolCall') return e.calls.forEach(run);
+      if (e.type === 'toolCancel') return e.ids.forEach((id) => running.get(id)?.abort());
+      emit(e);
+      if (e.type === 'state') flush();
+    },
+  });
+
+  async function run({ id, name, args }) {
+    const ac = new AbortController();
+    running.set(id, ac);
+    emit({ type: 'tool', id, name });
+    let response, ok = false;
+    try {
+      const tool = val(tools).find((t) => t.name === name);
+      if (!tool) throw new Error(unknownToolMessage(name, val(tools).map((t) => t.name)));
+      const raw = await tool.execute(parse(tool, args), { signal: ac.signal, toolCallId: id });
+      const content = typeof raw === 'string' ? raw : raw?.content ?? '';
+      const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : content;
+      for (const b of parts) if (b.type === 'image' && !ac.signal.aborted) live.pushImage(b.data, b.mediaType);
+      const text = parts.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+      response = { output: text };
+      ok = true;
+    } catch (err) {
+      response = { error: err?.message || String(err) };
+    }
+    running.delete(id);
+    emit({ type: 'toolEnd', id, name, ok: ok && !ac.signal.aborted });
+    if (!ac.signal.aborted) live.respond([{ id, name, response }]);
+    flush();
+  }
+
+  return {
+    get state() { return live.state; },
+    start: () => live.start(),
+    stop() {
+      live.stop();
+      held.length = 0;
+      for (const ac of running.values()) ac.abort();
+    },
+    /** True when nothing is going on in the call: she isn't talking or thinking and no tool is running. */
+    quiet,
+    /** A background agent's news (newsDesk's enqueue text): into the call now if quiet, else at the next quiet moment. */
+    news(text) { held.push(String(text)); flush(); },
+    pushAudio: (pcm) => live.pushAudio(pcm),
+    pushImage: (data, mimeType) => live.pushImage(data, mimeType),
+  };
+}
