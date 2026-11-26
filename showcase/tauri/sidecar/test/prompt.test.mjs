@@ -136,3 +136,12 @@ assert.match(liveLine, /one click, one scroll or opening a link[^\n]*yourself/, 
 const agentsSrc = readFileSync(fileURLToPath(new URL('../agents.mjs', import.meta.url)), 'utf8');
 assert.match(agentsSrc, /operator \(works other apps on the screen/, 'send_agent names the operator');
 console.log('prompt (live handoff) tests: passed');
+// Regression (a real run with the second brain set to a folder holding Jarvis's own source): asked to work an app,
+// Classic grepped its own sidecar code a dozen times before acting. The line beside Speed says to use the screen
+// tools straight away and never inspect its own code or tool definitions.
+{
+  const at = side.indexOf('\nSpeed: '), ownCode = side.indexOf('\nOn screen or in an app: ');
+  assert.ok(ownCode > at && ownCode < side.indexOf('\nSeveral things in one request'), 'right after Speed, where the tools are described');
+  assert.match(side, /\nOn screen or in an app: [^\n]*use the screen tools \(take_screenshot, read_window, open, act_in_app, draw\) directly[^\n]*never read, search or run commands on Jarvis's own code or tool definitions/, 'no reading its own source first');
+}
+console.log('prompt (own code) tests: passed');
