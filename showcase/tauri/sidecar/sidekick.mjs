@@ -2380,7 +2380,7 @@ function onVoice(m) {
     if (m.code === 'live_mic') {
       if (m.reason === 'permission') openUrl(`x-apple.systempreferences:com.apple.preference.security?${PRIVACY.microphone}`);
       if (m.message) problem('hearing', `live_mic: ${m.message}`);
-      return liveCall.fail('mic', m.reason);
+      return liveCall.fail(m.reason === 'permission' ? 'mic_permission' : 'mic', m.reason);
     }
     if (m.code === 'nothing_heard' && snap) { snap.waitingVoice = false; return; }
     if (m.code === 'model_missing') startVoiceDownload();

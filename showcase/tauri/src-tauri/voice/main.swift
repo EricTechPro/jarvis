@@ -760,10 +760,27 @@ final class Voice {
         log("live mode \(on ? "on" : "off")")
     }
 
+    private var liveWanted = false // the call still wants its mic (an answer to the prompt can come after a hang-up)
+
     func setLiveCapture(_ on: Bool) {
+        liveWanted = on
         if !on { return liveMic.stop() }
         guard liveMode else { return log("live capture refused: not in live mode") }
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return emit(["type": "error", "code": "live_mic", "reason": "permission"]) }
+        switch LiveMic.access(AVCaptureDevice.authorizationStatus(for: .audio)) {
+        case .open: openLiveMic()
+        case .refused: emit(["type": "error", "code": "live_mic", "reason": "permission"])
+        case .ask:
+            log("live mic: asking for the microphone")
+            AVCaptureDevice.requestAccess(for: .audio) { ok in
+                DispatchQueue.main.async {
+                    guard self.liveWanted, self.liveMode else { return }
+                    if ok { self.openLiveMic() } else { emit(["type": "error", "code": "live_mic", "reason": "permission"]) }
+                }
+            }
+        }
+    }
+
+    private func openLiveMic() {
         if let problem = liveMic.start() { emit(["type": "error", "code": "live_mic", "reason": "failed", "message": problem]) }
     }
 
@@ -1435,6 +1452,10 @@ if args.contains("--test-livemic") {
     let msg = LivePCM.message(Data([1, 0, 2, 0]))
     check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
     check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))
+    check("allowed: the call's mic opens", LiveMic.access(.authorized) == .open)
+    // Not asked yet, or an ad-hoc update whose old grant no longer matches (macOS reports it as not asked): ask, as a take does.
+    check("not asked yet: the call asks for the mic", LiveMic.access(.notDetermined) == .ask)
+    check("turned off: refused", LiveMic.access(.denied) == .refused && LiveMic.access(.restricted) == .refused)
     exit(bad == 0 ? 0 : 1)
 }
 // --test-mics: which mics a take tries when the first won't open; exits 1 on a failure.
