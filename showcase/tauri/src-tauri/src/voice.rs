@@ -244,30 +244,19 @@ pub(crate) fn set_esc(app: &AppHandle, label: &str, on: bool) {
     });
 }
 
-<<<<<<< HEAD
-/// Live mode lines from the helper, as the sidecar takes them: `pcm` (16 kHz 16-bit mono, base64) becomes
-/// `live_pcm`, `live_toggle` (a tap of the talk chord: open or hang up the call), `live_wake` (the wake word: open
-/// one) and `live_look` (a circle drawn with it, with the circled area) pass as is, and `sleep` (the Mac
-/// is going to sleep) becomes `system_sleep`.
-=======
 /// Helper lines that go straight to the sidecar: `pcm` (16 kHz 16-bit mono, base64) becomes `live_pcm`;
-/// `live_toggle` (a tap of the talk chord: open or hang up the call), `live_open` (the highlight keys held in Live:
-/// open the call so it listens), `live_look` (a circle drawn with the highlight keys in Live, with the circled area)
-/// and `highlight` (a Classic circle with no words yet, with its area) pass as is; and `sleep` (the Mac is going to
-/// sleep) becomes `system_sleep`.
->>>>>>> d387efc (✨ [feat] voice: hold ⌃⌘ to highlight, ⌃⌥ is talk only)
+/// `live_toggle` (a tap of the talk chord: open or hang up the call), `live_wake` (the wake word: open one),
+/// `live_open` (the highlight keys held in Live: open the call so it listens), `live_look` (a circle drawn with the
+/// highlight keys in Live, with the circled area) and `highlight` (a Classic circle with no words yet, with its area)
+/// pass as is; and `sleep` (the Mac is going to sleep) becomes `system_sleep`.
 fn live_line(msg: &Value) -> Option<Value> {
     match msg.get("type").and_then(Value::as_str) {
         Some("pcm") => Some(json!({ "type": "live_pcm", "data": msg.get("data") })),
         Some("live_toggle") => Some(json!({ "type": "live_toggle" })),
-<<<<<<< HEAD
         // The wake word heard in Live mode with no call open: the sidecar opens one.
         Some("live_wake") => Some(json!({ "type": "live_wake" })),
-        // A circle drawn with the chord in a call: the circled shot goes in as a look.
-=======
         Some("live_open") => Some(json!({ "type": "live_open" })),
         // A circle drawn with the highlight keys in a call: the circled shot goes in as a look.
->>>>>>> d387efc (✨ [feat] voice: hold ⌃⌘ to highlight, ⌃⌥ is talk only)
         Some("live_look") => Some(json!({ "type": "live_look", "area": msg.get("area") })),
         // Classic: a circle with nothing said yet; the sidecar listens for the question about it.
         Some("highlight") => Some(json!({ "type": "highlight", "area": msg.get("area") })),
