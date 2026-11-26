@@ -1,7 +1,7 @@
 // What the model is told about each system, and which features each one gets. Run: npm test
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { canCircle, canSnap, hasHands, hasHotkeys, hasVoice, hasWakeWord, linuxSession, micTrouble, needsVoiceModel, platformLine, samePair, seesPointer, writeChord, writeChords } from '../platform.mjs';
+import { canCircle, canSnap, hasHands, hasHotkeys, hasVoice, hasWakeWord, linuxSession, micTrouble, needsVoiceModel, platformLine, highlightChord, samePair, seesPointer, writeChord, writeChords } from '../platform.mjs';
 
 const win = platformLine('win32', { arch: 'x64', release: '10.0.22631' });
 assert.match(win, /^Platform: Windows 11 on x64\./);
@@ -92,6 +92,24 @@ for (const p of ['darwin', 'win32', 'linux']) {
 }
 assert.ok(!writeChords('win32').some((c) => c.includes('command')) && !writeChords('linux').some((c) => samePair(c, ['option', 'shift'])), 'no Win key and no Alt+Shift on a PC');
 assert.ok(samePair(['a', 'b'], ['b', 'a']) && !samePair(['a', 'b'], ['a', 'c']) && !samePair(['a', 'a'], ['a', 'b']) && !samePair(null, ['a', 'b']));
+
+// The highlight keys (held to circle part of the screen): ⌃⌘ on a Mac, never the talk or type-to-ask pair. A clash
+// falls back to ⌥⇧, and when that is taken too there is no highlight. Off the Mac there is none yet.
+const CC = ['control', 'command'], OS = ['option', 'shift'];
+assert.deepEqual(highlightChord('darwin', TALK, ['option', 'command'], undefined), CC, 'the Mac default: Control+Command');
+assert.deepEqual(highlightChord('darwin', TALK, ['command', 'control'], undefined), OS, 'type-to-ask is ⌃⌘: falls back to ⌥⇧');
+assert.deepEqual(highlightChord('darwin', ['command', 'control'], ['option', 'command'], undefined), OS, 'talk is ⌃⌘: falls back to ⌥⇧');
+assert.equal(highlightChord('darwin', ['option', 'shift'], ['control', 'command'], undefined), null, 'both taken: no highlight');
+assert.deepEqual(highlightChord('darwin', TALK, null, undefined), CC, 'type-to-ask off: still ⌃⌘');
+assert.deepEqual(highlightChord('darwin', TALK, ['option', 'command'], ['shift', 'option']), OS, 'a saved pair is kept');
+assert.deepEqual(highlightChord('darwin', TALK, ['option', 'command'], ['option', 'control']), CC, 'saved as the talk pair: never both');
+assert.equal(highlightChord('darwin', TALK, ['option', 'command'], 'off'), null, "saved as 'off'");
+for (const bad of ['control+command', ['control'], ['command', 'hyper'], 7, null]) assert.deepEqual(highlightChord('darwin', TALK, ['option', 'command'], bad), CC, `bad saved value ${JSON.stringify(bad)}`);
+for (const p of ['win32', 'linux']) assert.equal(highlightChord(p, TALK, ['control', 'shift'], undefined), null, `${p}: no highlight keys yet`);
+for (const talk of writeChords('darwin')) for (const write of [...writeChords('darwin'), null]) {
+  const h = highlightChord('darwin', talk, write, undefined);
+  assert.ok(h === null || (!samePair(h, talk) && !samePair(h, write)), `never talk (${talk}) or type-to-ask (${write})`);
+}
 console.log('platform tests: passed');
 
 // Regression (#65): the type-to-ask tap can be turned off, and then no pair is taken.

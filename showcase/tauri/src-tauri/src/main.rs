@@ -58,6 +58,8 @@ struct Roster(Mutex<Vec<String>>);
 struct Voice(Mutex<Option<Child>>, AtomicUsize);
 /// Talk chord passed to the voice helper, e.g. ["control", "option"].
 struct TalkChord(Mutex<Vec<String>>);
+/// macOS: the highlight chord passed to the voice helper (held to circle part of the screen), empty when off.
+struct HighlightChord(Mutex<Vec<String>>);
 /// Windows: the downloaded speech model's folder (the sidecar owns the download and says where it is).
 struct VoiceModel(Mutex<Option<String>>);
 /// macOS: the "drag me into the list" panel the hands helper shows under System Settings.
@@ -1799,6 +1801,12 @@ fn handle_sidecar(app: &AppHandle, msg: Value) {
                     to_voice(app, &json!({ "cmd": "chord", "mods": mods }));
                 }
             }
+            // The highlight pair (macOS helper only); none means it's off, so the helper draws with no keys.
+            if cfg!(target_os = "macos") {
+                let mods = voice::highlight_mods(&msg);
+                *app.state::<HighlightChord>().0.lock().unwrap() = mods.clone();
+                to_voice(app, &json!({ "cmd": "highlight", "mods": mods }));
+            }
             // The type-to-ask pair; none sent (Wayland) switches the tap off.
             let write = msg.get("write").and_then(Value::as_array).and_then(|m| {
                 tap::mask(&m.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect::<Vec<_>>())
@@ -1921,6 +1929,7 @@ fn main() {
         .manage(Roster(Mutex::new(vec!["sidekick".into()])))
         .manage(Voice(Mutex::new(None), AtomicUsize::new(0)))
         .manage(TalkChord(Mutex::new(vec!["control".into(), "option".into()])))
+        .manage(HighlightChord(Mutex::new(vec!["control".into(), "command".into()])))
         .manage(VoiceModel(Mutex::new(None)))
         .manage(PermGuide(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![buddy, ink_wait, set_hot, set_hit_rects, sidecar_send, set_typing, perm_status, perm_request, perm_guide, screen_check, open_settings, onboarding_finish, guide_close, panel_hide, pick_folder, esc_watch, relaunch, focus_guide, guide_aside, drag_window])

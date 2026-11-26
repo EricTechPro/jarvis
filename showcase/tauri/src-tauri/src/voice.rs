@@ -37,6 +37,10 @@ pub(crate) fn start_voice(app: &AppHandle) {
     let chord = app.state::<TalkChord>().0.lock().unwrap().join(",");
     let mut cmd = Command::new(bin);
     cmd.arg("--chord").arg(chord);
+    if cfg!(target_os = "macos") {
+        let highlight = app.state::<HighlightChord>().0.lock().unwrap().join(",");
+        cmd.arg("--highlight").arg(if highlight.is_empty() { "off".to_owned() } else { highlight });
+    }
     if let Some(dir) = app.state::<VoiceModel>().0.lock().unwrap().clone() {
         cmd.arg("--model").arg(dir);
     }
@@ -240,22 +244,43 @@ pub(crate) fn set_esc(app: &AppHandle, label: &str, on: bool) {
     });
 }
 
+<<<<<<< HEAD
 /// Live mode lines from the helper, as the sidecar takes them: `pcm` (16 kHz 16-bit mono, base64) becomes
 /// `live_pcm`, `live_toggle` (a tap of the talk chord: open or hang up the call), `live_wake` (the wake word: open
 /// one) and `live_look` (a circle drawn with it, with the circled area) pass as is, and `sleep` (the Mac
 /// is going to sleep) becomes `system_sleep`.
+=======
+/// Helper lines that go straight to the sidecar: `pcm` (16 kHz 16-bit mono, base64) becomes `live_pcm`;
+/// `live_toggle` (a tap of the talk chord: open or hang up the call), `live_open` (the highlight keys held in Live:
+/// open the call so it listens), `live_look` (a circle drawn with the highlight keys in Live, with the circled area)
+/// and `highlight` (a Classic circle with no words yet, with its area) pass as is; and `sleep` (the Mac is going to
+/// sleep) becomes `system_sleep`.
+>>>>>>> d387efc (✨ [feat] voice: hold ⌃⌘ to highlight, ⌃⌥ is talk only)
 fn live_line(msg: &Value) -> Option<Value> {
     match msg.get("type").and_then(Value::as_str) {
         Some("pcm") => Some(json!({ "type": "live_pcm", "data": msg.get("data") })),
         Some("live_toggle") => Some(json!({ "type": "live_toggle" })),
+<<<<<<< HEAD
         // The wake word heard in Live mode with no call open: the sidecar opens one.
         Some("live_wake") => Some(json!({ "type": "live_wake" })),
         // A circle drawn with the chord in a call: the circled shot goes in as a look.
+=======
+        Some("live_open") => Some(json!({ "type": "live_open" })),
+        // A circle drawn with the highlight keys in a call: the circled shot goes in as a look.
+>>>>>>> d387efc (✨ [feat] voice: hold ⌃⌘ to highlight, ⌃⌥ is talk only)
         Some("live_look") => Some(json!({ "type": "live_look", "area": msg.get("area") })),
+        // Classic: a circle with nothing said yet; the sidecar listens for the question about it.
+        Some("highlight") => Some(json!({ "type": "highlight", "area": msg.get("area") })),
         // The Mac is going to sleep: the sidecar hangs up an open Live call.
         Some("sleep") => Some(json!({ "type": "system_sleep" })),
         _ => None,
     }
+}
+
+/// The sidecar's keybinds: the highlight pair for the voice helper (macOS), or none when it is off or missing.
+pub(crate) fn highlight_mods(msg: &Value) -> Vec<String> {
+    let mods: Vec<String> = msg.get("highlight").and_then(Value::as_array).map(|m| m.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+    if mods.len() == 2 { mods } else { Vec::new() }
 }
 
 fn handle_voice(app: &AppHandle, msg: Value) {
@@ -353,6 +378,27 @@ mod tests {
     fn a_live_circle_goes_to_the_sidecar_with_its_area() {
         let area = json!({ "file": "/tmp/sidekick-marked-1.png", "rect": [0, 0, 320, 220], "strokes": [[[1, 2]]] });
         assert_eq!(live_line(&json!({ "type": "live_look", "area": area })), Some(json!({ "type": "live_look", "area": area })));
+    }
+
+    #[test]
+    fn a_highlight_hold_in_live_opens_the_call() {
+        assert_eq!(live_line(&json!({ "type": "live_open" })), Some(json!({ "type": "live_open" })));
+    }
+
+    #[test]
+    fn a_classic_highlight_with_no_words_goes_to_the_sidecar_with_its_area() {
+        let area = json!({ "file": "/tmp/sidekick-marked-2.png", "rect": [0, 0, 320, 220], "strokes": [[[1, 2]]] });
+        assert_eq!(live_line(&json!({ "type": "highlight", "area": area })), Some(json!({ "type": "highlight", "area": area })));
+    }
+
+    #[test]
+    fn the_keybinds_highlight_pair_goes_to_the_helper() {
+        let on = json!({ "type": "keybinds", "talk": ["control", "option"], "highlight": ["control", "command"] });
+        assert_eq!(highlight_mods(&on), vec!["control".to_owned(), "command".to_owned()]);
+        // Off (both fallbacks taken), missing (not a Mac) or not a pair: no highlight keys.
+        for off in [json!({ "highlight": null }), json!({}), json!({ "highlight": ["control"] }), json!({ "highlight": "control+command" })] {
+            assert!(highlight_mods(&off).is_empty(), "{off}");
+        }
     }
 
     #[test]

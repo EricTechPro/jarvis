@@ -1,10 +1,11 @@
-// Drawing on the screen while talking. While ⌃⌥ is held, moving the cursor draws teal pen strokes (tapered,
-// faster = thinner, with a soft glow) on a see-through panel over every screen: circle something, no clicking.
-// A stroke counts only once it closes round something: it snaps shut (a glow pulse, a soft click, a trackpad tick)
-// and stays. One circle per talk: after it snaps, the cursor stops drawing until the keys are let go. Lines and
-// scribbles that never close fade on their own and are never sent. When the talk ends, the part of the screen with
-// the circle is captured with it on it and sent with what was said; then it fades.
-// The panels never take a click (macOS may not deliver one while ⌃⌥ is down anyway), and are off screen when empty.
+// Drawing on the screen while talking. While the highlight chord (default ⌃⌘) is held, moving the cursor draws teal
+// pen strokes (tapered, faster = thinner, with a soft glow) on a see-through panel over every screen: circle
+// something, no clicking. A stroke counts only once it closes round something: it snaps shut (a glow pulse, a soft
+// click, a trackpad tick) and stays. One circle at a time: after a short rest the cursor draws again, and the next
+// circle that snaps shut replaces the last. Lines and scribbles that never close fade on their own and are never
+// sent. When the keys are let go, the part of the screen with the circle is captured with it on it and sent with
+// what was said; then it fades.
+// The panels never take a click (macOS may not deliver one while the keys are down anyway), and are off screen when empty.
 import AppKit
 import QuartzCore
 
@@ -264,22 +265,22 @@ final class Ink {
     private var armed = false
     // Following the cursor while armed: where it was, when it last moved, and the panel the stroke is on.
     private var last: CGPoint?, lastMoved = 0.0, onPanel: InkPanel?
-    // A circle has snapped this talk: nothing more draws until the keys are let go.
-    private var snapped = false
+    // When a circle last snapped shut this hold: the cursor rests a moment before it draws the next one.
+    private var snappedAt: Double?
     private static let startAfter: CGFloat = 6, pauseEnds = 0.35
     // The capture of the last talk: under way, or done and waiting to be taken.
     private var pending = false, abandoned = false
     private var result: [String: Any]?
     private var waiter: (([String: Any]?) -> Void)?
 
-    /// The mouse draws only while ⌃⌥ is down; otherwise clicks go to the apps underneath.
+    /// The mouse draws only while the highlight chord is down; otherwise clicks go to the apps underneath.
     func setArmed(_ on: Bool) {
         if on == armed { return }
         armed = on
         if on {
             syncScreens()
             for p in panels { p.orderFrontRegardless() }
-            last = NSEvent.mouseLocation; lastMoved = ProcessInfo.processInfo.systemUptime; onPanel = nil; snapped = false
+            last = NSEvent.mouseLocation; lastMoved = ProcessInfo.processInfo.systemUptime; onPanel = nil; snappedAt = nil
         } else {
             for p in panels {
                 p.view.end()
@@ -292,20 +293,32 @@ final class Ink {
     /// Called every display tick: while armed, the cursor's path becomes ink. A stroke starts once the cursor has
     /// clearly moved (not a nudge) and ends after a short pause or on another screen.
     func follow() {
-        guard armed, !snapped, let prev = last else { return }
+        guard armed, let prev = last else { return }
         let m = NSEvent.mouseLocation, now = ProcessInfo.processInfo.systemUptime
-        if let p = onPanel, now - lastMoved > Self.pauseEnds { snapped = p.view.end(); onPanel = nil; if snapped { return } }
+        // Just snapped: the cursor still sweeping on from the circle doesn't start the next one.
+        if let t = snappedAt, now - t < Self.pauseEnds { last = m; return }
+        if let p = onPanel, now - lastMoved > Self.pauseEnds { onPanel = nil; if p.view.end() { didSnap(on: p, now); return } }
         guard hypot(m.x - prev.x, m.y - prev.y) >= (onPanel == nil ? Self.startAfter : 0.5) else { return }
         last = m; lastMoved = now
         guard let p = panels.first(where: { NSMouseInRect(m, $0.frame, false) }) else { return }
         // The view is flipped: y runs down from the panel's top.
         let at = { (q: CGPoint) in CGPoint(x: q.x - p.frame.minX, y: p.frame.maxY - q.y) }
         if p !== onPanel {
-            if onPanel?.view.end() == true { onPanel = nil; snapped = true; return }
+            if let old = onPanel, old.view.end() { onPanel = nil; didSnap(on: old, now); return }
             onPanel = p
             p.view.begin(at: at(prev))
         }
-        if p.view.move(to: at(m)) { onPanel = nil; snapped = true }
+        if p.view.move(to: at(m)) { onPanel = nil; didSnap(on: p, now) }
+    }
+
+    /// The closed loops a new one replaces: every other closed stroke (lines that never closed aren't loops).
+    static func replaced(_ strokes: [InkStroke], newest: InkStroke) -> [InkStroke] { strokes.filter { $0.closed && $0 !== newest } }
+
+    /// A circle just snapped shut on panel p: it replaces any earlier one, on every screen.
+    private func didSnap(on p: InkPanel, _ now: Double) {
+        snappedAt = now
+        guard let newest = p.view.strokes.last(where: \.closed) else { return }
+        for panel in panels { fade(Self.replaced(panel.view.strokes, newest: newest), in: panel, after: 0) }
     }
 
     private func syncScreens() {

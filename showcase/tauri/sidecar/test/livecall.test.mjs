@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createLiveBrain } from '../livebrain.mjs';
-import { createLiveCall, liveErrorText, lookAtArea } from '../livecall.mjs';
+import { createLiveCall, liveErrorText, lookAtArea, openForHighlight } from '../livecall.mjs';
 import { holdAfterLaunch } from '../agents.mjs';
 
 const fakeTransport = () => {
@@ -424,6 +424,30 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn, now } = {}) => {
   assert.equal(call.wakeOk(), false, 'her goodbye may still be playing');
   t0 += 1500; // past the end of her voice (1.8 s after the hang-up) and the moment after it
   assert.equal(call.wakeOk(), true, 'then a wake opens a call again');
+}
+
+{ // Holding the highlight keys (⌃⌘) in Live opens the call straight away, so she listens while the circle is drawn;
+  // a Classic reply is quieted first. A call already open is left as it is (holding never hangs up).
+  const { call, t } = setup();
+  const order = [];
+  assert.equal(await openForHighlight(call, { quiet: () => order.push(`quiet:${call.open}`) }), true);
+  assert.equal(call.open, true, 'the hold opened a call');
+  assert.deepEqual(order, ['quiet:false'], 'quieted before the call opened');
+  assert.equal(await openForHighlight(call, { quiet: () => order.push('again') }), false);
+  assert.equal(call.open, true, 'a second hold leaves the open call alone');
+  assert.deepEqual(order, ['quiet:false'], 'nothing to quiet in an open call');
+  // Letting go with a circle: the circled area goes in through the same look, into the call the hold opened.
+  const img = Buffer.from([9, 9]);
+  assert.equal(await lookAtArea(call, { file: '/tmp/sidekick-marked-9.png' }, { read: async () => img }), true);
+  assert.equal(t.calls.length, 1, 'no second call');
+  assert.deepEqual(t.calls[0].sent.filter((m) => m.realtime?.video), [{ realtime: { video: { data: img.toString('base64'), mimeType: 'image/png' } } }]);
+  call.hangUp('tap');
+  // sidekick.mjs: the helper's live_open (a highlight hold) opens the call only in Live, with the same quiet; the
+  // talk chord is a plain tap again, and the highlight release still arrives as live_look.
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  assert.match(src, /m\.type === 'live_open'\) \{ if \(voiceModeOf\(config\) === 'live'\) openForHighlight\(liveCall, \{ quiet: \(\) => \{ interruptQuietly\('live'\); speech\.stop\(\); \} \}\)/);
+  const rust = fs.readFileSync(new URL('../../src-tauri/src/voice.rs', import.meta.url), 'utf8');
+  assert.match(rust, /Some\("live_open"\) => Some\(json!\(\{ "type": "live_open" \}\)\)/, 'the shell passes live_open straight to the sidecar');
 }
 
 console.log('livecall tests passed');

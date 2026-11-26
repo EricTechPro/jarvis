@@ -241,7 +241,19 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
 }
 
 /**
- * A circle drawn with the talk chord in a call (the voice helper's live_look): the circled shot goes in as a look, the
+ * Holding the highlight keys (⌃⌘) in Live (the voice helper's live_open): open the call right away, so she listens
+ * while the circle is drawn. quiet runs first, to stop a Classic reply. An open call is left as it is (a hold never
+ * hangs up). True: a call was opened.
+ */
+export async function openForHighlight(call, { quiet = () => {} } = {}) {
+  if (call.open) return false;
+  quiet();
+  await call.toggle();
+  return true;
+}
+
+/**
+ * A circle drawn with the highlight keys in a call (the voice helper's live_look): the circled shot goes in as a look, the
  * same as ⌃⌥A's crop, so it opens a call when there is none. prepare/read/remove: the file steps (sidekick passes
  * fitImage and node:fs); the file is the helper's temp shot and is removed either way. quiet: run before a call opens,
  * to stop a Classic reply still streaming or speaking. False: no area to look at.

@@ -4,7 +4,8 @@
 // (quick tap) on a pause or the next press-and-release. Hold ⌃⌥ = push-to-talk (release sends). Quick tap = hands-free
 // (ends on a pause or another tap). JSON lines on stdout; exits when stdin closes.
 // Modifier state is read with CGEventSource, which needs no Input Monitoring permission.
-// While ⌃⌥ is held, moving the cursor draws on the screen (ink.swift); the marked area goes out with what was said.
+// The highlight chord (default ⌃⌘) is its own key: while it's held, the mic listens as for a hold of ⌃⌥ and moving
+// the cursor draws on the screen (ink.swift); the circled area goes out with what was said. ⌃⌥ never draws.
 // While listening, a small voice-bar pill rides beside the cursor (wave.swift) instead of a transcript bubble.
 // With the wake word on, it also listens quietly for "Hey Jarvis" and starts a hands-free take on hearing it.
 import AVFoundation
@@ -599,6 +600,9 @@ final class Voice {
     // When talking ended and what finished the words (the recogniser, its 2.5 s cap): sent with them, for timing.
     private var finishedAt = 0.0, endedVia = ""
     private var blocked = false, prevChord = false, authorizing = false, reportEmpty = false, failed = false
+    // The chord last read as pressed (talk or highlight), and whether this take is a highlight (it draws).
+    private var prevPressed: Chord?
+    private var highlighting = false
     // The keys already reading down when the chord went down: they can't be part of its shortcut (isShortcut).
     private var heldAtArm = Set<CGKeyCode>()
     private var engine: AVAudioEngine?
@@ -714,8 +718,42 @@ final class Voice {
         guard let m = Self.mask(names) else { return log("ignored chord \(names)") }
         if phase == .wake { stopWake() } else if phase != .idle { cancel() }
         chordMask = m; blocked = true
+        if highlightMask == m { highlightMask = nil; log("highlight chord off: it was the new talk chord") }
         log("talk chord: \(names.joined(separator: "+"))")
     }
+
+    // The highlight chord: held to circle part of the screen (default ⌃⌘), never the talk chord; nil is off.
+    // Set with --highlight or {"cmd":"highlight"} (an empty list or "off" switches it off).
+    enum Chord { case talk, highlight }
+    private var highlightMask: CGEventFlags? = [.maskControl, .maskCommand]
+    static func highlightMask(_ names: [String], talk: CGEventFlags) -> CGEventFlags? {
+        guard let m = mask(names), m != talk else { return nil }
+        return m
+    }
+    func setHighlight(_ names: [String]) {
+        let m = Self.highlightMask(names, talk: chordMask)
+        if m != highlightMask, highlighting, phase != .idle { cancel() }
+        highlightMask = m; blocked = true
+        log(m == nil ? "highlight chord off" : "highlight chord: \(names.joined(separator: "+"))")
+    }
+    /// Which chord the modifier keys are, exactly (an extra modifier makes it neither).
+    static func pressed(_ f: CGEventFlags, talk: CGEventFlags, highlight: CGEventFlags?) -> Chord? {
+        if f == talk { return .talk }
+        if let h = highlight, f == h { return .highlight }
+        return nil
+    }
+    /// The drawing layer is on only while the highlight chord is held for its take; the talk chord never draws.
+    static func inks(highlight: Bool, phase: Phase) -> Bool { highlight && (phase == .armed || phase == .holding) }
+    enum HighlightRelease { case look, clear, finish }
+    /// Letting go of the highlight chord. Live: a closed circle is a look at that area (the call opened at the hold
+    /// stays); no circle just clears the ink and leaves the call as it is. Classic: the take finishes either way (the
+    /// words, if any, are still coming in; highlightEnd decides once they have).
+    static func highlightRelease(live: Bool, circled: Bool) -> HighlightRelease { live ? (circled ? .look : .clear) : .finish }
+    enum HighlightEnd { case send, listen, quiet }
+    /// A Classic highlight take once its words are in: words go out (with the circled area, if any); a circle with no
+    /// words yet keeps listening hands-free for the question (the app asks by typing after 12 s); neither is dropped
+    /// quietly (no "I didn't hear you" for a highlight that was let go).
+    static func highlightEnd(words: Bool, circled: Bool) -> HighlightEnd { words ? .send : circled ? .listen : .quiet }
 
     private static let modifierKeys: Set<CGKeyCode> = [0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F]
     private static let tapLimit = 0.25
@@ -745,10 +783,6 @@ final class Voice {
     }
 
     // ---------- Live mode ----------
-    enum LiveRelease { case look, toggle }
-    /// Letting go of ⌃⌥ in Live: a closed circle drawn during the hold is a look at that area (the call is left as it
-    /// is, or opened by the look); anything else opens or hangs up the call.
-    static func liveRelease(circled: Bool) -> LiveRelease { circled ? .look : .toggle }
     // {"cmd":"live_mode"}: the chord's tap is reported as {"type":"live_toggle"} (the app opens or hangs up the call)
     // instead of starting a take, so there's no pause that ends a turn and no muted output. The wake word, when on, is
     // listened for only while no call has the mic, and reported as {"type":"live_wake"} (the app opens a call).
@@ -817,16 +851,22 @@ final class Voice {
     }
 
     func tick() {
-        // Drawing follows the keys: only while ⌃⌥ is down for a talk.
-        defer { ink.setArmed(phase == .armed || phase == .holding); ink.follow(); wave.tick(); buddy.tick() }
+        // Drawing follows the keys: only while the highlight chord is down for its take.
+        defer { ink.setArmed(Self.inks(highlight: highlighting, phase: phase)); ink.follow(); wave.tick(); buddy.tick() }
         let now = uptime()
         let f = CGEventSource.flagsState(.combinedSessionState).intersection(Self.allMods)
-        let held = f.intersection(chordMask)
-        let down = held == chordMask // once talking, a stray extra modifier doesn't count as letting go
-        let extra = !f.subtracting(chordMask).isEmpty
-        let chord = down && !extra
+        let pressed = Self.pressed(f, talk: chordMask, highlight: highlightMask)
+        // A chord newly pressed (not one still held from a shortcut or a take that was dropped).
+        let started = pressed != nil && pressed != prevPressed && !blocked ? pressed : nil
+        defer { prevPressed = pressed }
+        // The chord this take listens to: the one that started it.
+        let mask = highlighting ? (highlightMask ?? chordMask) : chordMask
+        let held = f.intersection(mask)
+        let down = held == mask // once talking, a stray extra modifier doesn't count as letting go
+        let extra = !f.subtracting(mask).isEmpty
+        let chord = pressed == .talk
         defer { prevChord = chord }
-        if held.isEmpty { blocked = false }
+        if f.intersection(chordMask.union(highlightMask ?? [])).isEmpty { blocked = false }
 
         // Debounced release: true only once ⌃⌥ has been up for releaseDebounce.
         let released: Bool = {
@@ -837,10 +877,10 @@ final class Voice {
 
         switch phase {
         case .idle:
-            if chord && !prevChord && !blocked { arm(now) }
+            if let c = started { arm(now, highlight: c == .highlight) }
             else if wakeAllowed(now) { startWake(now) }
         case .wake:
-            if chord && !prevChord && !blocked { stopWake(); arm(now); return }
+            if let c = started { stopWake(); arm(now, highlight: c == .highlight); return }
             if !wakeOn || wakeHold { stopWake(); return } // while Jarvis answers, the mic stays open but unheard
             let paused = !wakeText.isEmpty && now - heardAt > Self.wakePause && now - voiceAt > Self.wakePause / 2
             // The 30 s refresh waits for a quiet moment, so it can't split "Hey" from "Jarvis".
@@ -848,23 +888,27 @@ final class Voice {
             if paused || (now - wakeAt > Self.wakeRecycle && quiet) || now - wakeAt > Self.wakeRecycle * 2 { recycleWake(now) }
         case .armed:
             // Only the first moment decides shortcut vs. talk: ⌃⌥ plus a key pressed since, ⇧ or ⌘ is a shortcut.
-            if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: ⌃⌥ was part of a shortcut"); cancel(); blocked = true; return }
-            if liveMode {
-                // A shortcut (⌃⌥A) was already caught above. On release, a circle drawn while holding is a look at that
-                // area (shot the same way as Classic's); otherwise it's a tap or hold that opens or hangs up the call.
-                guard released else { return }
-                phase = .idle
-                switch Self.liveRelease(circled: ink.capture()) {
-                case .look: ink.take { area in if let area { emit(["type": "live_look", "area": area]) } }
-                case .toggle: ink.clear(); emit(["type": "live_toggle"])
+            if down && Self.isShortcut(extra: extra, heldAtArm: heldAtArm, now: keysDown()) { log("not a talk: the chord was part of a shortcut"); cancel(); blocked = true; return }
+            if highlighting {
+                if released { releaseHighlight(now); return }
+                // Clearly a hold, not a shortcut: Live opens the call now so it hears what's said while circling.
+                if down && now - chordAt >= Self.tapLimit {
+                    phase = .holding
+                    if liveMode { emit(["type": "live_open"]) } else { showListening("hold", now) }
                 }
+                return
+            }
+            if liveMode {
+                // A shortcut (⌃⌥A) was already caught above, so a release here is a tap that opens or hangs up the call;
+                // holding just waits for the release. The talk chord never draws.
+                if released { phase = .idle; emit(["type": "live_toggle"]) }
                 return
             }
             if released { phase = .handsFree; showListening("handsfree", now); return }
             if down && now - chordAt >= Self.tapLimit { phase = .holding; showListening("hold", now) }
         case .holding:
-            if released { end("released"); finish(); return }
-            if now - listenAt > Self.maxSession { end("max length"); finish() }
+            if released { if highlighting { releaseHighlight(now) } else { end("released"); finish() }; return }
+            if !liveMode && now - listenAt > Self.maxSession { end("max length"); finish() }
         case .handsFree:
             // Pressing again switches to push-to-talk; letting go then sends.
             if chord && !prevChord && !blocked { phase = .holding; releasedAt = nil; return }
@@ -878,21 +922,33 @@ final class Voice {
         }
     }
 
+    /// The highlight chord was let go (highlightRelease). Live: the circle goes into the call as a look, or the ink
+    /// clears; Classic: the take finishes, and finalize sends the words with the circle or keeps listening.
+    private func releaseHighlight(_ now: Double) {
+        if !liveMode { end("highlight released"); finish(); return }
+        phase = .idle; highlighting = false
+        switch Self.highlightRelease(live: true, circled: ink.capture()) {
+        case .look: ink.take { area in if let area { emit(["type": "live_look", "area": area]) } }
+        case .clear, .finish: ink.clear()
+        }
+    }
+
     private func end(_ why: String) { log("session end: \(why) after \(String(format: "%.1f", uptime() - listenAt))s, mic boost \(String(format: "%.1f", autoGain.gain))x") }
 
     // ---------- session ----------
 
-    private func arm(_ now: Double) {
+    private func arm(_ now: Double, highlight: Bool = false) {
         phase = .armed
+        highlighting = highlight
         nothingWait = 8
         chordAt = now
         heldAtArm = keysDown()
         if !heldAtArm.isEmpty { log("chord: keys already down don't count toward a shortcut: \(heldAtArm.sorted())") }
         best = ""
         woke = false
-        // The drawing layer first: starting the mic below holds this thread for a moment (longer with Bluetooth),
-        // and a drag begun in that moment would otherwise land in the app underneath.
-        ink.setArmed(true)
+        // The drawing layer first (highlight only): starting the mic below holds this thread for a moment (longer
+        // with Bluetooth), and a drag begun in that moment would otherwise land in the app underneath.
+        if highlight { ink.setArmed(true) }
         // JARVIS_VOICE_DRYRUN_TEXT: what a dry run "hears", to test what goes out with the words (like pen marks).
         if dryRun { best = ProcessInfo.processInfo.environment["JARVIS_VOICE_DRYRUN_TEXT"] ?? ""; return }
         if liveMode { return } // the call's mic is opened by live_capture, not by the chord
@@ -959,6 +1015,20 @@ final class Voice {
         if text.isEmpty { wave.hide() } else { wave.awaitAnswer() }
         let empty = text.isEmpty && reportEmpty, spoke = voiceAt > listenAt + 0.05
         reportEmpty = false
+        let highlight = highlighting
+        highlighting = false
+        if highlight && text.isEmpty {
+            // A highlight with nothing said yet: the circled area goes to the app, which keeps listening for the
+            // question (then asks by typing); with no circle either, it was let go and is dropped quietly.
+            ink.take { area in
+                switch Self.highlightEnd(words: false, circled: area != nil) {
+                case .listen: log("highlight: circled, nothing said yet"); emit(["type": "highlight", "area": area ?? [:]])
+                case .send, .quiet: break
+                }
+                emit(["type": "state", "state": "idle"])
+            }
+            return
+        }
         let rest = {
             emit(["type": "state", "state": "idle"])
             // Listened but got no words: say so instead of closing silently.
@@ -989,6 +1059,7 @@ final class Voice {
         rec?.cancel(); rec = nil
         finishTimer?.invalidate(); finishTimer = nil
         phase = .idle
+        highlighting = false
         woke = false; wakeCooldownUntil = uptime() + Self.wakeCooldown
         reportEmpty = false
         ink.clear()
@@ -1427,6 +1498,11 @@ if args.contains("--test-snap") {
     box += stride(from: CGFloat(120), through: 0, by: -6).map { CGPoint(x: $0, y: 90) }
     box += stride(from: CGFloat(90), through: 0, by: -6).map { CGPoint(x: 2, y: $0) }
     check("a rough box snaps", Loop.closing(box) != nil)
+    // Each closed loop in one hold replaces the one before; loose lines aren't loops.
+    let first = InkStroke(), line = InkStroke(), second = InkStroke()
+    first.closed = true; second.closed = true
+    check("a new circle replaces the last", Ink.replaced([first, line, second], newest: second).map { $0 === first } == [true])
+    check("the only circle stays", Ink.replaced([line, second], newest: second).isEmpty)
     exit(bad == 0 ? 0 : 1)
 }
 // --test-chord checks when the talk chord counts as part of a shortcut, with made-up key states; exits 1 on a failure.
@@ -1441,6 +1517,26 @@ if args.contains("--test-chord") {
     check("a key pressed after it still does", Voice.isShortcut(extra: false, heldAtArm: [0x00], now: [0x00, 0x01]))
     check("a held key let go isn't a key pressed", !Voice.isShortcut(extra: false, heldAtArm: [0x00], now: []))
     check("an extra ⇧ or ⌘ still counts with a key held", Voice.isShortcut(extra: true, heldAtArm: [0x00], now: [0x00]))
+    // The highlight chord (⌃⌘ by default) is its own key: it circles; the talk chord (⌃⌥) only talks.
+    let ctrlOpt: CGEventFlags = [.maskControl, .maskAlternate], ctrlCmd: CGEventFlags = [.maskControl, .maskCommand]
+    check("⌃⌥ is the talk chord", Voice.pressed(ctrlOpt, talk: ctrlOpt, highlight: ctrlCmd) == .talk)
+    check("⌃⌘ is the highlight chord", Voice.pressed(ctrlCmd, talk: ctrlOpt, highlight: ctrlCmd) == .highlight)
+    check("⌃⌥⌘ together is neither", Voice.pressed([.maskControl, .maskAlternate, .maskCommand], talk: ctrlOpt, highlight: ctrlCmd) == nil)
+    check("⌃ alone is neither", Voice.pressed([.maskControl], talk: ctrlOpt, highlight: ctrlCmd) == nil)
+    check("highlight off: ⌃⌘ is nothing", Voice.pressed(ctrlCmd, talk: ctrlOpt, highlight: nil) == nil)
+    check("the highlight pair is read like the talk pair", Voice.highlightMask(["control", "command"], talk: ctrlOpt) == ctrlCmd)
+    check("a highlight pair the same as talk is refused", Voice.highlightMask(["option", "control"], talk: ctrlOpt) == nil)
+    check("no pair (off) is no highlight", Voice.highlightMask([], talk: ctrlOpt) == nil)
+    check("the talk chord never inks", !Voice.inks(highlight: false, phase: .armed) && !Voice.inks(highlight: false, phase: .holding))
+    check("the highlight chord inks while it's held", Voice.inks(highlight: true, phase: .armed) && Voice.inks(highlight: true, phase: .holding))
+    check("no ink once it's let go", !Voice.inks(highlight: true, phase: .finishing) && !Voice.inks(highlight: true, phase: .idle))
+    // Classic: letting go finishes the take (the words, if any, are still coming in), circle or not.
+    check("Classic, let go with a circle: the take finishes", Voice.highlightRelease(live: false, circled: true) == .finish)
+    check("Classic, let go with no circle: the take finishes", Voice.highlightRelease(live: false, circled: false) == .finish)
+    check("Classic, words heard: sent with the circled area", Voice.highlightEnd(words: true, circled: true) == .send)
+    check("Classic, words and no circle: sent like a talk", Voice.highlightEnd(words: true, circled: false) == .send)
+    check("Classic, a circle and no words yet: keep listening for the question", Voice.highlightEnd(words: false, circled: true) == .listen)
+    check("Classic, no circle and no words: dropped quietly", Voice.highlightEnd(words: false, circled: false) == .quiet)
     exit(bad == 0 ? 0 : 1)
 }
 // --test-livemic: the Live call's mic frames (16 kHz 16-bit mono PCM) from a 48 kHz float mic, and the crop chord
@@ -1484,9 +1580,10 @@ if args.contains("--test-livemic") {
     let msg = LivePCM.message(Data([1, 0, 2, 0]))
     check("the frame message", msg["type"] as? String == "pcm" && msg["data"] as? String == "AQACAA==")
     check("⌃⌥A (the crop) is a shortcut, not a tap", Voice.isShortcut(extra: false, heldAtArm: [], now: [0x00]))
-    // Circling in a call, the same gesture as Classic: a closed circle on release is a look, not a hang-up.
-    check("released after circling: the circled area is a look", Voice.liveRelease(circled: true) == .look)
-    check("released without a circle: a tap or hold opens or hangs up the call", Voice.liveRelease(circled: false) == .toggle)
+    // Circling in a call is the highlight chord's: a closed circle on release is a look; no circle just clears the
+    // ink and leaves the call as it is. The talk chord in a call is a plain tap that opens or hangs up.
+    check("highlight let go after circling: the circled area is a look", Voice.highlightRelease(live: true, circled: true) == .look)
+    check("highlight let go without a circle: the ink clears, the call stays", Voice.highlightRelease(live: true, circled: false) == .clear)
     check("allowed: the call's mic opens", LiveMic.access(.authorized) == .open)
     // Not asked yet, or an ad-hoc update whose old grant no longer matches (macOS reports it as not asked): ask, as a take does.
     check("not asked yet: the call asks for the mic", LiveMic.access(.notDetermined) == .ask)
@@ -1571,6 +1668,7 @@ var signalSources: [DispatchSourceSignal] = []
 let voice = Voice()
 if args.contains("--no-mute") { OutputMute.enabled = false }
 if let i = args.firstIndex(of: "--chord"), i + 1 < args.count { voice.setChord(args[i + 1].components(separatedBy: ",")) }
+if let i = args.firstIndex(of: "--highlight"), i + 1 < args.count { voice.setHighlight(args[i + 1] == "off" ? [] : args[i + 1].components(separatedBy: ",")) }
 if LiveTest.url != nil { OutputMute.enabled = false; voice.setWake(true); LiveTest.start() }
 // The Mac is going to sleep: the app hangs up a Live call, so no session keeps running (and costing) while it sleeps.
 NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in emit(["type": "sleep"]) }
@@ -1588,6 +1686,8 @@ Thread.detachNewThread {
         case "buddy": DispatchQueue.main.async { if msg["on"] as? Bool == true { voice.buddy.show(msg) } else { voice.buddy.hide() } }
         case "buddy_alpha": if let a = msg["a"] as? Double { DispatchQueue.main.async { voice.buddy.setHidden(a < 0.5) } }
         case "chord": if let mods = msg["mods"] as? [String] { DispatchQueue.main.async { voice.setChord(mods) } }
+        // The highlight chord (held to circle part of the screen); an empty list switches it off.
+        case "highlight": if let mods = msg["mods"] as? [String] { DispatchQueue.main.async { voice.setHighlight(mods) } }
         case "watch_clicks": let on = msg["on"] as? Bool == true; DispatchQueue.main.async { voice.watchClicks = on }
         case "sound": if let on = msg["on"] as? Bool { DispatchQueue.main.async { SnapCue.soundOn = on } }
         // The listening pill beside the cursor: off while the notch capsule shows it instead.

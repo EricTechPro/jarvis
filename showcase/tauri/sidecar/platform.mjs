@@ -59,6 +59,15 @@ export function writeChord(platform, talk, saved) {
   return offered.find((c) => samePair(c, saved) && !samePair(c, talk)) ?? offered.find((c) => !samePair(c, talk)) ?? offered[0];
 }
 
+/** The highlight keys (held to circle part of the screen, macOS only for now): the saved pair, else Control+Command,
+ *  else Option+Shift, whichever is first that isn't the talk or type-to-ask pair. null: off (saved as 'off', not a
+ *  Mac, or both fallbacks taken). */
+export function highlightChord(platform, talk, write, saved) {
+  if (platform !== 'darwin' || saved === 'off') return null;
+  const valid = talkChords(platform).filter((c) => samePair(c, saved));
+  return [...valid, ['control', 'command'], ['option', 'shift']].find((c) => !samePair(c, talk) && !samePair(c, write)) ?? null;
+}
+
 /** The voice helper's mic list ({"type":"mics"}), checked: up to 40 mics with a string id, names and ids cut short, and
  *  the one automatic uses now (macOS: the built-in mic while the default is a Bluetooth headset). */
 export function cleanMics(m) {

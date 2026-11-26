@@ -89,9 +89,10 @@ your-notes/
 ```md
 # shortcuts.md
 
-talk    ⌃ + ⌥        Ctrl + Alt
-type    ⌥ + ⌘        Ctrl + Shift
-show    ⌃ + ⌥ + S    Ctrl + Shift + S
+talk       ⌃ + ⌥        Ctrl + Alt
+highlight  ⌃ + ⌘        (Mac: hold and circle)
+type       ⌥ + ⌘        Ctrl + Shift
+show       ⌃ + ⌥ + S    Ctrl + Shift + S
 ```
 
 ## Models
