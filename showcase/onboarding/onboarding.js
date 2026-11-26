@@ -1232,7 +1232,7 @@
 
   // ---------------------------------------------------------------- second brain
   // A folder of their notes the chat works from (secondbrain.mjs). Create one on the Desktop is the default: the
-  // sidecar makes ~/Desktop/Second Brain, or fills in what's missing when it's already there. Continue saves the
+  // sidecar makes ~/Desktop/<First> OS, or fills in what's missing when it's already there. Continue saves the
   // pick (ob_brain) and moves on once the sidecar says it's done; a folder it refuses shows why and stays.
   const BRAIN_CHOICES = [['desktop', 'Create one on the Desktop'], ['existing', 'Use an existing folder'], ['skip', 'Skip for now']];
   const brain = {
@@ -1247,7 +1247,7 @@
     },
     ready: () => !brain.saving && (brain.choice !== 'existing' || !!brain.folder),
     sub(id) {
-      if (id === 'desktop') return state?.brain?.desktop ? state.brain.desktop.replace(/^\/(Users|home)\/[^/]+/, '~') : 'A new Second Brain folder';
+      if (id === 'desktop') return state?.brain?.desktop ? state.brain.desktop.replace(/^\/(Users|home)\/[^/]+/, '~') : 'A new folder on your Desktop';
       return id === 'existing' ? 'An Obsidian vault or notes folder' : 'Set one up later in the Jarvis panel';
     },
     render() {

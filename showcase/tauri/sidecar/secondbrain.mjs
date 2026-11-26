@@ -6,6 +6,7 @@
 // rules (root's AGENTS.md, or CLAUDE.md) ride in the system prompt, capped so small local models still fit.
 // Jarvis' own data stays in ~/Jarvis.
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 export const RULES_MAX = 6000;
@@ -235,12 +236,34 @@ export function createBrain(locations, home) {
 }
 
 // ---------- the setup guide's default ----------
-/** Where the setup guide's default one goes: ~/Desktop/Second Brain. */
-export const desktopBrainDir = (home) => path.join(home, 'Desktop', 'Second Brain');
-/** Makes (or fills in) ~/Desktop/Second Brain: when it's already there, the locations found in it by name are kept
+/** The account's names, { full, user }: os.userInfo() has no full name, so it's id -F on macOS, the passwd GECOS
+ *  field (before its first comma) on Linux, and USERNAME on Windows. A command that fails gives ''. */
+export function accountNames({ platform = process.platform, user = '', env = process.env, run = runText } = {}) {
+  let full = '';
+  try {
+    if (platform === 'darwin') full = run('id', ['-F']) ?? '';
+    else if (platform === 'win32') full = env.USERNAME ?? '';
+    else if (user) full = String(run('getent', ['passwd', user]) ?? '').split(':')[4]?.split(',')[0] ?? '';
+  } catch { full = ''; }
+  return { full: String(full).trim(), user };
+}
+function runText(cmd, args) {
+  return execFileSync(cmd, args, { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+}
+// What a folder name can't hold (on any of the three systems), and leading or trailing dots and spaces.
+const folderSafe = (s) => String(s ?? '').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, '').replace(/^[.\s]+|[.\s]+$/g, '');
+/** The default second brain's folder name: "<First> OS", First being the full name's first word, else the username,
+ *  else "Second Brain". */
+export function brainName({ full, user } = {}) {
+  const first = folderSafe(String(full ?? '').trim().split(/\s+/)[0]) || folderSafe(user);
+  return first ? `${first} OS` : 'Second Brain';
+}
+/** Where the setup guide's default one goes: ~/Desktop/<name> (brainName). */
+export const desktopBrainDir = (home, name = 'Second Brain') => path.join(home, 'Desktop', name);
+/** Makes (or fills in) ~/Desktop/<name>: when it's already there, the locations found in it by name are kept
  *  and only the missing folders and starter files are added, never over a file. → createBrain's result. */
-export function makeDesktopBrain(home) {
-  const root = desktopBrainDir(home), found = detectLocations(root), l = { root };
+export function makeDesktopBrain(home, name) {
+  const root = desktopBrainDir(home, name), found = detectLocations(root), l = { root };
   for (const k of SUBS) l[k] = found[k] || path.join(root, LOC[k].name);
   return createBrain(l, home);
 }

@@ -1,7 +1,7 @@
 // The Second brain page's "Create a New One": the real panel/index.html + panel.js run in a linkedom DOM inside
 // node:vm, in its browser preview (sample data), with the state's home folder set. Picking Create a New One fills
-// the parent folder with ~/Desktop and the name with "Second Brain", so the root it checks (and would make) is
-// ~/Desktop/Second Brain. No browser, no app. Run: npm test
+// the parent folder with ~/Desktop and the name with the sidecar's default ("Sam OS"), so the root it checks (and
+// would make) is ~/Desktop/Sam OS. No browser, no app. Run: npm test
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -36,20 +36,20 @@ w.window.HTMLElement.prototype.animate = () => ({ finished: Promise.resolve(), c
 vm.runInContext(fs.readFileSync(new URL('panel.js', ROOT), 'utf8'), vm.createContext(page));
 // The preview's sample state goes out on a timer: give it this computer's home folder first, as the sidecar does.
 const real = page.__panel;
-page.__panel = (m) => real(m.kind === 'state' ? { ...m, state: { ...m.state, secondBrain: { saved: null, using: null, missing: false, found: [], home: HOME } } } : m);
+page.__panel = (m) => real(m.kind === 'state' ? { ...m, state: { ...m.state, secondBrain: { saved: null, using: null, missing: false, found: [], home: HOME, name: 'Sam OS' } } } : m);
 await tick(20);
 
 const $ = (q) => w.document.querySelector(q);
 assert.ok($('[data-k="sbmode:create"]'), 'the Second brain page is open');
 $('[data-k="sbmode:create"]').dispatchEvent(new page.Event('click'));
 await tick(20);
-assert.equal($('#sb-name').value, 'Second Brain', 'Create a New One: the name is "Second Brain"');
+assert.equal($('#sb-name').value, 'Sam OS', 'Create a New One: the name is the default one, "Sam OS"');
 const parentRow = [...w.document.querySelectorAll('.setting')].find((n) => n.textContent.startsWith('Parent folder'));
 assert.ok(parentRow, 'the parent folder row shows');
 assert.match(parentRow.textContent, /\/Users\/sam\/Desktop/, 'Create a New One: the parent folder is ~/Desktop');
 const check = sent.filter((m) => m.type === 'secondbrain' && m.op === 'check' && m.mode === 'create').at(-1);
 assert.ok(check, 'the new root is checked straight away');
-assert.equal(check.form.root, `${HOME}/Desktop/Second Brain`, 'so the root is ~/Desktop/Second Brain');
-assert.equal(check.form.context, `${HOME}/Desktop/Second Brain/_context`, 'with the usual folders in it');
-console.log('brainsetup-panel: Create a New One starts at ~/Desktop/Second Brain ok');
+assert.equal(check.form.root, `${HOME}/Desktop/Sam OS`, 'so the root is ~/Desktop/Sam OS');
+assert.equal(check.form.context, `${HOME}/Desktop/Sam OS/_context`, 'with the usual folders in it');
+console.log('brainsetup-panel: Create a New One starts at ~/Desktop/<First> OS ok');
 process.exit(0); // the page's own timers (the Home page's clock) would keep it running

@@ -68,7 +68,7 @@ import { createMcp, createMcpTools } from './mcp.mjs';
 import { createLiveBrain } from './livebrain.mjs';
 import { guardTools } from './loopguard.mjs';
 import { deleteSkill, listSkills, readSkill, saveSkill, setExtraSkillsDir, skillIndex } from './skills.mjs';
-import { brainLayout, checkForm, checkSecondBrain, createBrain, desktopBrainDir, KEYS as BRAIN_KEYS, layoutFound, makeDesktopBrain, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
+import { accountNames, brainLayout, brainName, checkForm, checkSecondBrain, createBrain, desktopBrainDir, KEYS as BRAIN_KEYS, layoutFound, makeDesktopBrain, migrateBrain, resolveBrain, secondBrainBlock } from './secondbrain.mjs';
 import { getJob, jobBrief, jobsText, listJobs, markRun, nextJobDue, removeJob, takeDueJobs, updateJob } from './jobs.mjs';
 import { z } from 'zod';
 
@@ -98,6 +98,8 @@ const sayOut = say;
 const VERSION = process.env.JARVIS_VERSION || '0.0.0';
 const UPDATE_REPO = 'EricTechPro/jarvis';
 const HOME = os.homedir();
+// The default second brain's folder name, "<First> OS" (EricTech OS on Eric's Mac), read once.
+const BRAIN_NAME = brainName(accountNames({ user: (() => { try { return os.userInfo().username; } catch { return ''; } })() }));
 // The chat works from ~/Jarvis: commands run there and files given without a full path land there (Data/ and
 // Skills/ inside it stay write-protected by safety.mjs). Made up front so Claude Code always has a folder to start in.
 const WORKDIR = JARVIS_DIR;
@@ -2216,7 +2218,7 @@ const panelNote = (text, bad = false, p = null) => panelOpen && send({ type: 'pa
 // The Second brain page: what's saved, the locations in use (found in root where unset) and what's in them.
 function brainState() {
   const saved = migrateBrain(config.secondBrain), using = brain();
-  return { saved, using, missing: !!saved && !using, found: using ? layoutFound(brainLayout(using)) : [], home: HOME };
+  return { saved, using, missing: !!saved && !using, found: using ? layoutFound(brainLayout(using)) : [], home: HOME, name: BRAIN_NAME };
 }
 // The page's messages: check (the status of each location typed, and what root holds), save (an existing folder,
 // with any location chosen by hand) and create (a new one: folders and starter files, never over a file).
@@ -2830,7 +2832,7 @@ function obState() {
     liveVoice: liveVoiceOf(config, geminiVoice()), // the voice a Live call speaks in (the reply step in Live picks it)
     studio: tts().local ? studioState() : null,
     // The "Your second brain" step: the one saved (its root, or null) and where the default one goes.
-    brain: { root: migrateBrain(config.secondBrain)?.root || null, desktop: desktopBrainDir(HOME) },
+    brain: { root: migrateBrain(config.secondBrain)?.root || null, desktop: desktopBrainDir(HOME, BRAIN_NAME) },
   });
 }
 // The "Your second brain" step's Continue: make (or fill in) the default one on the Desktop, use a chosen folder as
@@ -2839,7 +2841,7 @@ function obBrain(m) {
   const done = (r) => { ob({ kind: 'brain', ...r }); obState(); };
   if (m.choice === 'skip') return done({ ok: true, choice: 'skip' });
   if (m.choice === 'desktop') {
-    const r = makeDesktopBrain(HOME);
+    const r = makeDesktopBrain(HOME, BRAIN_NAME);
     if (!r.ok) return done({ ok: false, error: r.why });
     config.secondBrain = r.locations; saveConfig(); agentStale = true; menu();
     return done({ ok: true, choice: 'desktop', root: r.locations.root, made: r.made, kept: r.kept });

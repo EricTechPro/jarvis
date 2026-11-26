@@ -1008,8 +1008,8 @@
   function sbInit() {
     const b = state.secondBrain ?? {}, saved = b.saved ?? {}, using = b.using ?? {};
     const form = Object.fromEntries(SB_LOCS.map(([k]) => [k, saved[k] || using[k] || '']));
-    // A new one starts as ~/Desktop/Second Brain (the setup guide's default too); both can be changed.
-    ui.sb = { savedKey: JSON.stringify(b.saved ?? null), mode: 'existing', form, over: new Set(SB_LOCS.map(([k]) => k).filter((k) => k !== 'root' && saved[k])), parent: b.home ? joinPath(b.home, 'Desktop') : '', name: 'Second Brain', status: null, found: {}, seq: 0, fill: false };
+    // A new one starts as ~/Desktop/<First> OS (the sidecar's name for it, the setup guide's default too); both can be changed.
+    ui.sb = { savedKey: JSON.stringify(b.saved ?? null), mode: 'existing', form, over: new Set(SB_LOCS.map(([k]) => k).filter((k) => k !== 'root' && saved[k])), parent: b.home ? joinPath(b.home, 'Desktop') : '', name: b.name || 'Second Brain', status: null, found: {}, seq: 0, fill: false };
     if (form.root) sbCheck();
   }
   function sbCheck(fill = false) {

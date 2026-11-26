@@ -1,5 +1,5 @@
 // The setup guide's "Your second brain" step, sidecar side: the real sidekick.mjs spawned with a temp HOME and data
-// dir, driven with ob_brain. The default choice makes ~/Desktop/Second Brain (folders and starter files), a second
+// dir, driven with ob_brain. The default choice makes ~/Desktop/<First> OS (folders and starter files), a second
 // run only fills in what's missing and never writes over a file, an existing folder is reused, "Use an existing
 // folder" saves the one chosen, and Skip saves nothing. No network, no real keys. Run: npm test
 import assert from 'node:assert/strict';
@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { accountNames, brainName } from '../secondbrain.mjs';
 
 const SIDEKICK = fileURLToPath(new URL('../sidekick.mjs', import.meta.url));
 
@@ -52,14 +53,16 @@ async function saved(s, pred, what) {
   for (let i = 0; i < 200; i++) { try { if (pred(s.config())) return s.config(); } catch {} await settle(50); }
   assert.fail(`${what}: ${JSON.stringify((() => { try { return s.config(); } catch { return null; } })())}`);
 }
+// The default folder's name comes from this account (brainname.test.mjs has the cases): "EricTech OS" on Eric's Mac.
+const NAME = brainName(accountNames({ user: os.userInfo().username }));
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-brainsetup-')));
 const homes = [];
 
 try {
-  // The default: a fresh home (no Desktop folder yet) gets ~/Desktop/Second Brain, made in full, and it's saved.
+  // The default: a fresh home (no Desktop folder yet) gets ~/Desktop/<First> OS, made in full, and it's saved.
   {
     const home = tmp(); homes.push(home);
-    const dir = path.join(home, 'Desktop', 'Second Brain');
+    const dir = path.join(home, 'Desktop', NAME);
     const s = start(home);
     const st = await s.hello();
     assert.equal(st.brain?.desktop, dir, 'the guide is told where the default one goes');
@@ -90,11 +93,11 @@ try {
     await s.stop();
   }
 
-  // A Second Brain already on the Desktop, laid out its own way: it's reused, its folders found by name, and only
+  // One already on the Desktop, laid out its own way: it's reused, its folders found by name, and only
   // the missing pieces added (no _context beside its Wiki).
   {
     const home = tmp(); homes.push(home);
-    const dir = path.join(home, 'Desktop', 'Second Brain');
+    const dir = path.join(home, 'Desktop', NAME);
     fs.mkdirSync(path.join(dir, 'Wiki'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# Rules\n');
     const s = start(home);
@@ -124,7 +127,7 @@ try {
     await settle();
     const before = (() => { try { return s.config().secondBrain ?? null; } catch { return null; } })(); // no settings.json yet is fine too
     assert.equal(before, null, 'Skip saves nothing');
-    assert.ok(!fs.existsSync(path.join(home, 'Desktop', 'Second Brain')), 'and makes nothing');
+    assert.ok(!fs.existsSync(path.join(home, 'Desktop', NAME)), 'and makes nothing');
     const bad = await s.brain({ choice: 'existing', root: os.tmpdir() });
     assert.equal(bad.ok, false, 'a folder outside the home folder is refused');
     assert.match(bad.error, /inside your home folder/);

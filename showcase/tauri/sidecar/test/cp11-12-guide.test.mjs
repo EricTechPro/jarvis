@@ -61,7 +61,7 @@ const state = (over = {}) => ({
   kind: 'state', platform: 'darwin', step: 0, sound: true, look: 'jarvis', size: 'default', voice: true, actions: false, login: true,
   filesAsked: true, replies: 'text', voiceMode: 'classic', tts: 'fish', geminiKey: false, geminiVoice: 'Kore', liveVoice: 'Kore',
   geminiVoices: [{ id: 'Kore', style: 'Firm' }], keys: { talk: ['control', 'option'], write: ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' },
-  connected: null, voiceModel: null, brain: { root: null, desktop: '/Users/sam/Desktop/Second Brain' },
+  connected: null, voiceModel: null, brain: { root: null, desktop: '/Users/sam/Desktop/Sam OS' },
   oauth: [{ id: 'anthropic', name: 'Claude', company: 'Anthropic', connected: false }, { id: 'openai', name: 'ChatGPT', company: 'OpenAI', connected: false }],
   apikey: [['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['gemini', 'Gemini'], ['deepseek', 'DeepSeek']].map(([id, name]) => ({ id, name, connected: false, link: `https://example.com/${id}` })),
   ...over,
@@ -197,14 +197,14 @@ const FAKE_KEY = 'sk-cp12-GUIDE-0123456789abcdef';
   const radios = [...g.$('brain-choices').querySelectorAll('[role="radio"]')];
   assert.deepEqual(radios.map((b) => b.querySelector('span').textContent), ['Create one on the Desktop', 'Use an existing folder', 'Skip for now'], 'three choices');
   assert.deepEqual(radios.map((b) => b.getAttribute('aria-checked')), ['true', 'false', 'false'], 'Create one on the Desktop is picked by default');
-  assert.match(radios[0].textContent, /Desktop\/Second Brain/, 'and says where it goes');
+  assert.match(radios[0].textContent, /Desktop\/Sam OS/, 'and says where it goes');
   assert.equal(g.$('next').disabled, false, 'the default is ready to go');
   g.click('next');
   assert.deepEqual(g.sent.at(-1), { type: 'ob_brain', choice: 'desktop' }, 'Continue makes it');
   assert.equal(g.$('next').disabled, true, 'and waits while it is made');
   await tick(5);
   assert.deepEqual(g.visible(), ['step-secondbrain'], 'without moving on yet');
-  g.reply({ kind: 'brain', ok: true, choice: 'desktop', root: '/Users/sam/Desktop/Second Brain', made: [], kept: [] });
+  g.reply({ kind: 'brain', ok: true, choice: 'desktop', root: '/Users/sam/Desktop/Sam OS', made: [], kept: [] });
   await tick(5);
   assert.deepEqual(g.visible(), ['step-find'], 'made: on to Find me');
 }
@@ -246,7 +246,7 @@ const FAKE_KEY = 'sk-cp12-GUIDE-0123456789abcdef';
   // Back on it with one already saved (a resumed setup): that folder, picked.
   const h = openGuide();
   await tick();
-  h.reply(state({ step: 8, brain: { root: '/Users/sam/Notes', desktop: '/Users/sam/Desktop/Second Brain' } }));
+  h.reply(state({ step: 8, brain: { root: '/Users/sam/Notes', desktop: '/Users/sam/Desktop/Sam OS' } }));
   await tick();
   const checked = [...h.$('brain-choices').querySelectorAll('[role="radio"]')].find((b) => b.getAttribute('aria-checked') === 'true');
   assert.match(checked.textContent, /^Use an existing folder/, 'a saved one opens as Use an existing folder');
