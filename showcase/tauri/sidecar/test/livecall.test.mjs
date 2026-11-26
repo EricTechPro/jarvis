@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createLiveBrain } from '../livebrain.mjs';
-import { createLiveCall, liveErrorText } from '../livecall.mjs';
+import { createLiveCall, liveErrorText, lookAtArea } from '../livecall.mjs';
 import { holdAfterLaunch } from '../agents.mjs';
 
 const fakeTransport = () => {
@@ -311,10 +311,48 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   }
 }
 
+{ // A circle drawn with ⌃⌥ in Live (the helper's live_look): the circled shot goes in through look, opening a call if
+  // none is open, and the temp file is removed. No file: nothing happens.
+  const img = Buffer.from([4, 2]);
+  const frames = (s) => s.sent.filter((m) => m.realtime?.video);
+  const { t, call } = setup();
+  const removed = [], fitted = [];
+  const io = { prepare: async (f) => { fitted.push(f); }, read: async (f) => (f === '/tmp/sidekick-marked-1.png' ? img : null), remove: (f) => removed.push(f) };
+  assert.equal(await lookAtArea(call, { file: '/tmp/sidekick-marked-1.png', rect: [0, 0, 320, 220] }, io), true);
+  assert.equal(call.open, true, 'a circle with no call open opens one');
+  assert.deepEqual(frames(t.calls[0]), [{ realtime: { video: { data: img.toString('base64'), mimeType: 'image/png' } } }]);
+  assert.deepEqual(fitted, ['/tmp/sidekick-marked-1.png']);
+  assert.deepEqual(removed, ['/tmp/sidekick-marked-1.png']);
+  assert.equal(await lookAtArea(call, null, io), false);
+  assert.equal(await lookAtArea(call, {}, io), false);
+  assert.equal(frames(t.calls[0]).length, 1, 'no area, no look');
+  call.hangUp('tap');
+  // sidekick.mjs routes the helper's live_look there, only in Live.
+  const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
+  assert.match(src, /m\.type === 'live_look'\) \{ if \(voiceModeOf\(config\) === 'live'\) lookAtArea\(liveCall, m\.area,/);
+  // A Classic reply still streaming or speaking is stopped before the circle opens a call, like a plain tap does.
+  assert.match(src, /m\.type === 'live_look'\)[^\n]*quiet: \(\) => \{ interruptQuietly\('live'\); speech\.stop\(\); \}/);
+}
+
+{ // A circle that opens a call first quiets whatever Classic is doing (quiet runs before the call opens); one drawn
+  // in an open call leaves it alone, the same as a tap of the talk chord.
+  const { call } = setup();
+  const order = [];
+  const io = { read: async () => { order.push(`read:${call.open}`); return Buffer.from([1]); }, quiet: () => order.push(`quiet:${call.open}`) };
+  await lookAtArea(call, { file: '/tmp/sidekick-marked-2.png' }, io);
+  assert.deepEqual(order, ['quiet:false', 'read:false'], 'no call open: quiet first, before the call opens');
+  order.length = 0;
+  await lookAtArea(call, { file: '/tmp/sidekick-marked-3.png' }, io);
+  assert.deepEqual(order, ['read:true'], 'a call already open: nothing to quiet');
+  call.hangUp('tap');
+}
+
 { // sidekick.mjs: in Live the crop goes through liveCall.look and skips the Classic listen/ask; Escape returns before it.
   const src = fs.readFileSync(new URL('../sidekick.mjs', import.meta.url), 'utf8');
   const fn = src.slice(src.indexOf('async function areaSnap()'), src.indexOf('let snapping = false'));
   assert.match(fn, /if \(res\.cancelled\) return;[^]*voiceModeOf\(config\) === 'live'[^]*liveCall\.look\(/);
+  assert.match(fn, /voiceModeOf\(config\) === 'live'\) \{[^]*if \(!liveCall\.open\) \{ interruptQuietly\('live'\); speech\.stop\(\); \}[^]*liveCall\.look\(/,
+    'a crop that opens a call stops a Classic reply first');
 }
 
 { // A fresh sidecar (respawned mid-call) has no call: hangUp says so and sends nothing, so sidekick.mjs must tell the overlay.

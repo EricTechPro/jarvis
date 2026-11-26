@@ -231,3 +231,20 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     news(text) { if (!brain) return false; brain.news(text); return true; },
   };
 }
+
+/**
+ * A circle drawn with the talk chord in a call (the voice helper's live_look): the circled shot goes in as a look, the
+ * same as ⌃⌥A's crop, so it opens a call when there is none. prepare/read/remove: the file steps (sidekick passes
+ * fitImage and node:fs); the file is the helper's temp shot and is removed either way. quiet: run before a call opens,
+ * to stop a Classic reply still streaming or speaking. False: no area to look at.
+ */
+export async function lookAtArea(call, area, { prepare = async () => {}, read, remove = () => {}, quiet = () => {} }) {
+  const file = area?.file;
+  if (typeof file !== 'string' || !file) return false;
+  try {
+    if (!call.open) quiet(); // opening a call: stop a Classic reply first, the same as a tap of the talk chord
+    await prepare(file);
+    await call.look(await read(file), 'image/png');
+    return true;
+  } finally { remove(file); }
+}

@@ -4,6 +4,8 @@
       "version": "0.2.7",
       "date": "2026-11-26",
       "items": [
+        { "kind": "new", "title": "Circle in a call", "text": "In Live, hold ⌃⌥ and circle part of the screen to show it to me, just like in Classic." },
+        { "kind": "fixed", "title": "One voice at a time", "text": "In Live, a circle or ⌃⌥A stops a typed reply first, so we don't talk over each other." },
         { "kind": "fixed", "title": "Stops failing steps sooner", "text": "In Live, when the same app step keeps failing, I stop and look instead of retrying." },
         { "kind": "fixed", "title": "Honest handoffs", "text": "I only say my operator is on it once it has really started." },
         { "kind": "fixed", "title": "Clicks in pop-ups", "text": "Clicking by name now picks what's in the open dialog, like Public." },
