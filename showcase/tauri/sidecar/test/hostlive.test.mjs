@@ -7,7 +7,7 @@ import vm from 'node:vm';
 const noop = () => {};
 const calls = [];
 const el = () => new Proxy({ style: {}, setAttribute: noop, addEventListener: noop, focus: noop, blur: noop }, { get: (t, k) => (k in t ? t[k] : noop) });
-const bubbles = [];
+const bubbles = [], ticks = [];
 const bubble = (kind, opts) => { const h = { kind, opts, text: '', closed: false, busy: false, set(t) { h.text = t; return h; }, processing() { h.busy = true; return h; }, close() { h.closed = true; }, end() { h.closed = true; }, append() {}, focus() {}, get open() { return !h.closed; } }; bubbles.push(h); return h; };
 const agent = { visible: true, pos: { x: 0, y: 0, r: 10 }, hide: noop, setAuto: noop, show: () => false, act: noop, working: noop, hush: noop, typing: () => false,
   listen: (o) => bubble('listen', o), prompt: (o) => bubble('prompt', o), say: (_, o) => bubble('say', o), think: () => bubble('think') };
@@ -18,7 +18,7 @@ const window = {
 const ctx = {
   window, Jarvis: window.Jarvis, navigator: { platform: 'MacIntel' }, performance, Math, JSON, Promise, Set, Map, Array, Object, String, Number, RegExp, Date,
   document: { createElement: el, addEventListener: noop, body: el(), hidden: false },
-  addEventListener: noop, setTimeout: noop, clearTimeout: noop, clearInterval: noop, setInterval: () => 0,
+  addEventListener: noop, setTimeout: noop, clearTimeout: noop, clearInterval: noop, setInterval: (fn) => { ticks.push(fn); return 0; },
   matchMedia: () => ({ matches: false, addEventListener: noop }), requestAnimationFrame: noop, innerWidth: 1512, innerHeight: 982,
 };
 vm.runInNewContext(fs.readFileSync(new URL('../../../jarvis/host.js', import.meta.url), 'utf8'), ctx);
@@ -51,4 +51,39 @@ assert.equal(answers()[0][1].msg.text, null);
 
 host({ kind: 'live', state: 'closed' });
 assert.ok(bubbles.filter((b) => b.kind === 'listen').every((b) => b.closed), 'hanging up closes the bubble');
+// Esc in a Live call hangs it up (the same hang-up as a tap of the chord), and Esc is held for the whole call even
+// with Jarvis off screen; after the call it is let go. Outside a call, Esc is unchanged.
+{
+  const sent = () => calls.filter(([c]) => c === 'sidecar_send').map(([, a]) => JSON.parse(JSON.stringify(a.msg))); // out of the vm's realm
+  const tick = () => { for (const f of ticks) f(); };
+  const escHeld = () => calls.filter(([c]) => c === 'esc_watch').at(-1)?.[1].on;
+  host({ kind: 'voice', type: 'state', state: 'idle', cancelled: true }); // the Classic take above ends
+  agent.visible = false;
+  tick();
+  assert.equal(escHeld(), false, 'nothing on screen: Esc is let go');
+  host({ kind: 'live', state: 'connecting', hint: 'Live · Connecting…' });
+  tick();
+  assert.equal(escHeld(), true, 'held while the call is being made');
+  host({ kind: 'esc' });
+  assert.deepEqual(sent().at(-1), { type: 'live_hangup', via: 'esc' }, 'Esc while connecting drops the call');
+  host({ kind: 'live', state: 'closed' });
+  host({ kind: 'live', state: 'connecting', hint: 'Live · Connecting…' });
+  host({ kind: 'live', state: 'listening', hint: 'Live · Listening…' });
+  host({ kind: 'live', turn: true });
+  host({ kind: 'agent', e: { type: 'start' } }); // she is answering
+  tick();
+  assert.equal(escHeld(), true, 'held while the call is open');
+  host({ kind: 'esc' });
+  assert.deepEqual(sent().at(-1), { type: 'live_hangup', via: 'esc' }, 'Esc while she speaks hangs up, not only stops her');
+  host({ kind: 'agent', e: { type: 'done' } });
+  host({ kind: 'live', state: 'closed' });
+  tick();
+  assert.equal(escHeld(), false, 'after hanging up other apps get Esc back');
+  // No call: Esc mid-answer stops the answer, as before.
+  agent.visible = true;
+  host({ kind: 'agent', e: { type: 'start' } });
+  host({ kind: 'esc' });
+  assert.deepEqual(sent().at(-1), { type: 'menu', id: 'stop', via: 'esc' });
+  assert.ok(!sent().slice(-1).some((m) => m.type === 'live_hangup'));
+}
 console.log('host live tests: passed');

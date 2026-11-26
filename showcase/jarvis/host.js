@@ -487,9 +487,11 @@
   // The call has its own listening bubble, never the voice helper's listening state, so an Allow that's open stays
   // open (in Classic, starting to talk closes it as a no). Her words come through the agent stream, as in Classic.
   // The bubble opens when the call does and again when they speak; between turns her reply stays up.
-  let liveHint = 'Live · Listening…', liveFresh = false; // fresh: the bubble still says Connecting
+  // liveOn: a call is open or being made (Esc hangs it up, so Esc is held meanwhile).
+  let liveHint = 'Live · Listening…', liveFresh = false, liveOn = false; // fresh: the bubble still says Connecting
   function onLive(m) {
     const a = getAgent();
+    if (m.state) liveOn = m.state !== 'closed';
     if (m.turn) { liveFresh = false; if (!notchOn()) { listen?.close(); listen = null; } return; }
     if (m.state === 'closed') { liveFresh = false; listen?.close(); listen = null; if (notchOn() && !responding) N().close(); return; }
     if (m.hint) liveHint = m.hint;
@@ -586,12 +588,14 @@
   // way out once Jarvis has gone). Cards left on screen have their own close button and don't hold Esc. The
   // reminders card does while it shows (it goes by itself in a few seconds).
   // A voice turn counts too: on macOS the sidekick steps away while the mic is on and until the answer shows.
-  const up = () => !!(getAgent()?.visible || Jarvis.notch?.active || ask || Jarvis.panel?.isOpen || Jarvis.ink?.playing || Jarvis.ink?.loose || Jarvis.ink?.reminding || hearing || waveTurn || Jarvis.voiceOut?.playing());
+  // So does a Live call, open or being made: Esc hangs it up, the same hang-up as a tap of the talk chord.
+  const up = () => !!(liveOn || getAgent()?.visible || Jarvis.notch?.active || ask || Jarvis.panel?.isOpen || Jarvis.ink?.playing || Jarvis.ink?.loose || Jarvis.ink?.reminding || hearing || waveTurn || Jarvis.voiceOut?.playing());
   function onEsc() {
     dropAutoListen();
     const a = getAgent();
     if (!a || !up()) return;
     if (ask) { finishAsk(null); return; }
+    if (liveOn) { send({ type: 'live_hangup', via: 'esc' }); return; }
     if (hearing) { hearing = false; send({ type: 'listen_cancel' }); return; }
     if (responding || Jarvis.voiceOut?.playing()) { send({ type: 'menu', id: 'stop', via: 'esc' }); Jarvis.voiceOut?.stop(); return; }
     // A drawing on screen: Esc takes it all away (and the sidecar forgets its parts).

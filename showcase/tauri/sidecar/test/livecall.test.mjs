@@ -180,6 +180,30 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.equal(call.open, false);
 }
 
+{ // Esc hangs up an open call like a tap does, logged as Esc; while it is still being made, Esc drops it unlogged.
+  const t = fakeTransport();
+  const logs = [];
+  let release;
+  const call = createLiveCall({
+    makeBrain: (emit) => new Promise((r) => { release = () => r(createLiveBrain({ emit, connect: t.connect, key: 'k', tools: [], system: '' })); }),
+    ui: () => {}, send: () => {}, ask: async () => null, toClassic: () => {}, log: (event, data) => logs.push([event, data]),
+  });
+  const opening = call.toggle();
+  assert.equal(call.hangUp('esc'), true);
+  release();
+  await opening;
+  assert.equal(call.open, false);
+  assert.equal(t.calls.length, 0);
+  assert.deepEqual(logs.filter(([e]) => e === 'live_end'), [], 'a call that never opened has no end');
+  const second = call.toggle();
+  release();
+  await second;
+  await until(() => t.calls.length === 1);
+  assert.equal(call.hangUp('esc'), true);
+  assert.equal(t.calls[0].closed, true);
+  assert.equal(logs.find(([e]) => e === 'live_end')[1].why, 'esc');
+}
+
 { // Hung up while the call was still being set up: it never opens.
   const t = fakeTransport();
   let release;
@@ -275,6 +299,7 @@ const setup = ({ tools = [], key = 'k', answer = null, newTurn } = {}) => {
   assert.match(src, /\.on\('close', \(\) => \{[^]{0,200}liveCall\.hangUp\('quit'\)/);
   assert.match(src, /type: 'voice_config',[^\n]*live: voiceModeOf\(config\) === 'live'/);
   assert.match(src, /m\.type === 'live_toggle'\) \{ if \(voiceModeOf\(config\) === 'live'\)/, 'a tap only calls in Live mode');
+  assert.match(src, /m\.type === 'live_hangup'\) liveCall\.hangUp\(m\.via === 'esc' \? 'esc' : 'tap'\)/, "the overlay's Esc hangs up through the same path");
   // Live mode starts the helper even with Classic talking off (macOS: the only helper with a Live mic).
   assert.match(src, /const liveTalk = \(\) => MAC && voiceModeOf\(config\) === 'live';/);
   assert.match(src, /type: 'voice_config', enabled: VOICE_OK && \(liveTalk\(\) \|\| \(config\.voice && voiceReady\(\)\)\),/);
