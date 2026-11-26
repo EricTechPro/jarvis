@@ -28,3 +28,4 @@ node_modules/
 # Any other build output
 dist/
 target/
+showcase/tauri/sidecar/coverage/

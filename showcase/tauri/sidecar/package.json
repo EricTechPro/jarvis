@@ -15,7 +15,8 @@
   "scripts": {
     "build": "./bundle.sh",
     "test": "node test/run.mjs",
-    "test:live": "node bench/memory.mjs"
+    "test:live": "node bench/memory.mjs",
+    "coverage": "c8 --all --src . --exclude \"test/**\" --exclude \"bench/**\" --exclude \"node_modules/**\" --exclude \"beats/**\" --exclude \"dist/**\" --reporter=text-summary --reporter=json-summary node test/run.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.321",
@@ -27,6 +28,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "c8": "12.0.0",
     "esbuild": "0.28.2"
   },
   "overrides": {
