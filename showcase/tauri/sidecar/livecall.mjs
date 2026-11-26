@@ -42,9 +42,11 @@ const frameLevel = (data) => {
  * makeBrain(emit): a Live brain for one call (async: the key is looked up first). ask: the app's yes/no card.
  * toClassic: switches the voice mode to Classic. anim(name): a tool's tag, as Classic shows it. hangUpHint: how to hang
  * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
- * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent).
+ * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent). onEnd(messages,
+ * why): at hang-up, what was said in the call as conversation messages (brain.mjs transcript's shape: his words, hers,
+ * the tools and what they returned), for the memory pass Classic runs when a conversation ends; only when he spoke.
  */
-export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN, now = Date.now }) {
+export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, onEnd = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN, now = Date.now }) {
   let brain = null, call = 0, capturing = false, opening = false;
   let ready = false, pending = []; // ready: the call is up; pending: crops waiting for it
   let turn = null; // her reply on screen: { shown, speech }
@@ -55,6 +57,16 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
   // draw in the call: its lines are said by her after the tool answers, so its overlay segments are held here (by
   // tool call id) and released when her voice after that answer starts. answered: the answer went out.
   const held = new Map(); // id → { segs: [ui message], answered, timer }
+  // The call's words, for the memory pass at hang-up. A caption is the whole turn so far; kept: how much of it is in
+  // messages already (a tool call keeps his words up to it, so his turn comes before the tool it led to).
+  let messages = [], words = { user: { text: '', kept: 0 }, jarvis: { text: '', kept: 0 } };
+  const keep = (who) => {
+    const w = words[who], t = w.text.slice(w.kept).trim();
+    w.kept = w.text.length;
+    if (t) messages.push(who === 'user' ? { role: 'user', content: t } : { role: 'assistant', content: [{ type: 'text', text: t }] });
+  };
+  const keepAll = () => { keep('user'); keep('jarvis'); };
+  const turnDone = (who) => { keep(who); words[who] = { text: '', kept: 0 }; };
   const release = (id, voiced) => {
     const h = held.get(id);
     if (!h) return;
@@ -114,12 +126,15 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         if (speechId === e.id) speechId = null;
         return;
       case 'interrupted':
+        turnDone('jarvis'); // her half-said reply
         flushDraws();
         ui({ kind: 'speech', stop: true });
         speechId = null;
         endTurn();
         return;
       case 'caption':
+        words[e.who === 'user' ? 'user' : 'jarvis'].text = e.text;
+        if (e.done) turnDone(e.who === 'user' ? 'user' : 'jarvis');
         if (e.who === 'user') stats.heard = Math.max(stats.heard, e.text.length);
         if (e.who === 'user') { if (!e.done) ui({ kind: 'live', heard: e.text }); return; }
         startTurn();
@@ -131,10 +146,13 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
         return;
       case 'tool':
         log('tool', toolLog({ turn: request, id: e.id, name: e.name, args: e.args }));
+        keepAll();
+        messages.push({ role: 'assistant', content: [{ type: 'tool_call', name: e.name, args: e.args }] });
         startTurn();
         ui({ kind: 'agent', e: { type: 'tool', id: e.id, anim: anim(e.name) } });
         return;
       case 'toolEnd':
+        messages.push({ role: 'tool', content: [{ content: String(e.output ?? ''), isError: !e.ok }] });
         // Cancelled or failed: what it held never draws (a cancelled drawing is taken off the overlay).
         if (held.has(e.id)) { if (e.ok) { held.get(e.id).answered = true; holdTimer(e.id); } else { clearTimeout(held.get(e.id).timer); held.delete(e.id); } }
         ui({ kind: 'agent', e: { type: 'tool_end', id: e.id, isError: !e.ok } });
@@ -163,6 +181,11 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     wakeAfter = Math.max(now(), playEnd) + WAKE_SETTLE_MS;
     closed();
     log('live_end', { why, ...callStats() });
+    keepAll();
+    const said = messages; messages = [];
+    if (said.some((m) => m.role === 'user')) {
+      try { Promise.resolve(onEnd(said, why)).catch((err) => console.error('[live] memory pass', err?.message)); } catch (err) { console.error('[live] memory pass', err?.message); }
+    }
     return true;
   }
 
@@ -193,6 +216,7 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
       opening = false;
       brain = b;
       stats = newStats();
+      messages = []; words = { user: { text: '', kept: 0 }, jarvis: { text: '', kept: 0 } };
       log('live_start', {});
       await b.start();
     },

@@ -1,6 +1,14 @@
 {
   "updates": [
     {
+      "version": "0.2.8",
+      "date": "2026-11-26",
+      "items": [
+        { "kind": "fixed", "title": "Live calls remember you", "text": "When a Live call ends, I keep what you told me about yourself, like after a typed chat." },
+        { "kind": "improved", "title": "Your notes first", "text": "Asked about you or your channels, I check your second brain before saying I don't know." }
+      ]
+    },
+    {
       "version": "0.2.7",
       "date": "2026-11-26",
       "items": [

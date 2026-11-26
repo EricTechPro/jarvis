@@ -347,6 +347,7 @@ export function secondBrainBlock(b, { max = RULES_MAX } = {}) {
   const raw = has('raw'), index = has('index'), src = has('sourceMap');
   const rawName = raw ? `${rel(dir, raw.path)}/` : '';
   const guide = [
+    `When they ask about themselves, their business, channels, projects or people, or a task needs a personal detail (their name, a link, an account) that is not already in what you know about them, look in the second brain first (${index ? `start at ${rel(dir, index.path)}` : 'search_files for it'}, then read what it points to) before ever saying you don't know.`,
     index ? `For questions about their business, work, projects or context, start at ${rel(dir, index.path)}${src && raw ? `, and use ${rel(dir, src.path)} to find the proof in ${rawName}` : ''}.` : '',
     has('context') && raw ? `${rel(dir, has('context').path)} is memory, not proof: check important claims in ${rawName}.` : '',
     raw ? `Never write, move or delete anything in ${rawName} (unedited evidence): the file tools and commands refuse it.` : '',

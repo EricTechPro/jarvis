@@ -135,6 +135,17 @@ export function parseBrain(text, { knownIds = [], wantSummary = false } = {}) {
   return { summary: summary.slice(0, 8000), facts };
 }
 
+// ---------- the memory pass ----------
+
+/** The memory pass over finished turns (a Classic conversation ending, a Live call hung up): null when nothing was
+ *  said, else { model, facts } to learn. ask({ system, text }) → { text, model }: the side model (oneShot). */
+export async function memoryFacts({ messages, name, facts = [], ask, clean }) {
+  const turns = transcript(messages, name, clean);
+  if (!turns.trim()) return null;
+  const { text, model } = await ask({ system: memoryPrompt(name), text: memoryInput({ facts, turns }) });
+  return { model, ...parseBrain(text, { knownIds: facts.map((f) => f.id) }) };
+}
+
 // ---------- the skill pass ----------
 // After a request that took many steps and worked: is it a how-to worth keeping (a skill), or a better version of a
 // skill that was followed? Strict on purpose: most requests are one-offs, and a wrong skill does more harm than none.

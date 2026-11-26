@@ -29,7 +29,7 @@ import {
   addFact, applySynced, syncSnapshot, DIR as STORE_DIR, repeatLabel, startOfDay, applyFold, approxTokens, archiveFolded, clearFacts, clearFinished, compactTrigger, fitContext, flushWrites, forgetFact, isSummary, listItems, listFacts, nextDue, pickFacts, planFold,
   touchFacts, forDisk, forProvider, loadLatestSession, newSession, openCommitments, pruneSessions, readJson, saveSession, takeDueReminders, updateCommitment, writeJson,
 } from './store.mjs';
-import { foldInput, foldPrompt, memoryInput, memoryPrompt, oneShot, parseBrain, parseSkill, shouldLearn, skillInput, skillPrompt, soundsWrong, transcript } from './brain.mjs';
+import { foldInput, foldPrompt, memoryFacts, oneShot, parseBrain, parseSkill, shouldLearn, skillInput, skillPrompt, soundsWrong, transcript } from './brain.mjs';
 import { briefNote } from './brief.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
@@ -1228,14 +1228,15 @@ async function learnFacts(facts) {
   if (added.length) menu();
   return added;
 }
+// s: a Classic session, or a Live call's { id: 'live', messages } (livecall's onEnd).
 async function memoryPass(s, why) {
-  const turns = transcript(s.messages.filter((m) => !isSummary(m)), userName, stripNote);
-  if (!turns.trim() || !config.model) return [];
+  const messages = s.messages.filter((m) => !isSummary(m));
+  if (!config.model || !transcript(messages, userName, stripNote).trim()) return [];
   const t0 = Date.now();
   try {
-    const facts = listFacts();
-    const { text, model } = await oneShot({ ...(await sideRoute()), system: memoryPrompt(userName), text: memoryInput({ facts, turns }) });
-    const out = parseBrain(text, { knownIds: facts.map((f) => f.id) });
+    const sideRouted = await sideRoute();
+    const out = await memoryFacts({ messages, name: userName, facts: listFacts(), clean: stripNote, ask: (o) => oneShot({ ...sideRouted, ...o }) });
+    const model = out.model;
     const learned = await learnFacts(out.facts);
     logLine('memory', { why, session: s.id, model, ms: Date.now() - t0, facts: learned.length, replaced: out.facts.filter((f) => f.replaces).length });
     return learned;
@@ -1437,6 +1438,8 @@ const liveCall = createLiveCall({
   newTurn: startRequest,
   log: logLine,
   inkStarted: (id, seg) => ink.started(id, seg),
+  // A hung-up call gets the memory pass a Classic conversation gets when it ends (logged as memory, why live_<how>).
+  onEnd: (messages, why) => memoryPass({ id: 'live', messages }, `live_${why}`),
 });
 // news: the agent ids this system turn passes on.
 const snoozeListenOn = () => VOICE_OK && !!config.voice && !!config.snoozeListen && voiceReady() && !intro;
