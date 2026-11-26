@@ -206,4 +206,34 @@ assert.equal(LOOP_LIMIT, 3);
   assert.equal((await run(replay, { goals: false })).ran.length, replay.length);
 }
 
+// A goal that moves forward starts over: every page of a wizard ends in "Next", so its first click is one goal for
+// the whole wizard. Two failures on different pages, each followed by a retry that worked, never block a retry.
+{
+  const lines = []; let fail = false;
+  const [act] = guardTools([{ name: 'act_in_app', execute: async () => { if (fail) throw new Error('Step 1: no text field called "x" here.'); return 'done.\nNow showing: Form'; } }],
+    { log: (kind, data) => lines.push({ kind, ...data }), request: () => 1, goals: true });
+  const page = async (label, ok) => { fail = !ok; return act.execute({ target: 'front', steps: [{ do: 'fill', label, text: 'x' }, { do: 'click_text', text: 'Next' }] }, {}).then(() => 'ok', (e) => e.message); };
+  await page('Email', false); assert.equal(await page('Email address', true), 'ok');
+  assert.equal(await page('Name', true), 'ok');
+  await page('Phone', false);
+  assert.equal(await page('Phone number', true), 'ok', 'the retry on the next page still runs');
+}
+
+// A call counts toward the request it started in. Live's act_in_app doesn't block the call, so Eric can speak (a new
+// request) while one still runs; when it fails late, it doesn't eat into the new request's tries.
+{
+  let req = 1; const gates = [];
+  const [act] = guardTools([{ name: 'act_in_app', execute: () => new Promise((res, rej) => gates.push(rej)) }],
+    { request: () => req, goals: true });
+  const go = (text) => act.execute({ target: 'front', steps: [{ do: 'click_text', text }] }, {}).then(() => 'ok', (e) => e.message);
+  const old = go('Old');
+  req = 2;
+  const a = go('A'); gates[1](new Error('timed out')); await a;
+  gates[0](new Error('timed out')); await old; // turn 1's call, failing late
+  const b = go('B'); gates[2](new Error('timed out')); await b;
+  const c = go('C');
+  assert.equal(gates.length, 4, "turn 2's third try runs after only two of its own failures");
+  gates[3](new Error('timed out')); await c;
+}
+
 console.log('loop guard tests: passed');

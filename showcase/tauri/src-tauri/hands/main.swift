@@ -306,13 +306,36 @@ func matchScore(_ low: String, _ q: String) -> Int {
     return low.range(of: pat, options: .regularExpression) != nil ? 1 : 2
 }
 
-/// A modal dialog or sheet in front of a page or window: hits inside it are the ones that can be clicked.
+/// A dialog or sheet in front of a page or window. Chrome gives every ARIA role=dialog the AXApplicationDialog subrole,
+/// modal or not (a cookie banner, Gmail's compose pane), so one only hides what's under it unless it is modal.
 func isModal(_ role: String, _ subrole: String) -> Bool { role == "AXSheet" || subrole == "AXApplicationDialog" || subrole == "AXDialog" }
 struct TextRank { let score: Int; let dialog: Bool; let web: Bool; let area: CGFloat }
-/// Which of two text hits click_text takes first: one inside a dialog in front, then the closer match, then words in the
-/// page over the browser's own tabs and toolbar (a tab titled "Sign in"), then the smaller one.
+/// Which of two text hits click_text takes first: the closer match, then one inside a dialog, then words in the page
+/// over the browser's own tabs and toolbar (a tab titled "Sign in"), then the smaller one.
 func textHitFirst(_ a: TextRank, _ b: TextRank) -> Bool {
-    a.dialog != b.dialog ? a.dialog : a.score != b.score ? a.score < b.score : a.web != b.web ? a.web : a.area < b.area
+    a.score != b.score ? a.score < b.score : a.dialog != b.dialog ? a.dialog : a.web != b.web ? a.web : a.area < b.area
+}
+/// Text hits in click order, without those behind a dialog: a hit outside every dialog whose middle lies under one
+/// can't be clicked (a "Public" cell in the table behind YouTube Studio's visibility dialog).
+func rankTextHits<T>(_ hits: [(rank: TextRank, frame: CGRect, el: T)], dialogs: [CGRect]) -> [T] {
+    hits.filter { h in h.rank.dialog || !dialogs.contains { $0.contains(CGPoint(x: h.frame.midX, y: h.frame.midY)) } }
+        .sorted { textHitFirst($0.rank, $1.rank) }.map { $0.el }
+}
+/// The checkbox or radio a label only starts with (`boxLabelMatch`) is taken over the text click_text found only when
+/// nothing was found, or the text is outside the page or the dialog the box is in.
+func takeLooseBox(hit: (web: Bool, dialog: Bool)?, box: (web: Bool, dialog: Bool)) -> Bool {
+    guard let h = hit else { return true }
+    return (!h.web && box.web) || (!h.dialog && box.dialog)
+}
+/// Inside a dialog or sheet (see isModal).
+func inDialog(_ e: AXUIElement) -> Bool {
+    var cur: AXUIElement? = e
+    for _ in 0..<40 {
+        guard let c = cur else { return false }
+        if isModal(str(c, kAXRoleAttribute) ?? "", str(c, kAXSubroleAttribute) ?? "") { return true }
+        cur = attr(c, kAXParentAttribute).map { $0 as! AXUIElement }
+    }
+    return false
 }
 
 func findTextEls(_ app: AXUIElement, _ w: Win, _ query: String, hidden: Bool = false, limit: Int = 8) -> [(AXUIElement, [String: Any])] {
@@ -320,27 +343,29 @@ func findTextEls(_ app: AXUIElement, _ w: Win, _ query: String, hidden: Bool = f
     let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     guard !q.isEmpty else { return [] }
     let win = CGRect(x: w.x, y: w.y, width: w.w, height: w.h)
-    var hits: [(rank: TextRank, el: AXUIElement, item: [String: Any])] = []
+    var hits: [(rank: TextRank, frame: CGRect, el: (AXUIElement, [String: Any]))] = []
+    var dialogs: [CGRect] = [] // what each dialog covers: a modal one (a sheet, aria-modal) the whole window
     var stack: [(AXUIElement, Int, Bool)] = [(root, 0, false)]
     var visited = 0
     while let (el, depth, inside) = stack.popLast(), visited < 12000 {
         visited += 1
-        let a = attrs(el, [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, "AXPlaceholderValue", kAXChildrenAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXRoleAttribute, kAXSubroleAttribute])
-        let dialog = inside || isModal(strOf(a[7]) ?? "", strOf(a[8]) ?? "")
+        let a = attrs(el, [kAXValueAttribute, kAXTitleAttribute, kAXDescriptionAttribute, "AXPlaceholderValue", kAXChildrenAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXRoleAttribute, kAXSubroleAttribute, "AXModal"])
+        let own = isModal(strOf(a[7]) ?? "", strOf(a[8]) ?? ""), dialog = inside || own
+        if own, let f = frameOf(a[5], a[6]) { dialogs.append(strOf(a[7]) == "AXSheet" || strOf(a[8]) == "AXDialog" || (a[9] as? Bool) == true ? win : f) }
         let texts = a[0..<4].compactMap { strOf($0) }
         if let t = texts.first(where: { $0.lowercased().contains(q) }), let f = frameOf(a[5], a[6]), f.width > 1, f.height > 1, hidden || win.intersects(f) {
             let low = t.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             // A whole word: no letter or digit right before or after. (\\b fails when the text starts or ends with a symbol, like "$1,250".)
             let score = matchScore(low, q)
             let role = strOf(a[7]) ?? ""
-            hits.append((TextRank(score: score, dialog: dialog, web: inWebPage(el), area: f.width * f.height), el, ["text": String(t.prefix(80)), "match": ["exact", "word", "partial"][score], "role": ROLE_NAME[role] ?? role.replacingOccurrences(of: "AX", with: "").lowercased(),
-                                                     "bounds": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)]]))
+            hits.append((TextRank(score: score, dialog: dialog, web: inWebPage(el), area: f.width * f.height), f, (el, ["text": String(t.prefix(80)), "match": ["exact", "word", "partial"][score], "role": ROLE_NAME[role] ?? role.replacingOccurrences(of: "AX", with: "").lowercased(),
+                                                     "bounds": [Int(f.minX), Int(f.minY), Int(f.width), Int(f.height)]])))
         }
         if depth < 60, let kids = a[4] as? [AXUIElement] {
             for k in kids.reversed() { stack.append((k, depth + 1, dialog)) }
         }
     }
-    return hits.sorted { textHitFirst($0.rank, $1.rank) }.prefix(limit).map { ($0.el, $0.item) }
+    return Array(rankTextHits(hits, dialogs: dialogs).prefix(limit))
 }
 
 /// Activates what a piece of text belongs to: focuses a text field, else presses the element or the nearest
@@ -1490,7 +1515,20 @@ case "--self-test":
     check("a label that only starts with the letters doesn't", !boxLabelMatch("Publicity settings", "public"))
     check("nor one with the word later on", !boxLabelMatch("Make it public", "public"))
     let behind = TextRank(score: 0, dialog: false, web: true, area: 400), inDlg = TextRank(score: 1, dialog: true, web: true, area: 9000)
-    check("a hit in the dialog in front beats a closer match behind it", textHitFirst(inDlg, behind) && !textHitFirst(behind, inDlg))
+    let dlgBox = CGRect(x: 300, y: 200, width: 600, height: 400)
+    check("a hit in the dialog in front beats a closer match behind it", rankTextHits([(rank: behind, frame: CGRect(x: 400, y: 300, width: 40, height: 10), el: "cell"), (rank: inDlg, frame: CGRect(x: 320, y: 220, width: 90, height: 100), el: "radio")], dialogs: [dlgBox]) == ["radio"])
+    // A role=dialog that isn't modal (a cookie banner, Gmail's compose pane) only hides what's under it.
+    check("an exact match beside a non-modal dialog beats a looser one inside it", rankTextHits([(rank: inDlg, frame: CGRect(x: 320, y: 220, width: 90, height: 20), el: "banner"), (rank: behind, frame: CGRect(x: 10, y: 10, width: 40, height: 10), el: "link")], dialogs: [dlgBox]) == ["link", "banner"])
+    check("on equal words, the dialog's hit comes first", rankTextHits([(rank: TextRank(score: 0, dialog: false, web: true, area: 400), frame: CGRect(x: 10, y: 10, width: 40, height: 10), el: "page"), (rank: TextRank(score: 0, dialog: true, web: true, area: 9000), frame: CGRect(x: 320, y: 220, width: 90, height: 100), el: "dialog")], dialogs: [dlgBox]) == ["dialog", "page"])
+    let partials = (0..<9).map { (rank: TextRank(score: 2, dialog: true, web: true, area: 100), frame: CGRect(x: 320, y: 220 + $0 * 20, width: 90, height: 10), el: "partial\($0)") }
+    check("partial matches in a dialog never crowd out a whole one on the page", rankTextHits(partials + [(rank: behind, frame: CGRect(x: 10, y: 10, width: 40, height: 10), el: "help")], dialogs: [dlgBox]).prefix(8).first == "help")
+    // A checkbox or radio whose label only starts with the words: over a found text only when that text is outside the
+    // page or dialog the box is in (click_text "Sign up" presses "Sign up free", not "Sign up for our newsletter").
+    check("a loose box is taken when nothing was found", takeLooseBox(hit: nil, box: (web: true, dialog: false)))
+    check("but not over a button in the same page", !takeLooseBox(hit: (web: true, dialog: false), box: (web: true, dialog: false)))
+    check("nor over a text in the same dialog", !takeLooseBox(hit: (web: true, dialog: true), box: (web: true, dialog: true)))
+    check("it beats a text behind the dialog it's in", takeLooseBox(hit: (web: true, dialog: false), box: (web: true, dialog: true)))
+    check("and the browser's own tabs", takeLooseBox(hit: (web: false, dialog: false), box: (web: true, dialog: false)))
     check("without a dialog, the smaller hit still wins", textHitFirst(TextRank(score: 0, dialog: false, web: true, area: 400), TextRank(score: 0, dialog: false, web: true, area: 9000)))
     check("and a closer match still beats a looser one", textHitFirst(TextRank(score: 0, dialog: true, web: true, area: 9000), TextRank(score: 1, dialog: true, web: true, area: 400)))
     check("a sheet or dialog subrole is a dialog in front", isModal("AXSheet", "") && isModal("AXGroup", "AXApplicationDialog") && isModal("AXWindow", "AXDialog") && !isModal("AXGroup", "AXDocument"))
@@ -1859,7 +1897,7 @@ case "act":
             } else {
                 hit = findTextEls(app, w, q).first(where: { clickMatch($0.1) })
                 if let box = boxes.first, hit == nil || !inWebPage(hit!.0) { hit = (box.0, ["text": box.1["label"] ?? q]) }
-                else if let box = loose.first(where: { inWebPage($0.0) }) ?? loose.first, hit == nil || (hit!.1["match"] as? String) != "exact" || (!inWebPage(hit!.0) && inWebPage(box.0)) { hit = (box.0, ["text": box.1["label"] ?? q]) }
+                else if let box = loose.first(where: { inWebPage($0.0) }) ?? loose.first, takeLooseBox(hit: hit.map { (web: inWebPage($0.0), dialog: inDialog($0.0)) }, box: (web: inWebPage(box.0), dialog: inDialog(box.0))) { hit = (box.0, ["text": box.1["label"] ?? q]) }
                 if hit == nil, !q.isEmpty, scrollToText(app, w, q) { hit = findTextEls(app, w, q).first(where: { clickMatch($0.1) }) }
                 // Not in the plan's window: an earlier step may have opened a new one (cmd+n, a dialog). Look there.
                 if hit == nil, !q.isEmpty {

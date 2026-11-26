@@ -65,11 +65,17 @@ export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, speech
     },
   });
 
-  // Parallel calls in one turn are answered together, in one toolResponse once the last is done: one per result made
-  // her answer once per result. A cancelled call gets no answer; if every call was cancelled, nothing is sent.
-  async function batch(calls) {
-    const answers = (await Promise.all(calls.map(run))).filter(Boolean);
-    if (answers.length) live.respond(answers);
+  // Parallel calls in one turn are answered together, one toolResponse per kind once the last of that kind is done:
+  // one per result made her answer once per result. The quick (blocking) ones and the slow (NON_BLOCKING) ones go
+  // separately, so a slow one never holds back what Gemini is waiting on. toolEnd fires as the answer goes out. A
+  // cancelled call is dropped at once (its tool may ignore the abort) and gets no answer.
+  function batch(calls) {
+    for (const group of [calls.filter((c) => !slow.has(c.name)), calls.filter((c) => slow.has(c.name))]) if (group.length) answer(group);
+  }
+  async function answer(group) {
+    const done = (await Promise.all(group.map(run))).filter(Boolean);
+    for (const { id, name, ok } of done) emit({ type: 'toolEnd', id, name, ok });
+    if (done.length) live.respond(done.map(({ id, name, response }) => ({ id, name, response })));
     flush();
   }
 
@@ -77,23 +83,29 @@ export function createLiveBrain({ emit, tools, system, slow = SLOW_TOOLS, speech
     const ac = new AbortController();
     running.set(id, ac);
     emit({ type: 'tool', id, name, args });
-    let response, ok = false;
-    try {
-      const tool = val(tools).find((t) => t.name === name);
-      if (!tool) throw new Error(unknownToolMessage(name, val(tools).map((t) => t.name)));
-      const raw = await tool.execute(parse(tool, args), { signal: ac.signal, toolCallId: id });
-      const content = typeof raw === 'string' ? raw : raw?.content ?? '';
-      const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : content;
-      for (const b of parts) if (b.type === 'image' && !ac.signal.aborted) live.pushImage(b.data, b.mediaType);
-      const text = parts.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-      response = { output: text };
-      ok = true;
-    } catch (err) {
-      response = { error: err?.message || String(err) };
-    }
-    running.delete(id);
-    emit({ type: 'toolEnd', id, name, ok: ok && !ac.signal.aborted });
-    return ac.signal.aborted ? null : { id, name, response };
+    const cancelled = new Promise((res) => ac.signal.addEventListener('abort', () => res(null), { once: true }));
+    const work = (async () => {
+      let response, ok = false;
+      try {
+        const tool = val(tools).find((t) => t.name === name);
+        if (!tool) throw new Error(unknownToolMessage(name, val(tools).map((t) => t.name)));
+        const raw = await tool.execute(parse(tool, args), { signal: ac.signal, toolCallId: id });
+        const content = typeof raw === 'string' ? raw : raw?.content ?? '';
+        const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : content;
+        for (const b of parts) if (b.type === 'image' && !ac.signal.aborted) live.pushImage(b.data, b.mediaType);
+        const text = parts.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+        response = { output: text };
+        ok = true;
+      } catch (err) {
+        response = { error: err?.message || String(err) };
+      }
+      running.delete(id);
+      if (ac.signal.aborted) flush();
+      return ac.signal.aborted ? null : { id, name, ok, response };
+    })();
+    const r = await Promise.race([work, cancelled]);
+    if (!r) emit({ type: 'toolEnd', id, name, ok: false });
+    return r;
   }
 
   return {

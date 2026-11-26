@@ -78,6 +78,7 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
       }
       const goal = goals ? goalOf(t.name, args) : null;
       if (fails.req !== req) fails = { req, n: 0, by: new Map() };
+      const mine = fails; // counted into the request this call started in, even if it ends in a later one
       if (goals && t.name === 'act_in_app' && (fails.n >= FAIL_LIMIT || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
         log('tool_outcome', { id, name: t.name, ok: false, reason: 'loop_guard', fails: fails.n });
         throw new Error(STUCK_MESSAGE);
@@ -94,7 +95,8 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
         if (!err && !blind) lastSig.set(t.name, sig);
         log('tool_outcome', { id, name: t.name, ok: !err, changed: err || prev == null ? null : sig !== prev, same, ms: Date.now() - t0, ...(err ? { reason: reasonOf(String(err?.message ?? err)) } : {}) });
       }
-      if (err && goals && t.name === 'act_in_app' && !ctx?.signal?.aborted) { fails.n++; if (goal) fails.by.set(goal, (fails.by.get(goal) ?? 0) + 1); }
+      // A goal that worked starts over (every page of a wizard ends in "Next": one goal, many pages).
+      if (goals && t.name === 'act_in_app' && !ctx?.signal?.aborted) { if (err) { mine.n++; if (goal) mine.by.set(goal, (mine.by.get(goal) ?? 0) + 1); } else if (goal) mine.by.delete(goal); }
       if (err) throw err;
       return raw;
     };

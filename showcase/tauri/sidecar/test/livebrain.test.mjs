@@ -227,4 +227,36 @@ for (const { skipAllow, answer, runs, asks } of [
   brain.stop();
 }
 
+{ // A slow call (NON_BLOCKING) never holds back a quick one's answer: Gemini waits on the quick one, so she'd go silent
+  // for as long as act_in_app sits on an Allow prompt. And a call they cut off, whose tool ignores the abort, holds
+  // nothing back either. toolEnd fires as its answer goes out, so a held drawing starts its wait from the answer.
+  const gates = {};
+  const mk = (name, { ignoresAbort = false } = {}) => ({ name, description: name, parameters: z.object({}), execute: (args, { signal, toolCallId }) => new Promise((res, rej) => { gates[toolCallId] = res; if (!ignoresAbort) signal.addEventListener('abort', () => rej(new Error('aborted'))); }) });
+  const slow = new Set(['act_in_app', 'read_window', 'list_windows']);
+  const { t, out, brain } = setup({ slow, tools: [mk('remember_commitment'), mk('draw'), mk('act_in_app'), mk('read_window'), mk('list_windows', { ignoresAbort: true })] });
+  await brain.start();
+  const s = t.calls[0];
+  const answered = () => responses(s).map((r) => r.id);
+  const ended = () => out.filter((e) => e.type === 'toolEnd').map((e) => e.id);
+  s.server({ toolCall: { functionCalls: [{ id: 'q1', name: 'remember_commitment', args: {} }, { id: 'q2', name: 'draw', args: {} }, { id: 's1', name: 'act_in_app', args: {} }] } });
+  await until(() => gates.q1 && gates.q2 && gates.s1);
+  gates.q1('saved');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(ended(), [], 'no toolEnd before its answer goes out');
+  gates.q2('drawn');
+  await until(() => answered().length === 2);
+  assert.deepEqual(answered(), ['q1', 'q2'], 'the quick ones are answered while act_in_app still runs');
+  assert.deepEqual(ended(), ['q1', 'q2']);
+  gates.s1('done');
+  await until(() => answered().length === 3);
+  s.server({ toolCall: { functionCalls: [{ id: 'r1', name: 'read_window', args: {} }, { id: 'r2', name: 'list_windows', args: {} }] } });
+  await until(() => gates.r1 && gates.r2);
+  s.server({ toolCallCancellation: { ids: ['r2'] } });
+  gates.r1('the window');
+  await until(() => answered().includes('r1'));
+  assert.ok(!answered().includes('r2'), 'the cancelled call gets no answer');
+  assert.equal(out.find((e) => e.type === 'toolEnd' && e.id === 'r2')?.ok, false);
+  brain.stop();
+}
+
 console.log('livebrain: ok');

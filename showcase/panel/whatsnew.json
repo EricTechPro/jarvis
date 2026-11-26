@@ -7,7 +7,10 @@
         { "kind": "fixed", "title": "Stops failing steps sooner", "text": "In Live, when the same app step keeps failing, I stop and look instead of retrying." },
         { "kind": "fixed", "title": "Honest handoffs", "text": "I only say my operator is on it once it has really started." },
         { "kind": "fixed", "title": "Clicks in pop-ups", "text": "Clicking by name now picks what's in the open dialog, like Public." },
-        { "kind": "fixed", "title": "No double answers", "text": "In Live, I answer once after doing several things at the same time." }
+        { "kind": "fixed", "title": "No double answers", "text": "In Live, I answer once after doing several things at the same time." },
+        { "kind": "fixed", "title": "Quick answers stay quick", "text": "In Live, a slow task in an app no longer holds up my other answers." },
+        { "kind": "fixed", "title": "Forms keep going", "text": "A step that failed once on one page of a form no longer stops me on the next one." },
+        { "kind": "fixed", "title": "Right button, not a checkbox", "text": "Clicking a button by name no longer ticks a checkbox that starts with the same words." }
       ]
     },
     {
