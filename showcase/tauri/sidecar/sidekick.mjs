@@ -714,7 +714,7 @@ tools.push(...createMcpTools({
 let requestNo = 0; // the request being answered (nextTurn), for holdAfterLaunch
 holdAfterLaunch(tools, () => requestNo);
 // Every call's outcome in the log and a stop for loops (loopguard.mjs), for Classic and Live alike.
-guardTools(tools, { log: (kind, data) => logLine(kind, data) });
+guardTools(tools, { log: (kind, data) => logLine(kind, data), request: () => requestNo });
 // A new request: Classic starts one per message, a Live call one per turn of theirs. Per-turn Allows, screenshot and
 // window freshness, the ink and the hold after send_agent all go by it.
 const startRequest = () => (requestNo = nextTurn());

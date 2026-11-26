@@ -255,7 +255,7 @@ export function oneYesNoAtATime(ask) {
   };
 }
 
-export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'Jarvis isn\'t running.' }), workdir = HOME, fileDir = () => '', readOnly = () => [], own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, jobs = null, skills = null }) {
+export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'Jarvis isn\'t running.' }), workdir = HOME, fileDir = () => '', readOnly = () => [], own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, rememberAllow = true, jobs = null, skills = null }) {
   // Relative paths (and run_command) start in workdir: ~/Jarvis for the chat, its own folder for an agent.
   // fileDir: where the file tools' relative paths start instead, when set (the chat's second brain, secondbrain.mjs).
   // readOnly: folders write_file and run_command never change (the second brain's _raw, safety.mjs).
@@ -267,6 +267,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
   // Bumped for every new request: what was seen before it may be another page, tab or app by now.
   let turn = 0;
   // Risky clicks the user allowed this request, as "app|kind": one Allow covers that kind in that app until the next request.
+  // rememberAllow false (the operator agent: its whole job, up to 30 minutes, is one request) asks for each plan.
   let allowedClicks = { turn: -1, keys: new Set() };
   async function shotPoint(x, y) {
     const problem = shotProblem(lastShot, turn);
@@ -353,6 +354,8 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     // A picture that isn't the shape of the area it's said to show would point in the wrong place: refuse to point.
     // The model's way of pointing (pixels or a 0–1000 grid), read once per screenshot: the model can change between requests.
     const scale = pointScale();
+    // Another window in front now: act_in_app's "front" is no longer the window read before.
+    if (t === 'front' && lastRead && res.window?.id != null && res.window.id !== lastRead.win) lastRead = null;
     lastShot = !size || !bounds ? null : shotFits(area, ...size) ? { ...shotMap(area, ...size, scale), bounds, win: res.window?.id ?? null, turn } : { unmapped: true, turn };
     const what = res.window ? `the ${res.window.app} window${res.window.title ? ` "${res.window.title}"` : ''}` : 'the whole screen';
     const dims = lastShot?.unmapped ? ` (it doesn't line up with the window on screen, so don't point or click by its pixels; use visible words)` : size ? shotUnits(...size, scale) : '';
@@ -849,7 +852,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
             if (label && isRiskyClick(label)) {
               const kind = riskyKind(label);
               // "front" or "browser" could be a different app by the next call, so those aren't remembered past this plan.
-              const key = /^(front|browser)$/i.test(appName) ? null : `${appName.toLowerCase()}|${kind}`;
+              const key = !rememberAllow || /^(front|browser)$/i.test(appName) ? null : `${appName.toLowerCase()}|${kind}`;
               if (!inThisPlan.has(kind) && !(key && allowedClicks.keys.has(key))) {
                 const where = appName === 'front' ? '' : ` in ${appName}`;
                 const covers = key ? ` Allow covers every "${kind}" click there for the rest of this request.` : '';
@@ -995,6 +998,7 @@ A drawing stays until the user clears it or the window changes; your next drawin
         const isFile = /^[~/.]/.test(t) && await fs.stat(expand(t)).then((s) => s.isFile() && (s.mode & 0o111) !== 0, () => false);
         allowed(checkOpen(t, HOME, { executable: isFile }));
         agentChangesScreen();
+        lastRead = null; // an app or page comes to the front: act_in_app's "front" isn't the window read before any more
         // mailto: has no //, but it's a link too (it used to be taken for an app name and fail).
         const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(t) || /^mailto:/i.test(t), isPath = /^[~/.]/.test(t) || /^[a-z]:\\/i.test(t);
         let r;

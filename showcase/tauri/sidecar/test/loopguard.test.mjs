@@ -91,8 +91,45 @@ assert.equal(LOOP_LIMIT, 3);
 // Wired once on the chat's shared tools, so Classic and Live both log outcomes and both stop loops.
 {
   const side = readFileSync(fileURLToPath(new URL('../sidekick.mjs', import.meta.url)), 'utf8');
-  assert.match(side, /\nguardTools\(tools, \{ log: /);
+  assert.match(side, /\nguardTools\(tools, \{ log: [^\n]*request: \(\) => requestNo/, 'each request (a Classic message or a Live turn) counts from zero');
   assert.match(side, /tools, system: liveSystem/, 'the Live brain gets the same tools array');
+}
+
+// Regression: looking is never refused. A screenshot's text is a fixed caption, so "what's on screen now?" asked four
+// times as they move through slides looked like four identical calls and the fourth was refused, by a message that
+// says to take a screenshot. The picture itself is the change signal.
+{
+  const lines = [];
+  let pixels = 'AAAA';
+  const tools = guardTools([{ name: 'take_screenshot', execute: async () => ({ content: [{ type: 'text', text: 'Screenshot of the Chrome window "Cards".' }, { type: 'image', data: pixels, mediaType: 'image/jpeg' }] }) }], { log: (kind, data) => lines.push({ kind, ...data }) });
+  for (let i = 0; i < 6; i++) await tools[0].execute({ target: 'front' }, { toolCallId: `s${i}` });
+  pixels = 'BBBB';
+  await tools[0].execute({ target: 'front' }, { toolCallId: 's6' });
+  const out = lines.filter((l) => l.kind === 'tool_outcome');
+  assert.ok(out.every((l) => l.ok), 'no screenshot refused, even of a screen that did not change');
+  assert.equal(out.at(-1).changed, true, 'a new picture counts as a change');
+  assert.equal(out[1].changed, false);
+}
+
+// Regression: each request counts from zero. Four "scroll down" messages in a row (a PDF whose text doesn't follow the
+// scroll) used to add up across requests and the fourth was refused.
+{
+  const { state, call } = (() => {
+    const st = { runs: 0 }; let req = 1;
+    const tools = guardTools([{ name: 'act_in_app', execute: async () => { st.runs++; return 'In Preview: scrolled.\nNow showing: doc.pdf\n1 text "Page"'; } }], { request: () => req });
+    return { state: st, call: async (args) => { await tools[0].execute(args, {}); req++; } };
+  })();
+  for (let i = 0; i < 5; i++) await call(scroll());
+  assert.equal(state.runs, 5, 'one scroll per request is never a loop');
+}
+
+// Regression: a result that says nothing about the screen (the helper returned no controls: "In Preview: scrolled.")
+// is no evidence that nothing changed, so it never counts toward a loop.
+{
+  const state = { runs: 0 };
+  const tools = guardTools([{ name: 'act_in_app', execute: async () => { state.runs++; return 'In Preview: scrolled.'; } }]);
+  for (let i = 0; i < 5; i++) await tools[0].execute(scroll(), {});
+  assert.equal(state.runs, 5);
 }
 
 console.log('loop guard tests: passed');

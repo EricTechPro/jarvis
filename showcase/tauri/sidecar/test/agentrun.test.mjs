@@ -104,7 +104,11 @@ const logC = fs.readFileSync(process.env.FAKE_LOG, 'utf8').trim().split('\n').ma
 assert.equal(endC.type, 'done', `${endC.agent.reason}\n${JSON.stringify(logC, null, 1)}`);
 assert.deepEqual([...logC[0].tools].sort(), ['act_in_app', 'finish', 'list_windows', 'open', 'plan', 'read_window', 'take_screenshot']);
 const acts = logC.filter((l) => l.name === 'act_in_app');
-assert.deepEqual(acts.map((l) => l.isError), [false, false, false, true], 'the fourth identical scroll is refused');
+assert.deepEqual(acts.slice(0, 4).map((l) => l.isError), [false, false, false, true], 'the fourth identical scroll is refused');
+// Regression: the operator's tools never start a new request, so one Allow on a Send used to cover every later Send in
+// that app for the rest of the job (up to 30 minutes). Each risky click there asks.
+assert.deepEqual(acts.slice(4).map((l) => l.isError), [false, false], 'both sends ran after a yes');
+assert.equal(events.filter((e) => e.type === 'ask' && e.agent.id === c.id && /Click "Send"/.test(e.agent.ask?.question ?? '')).length, 2, 'each Send in the job asked');
 assert.match(acts[3].result, /nothing changed after 3 tries: stop, take_screenshot/);
 // Screenshots go through the hands helper on macOS and Windows; on Linux the app takes them, so an agent can't (and Live
 // never offers an operator there: its line needs the helper).
