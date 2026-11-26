@@ -22,15 +22,16 @@ const HANDS = ['darwin', 'win32'].includes(process.platform);
 
 // A fake hands helper (same shape as test/hands.test.mjs): logs every call; the window's title comes from title.txt
 // when it exists, so a test can make the screen "change".
-const callLog = path.join(tmp, 'calls.jsonl'), handsFake = path.join(tmp, 'hands.mjs'), titleFile = path.join(tmp, 'title.txt');
+const callLog = path.join(tmp, 'calls.jsonl'), handsFake = path.join(tmp, 'hands.mjs'), titleFile = path.join(tmp, 'title.txt'), textsFile = path.join(tmp, 'texts.json');
 fs.writeFileSync(handsFake, `import fs from 'node:fs'; const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(callLog)}, JSON.stringify(a) + '\\n');
 const title = fs.existsSync(${JSON.stringify(titleFile)}) ? fs.readFileSync(${JSON.stringify(titleFile)}, 'utf8') : 'Cards';
+const texts = fs.existsSync(${JSON.stringify(textsFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(textsFile)}, 'utf8')) : ['Hello cards'];
 const win = { id: 7, app: 'Chrome', title, bounds: [0, 0, 800, 600] };
 let o = { ok: true, window: win };
-if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ role: 'button', label: 'Video +' }], texts: [] };
+if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ role: 'button', label: 'Video +' }], texts: fs.existsSync(${JSON.stringify(textsFile)}) ? texts : [] };
 if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
-if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ role: 'button', label: 'Save' }], texts: ['Hello cards'], note: '' };
+if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ role: 'button', label: 'Save' }], texts, note: '' };
 if (a[0] === 'front') o = { ok: true, app: win.app, title: win.title };
 if (a[0] === 'capture') { fs.writeFileSync(a[1], 'x'); o = { ok: true, file: a[1], window: win, pixels: [800, 600] }; }
 console.log(JSON.stringify(o));
@@ -56,6 +57,8 @@ fs.mkdirSync(path.join(brainDir, '_raw'), { recursive: true });
 fs.mkdirSync(path.join(brainDir, '_context'), { recursive: true });
 fs.writeFileSync(path.join(brainDir, '_context', 'goals.md'), '# Goals\nShip Jarvis v0.2.6 by Friday.\n');
 fs.writeFileSync(path.join(brainDir, '_raw', 'call.txt'), 'raw evidence');
+fs.writeFileSync(path.join(brainDir, '_context', 'index.md'), '# Index\n- [[youtube]]: _context/youtube.md, the channel\n');
+fs.writeFileSync(path.join(brainDir, '_context', 'youtube.md'), '# YouTube\nOwner: Eric Tech\nChannel: https://www.youtube.com/@EricTech\n');
 
 const overlay = [], callUi = [], sends = [], outcomes = [], events = [], lists = [];
 const noop = async () => {};
@@ -174,6 +177,10 @@ await cp('CP-2 second brain: read, list, search and write notes; _raw and secret
   const w = await call('write_file', { path: '_context/todo.md', content: '- test Live' });
   assert.equal(w.error, undefined, w.error);
   assert.equal(fs.readFileSync(path.join(brainDir, '_context', 'todo.md'), 'utf8'), '- test Live');
+  // Shell commands start in the second brain too, so a relative path in run_command points at the same notes.
+  const sh = await call('run_command', { command: process.platform === 'win32' ? 'type _context\\goals.md' : 'grep -n Friday _context/goals.md' });
+  assert.equal(sh.error, undefined, sh.error);
+  assert.match(sh.output, /Ship Jarvis v0\.2\.6 by Friday/, 'run_command with a relative path reads the brain');
   const raw = await call('write_file', { path: '_raw/call.txt', content: 'overwritten' });
   assert.ok(raw.error, 'writing into _raw is refused');
   assert.equal(fs.readFileSync(path.join(brainDir, '_raw', 'call.txt'), 'utf8'), 'raw evidence', '_raw is untouched');
@@ -281,7 +288,28 @@ if (HANDS) {
     assert.equal((await call('act_in_app', scroll)).error, undefined, 'a changed result resets the count');
     fs.rmSync(titleFile);
   });
-} else console.log('e2e live: hands paths (CP-5, CP-6 act_in_app, CP-7) skipped (macOS and Windows only)');
+
+  await cp('CP-11 "fill this in from what you know about me": the doc\'s blank lines, the brain\'s facts, then act_in_app types each value', async () => {
+    fs.writeFileSync(callLog, '');
+    fs.writeFileSync(textsFile, JSON.stringify(['Sponsor form', 'Name:', 'Channel URL:']));
+    const rw = await call('read_window', { target: 'front' });
+    assert.match(rw.output, /Name:/); assert.match(rw.output, /Channel URL:/);
+    // Not in memory: the brain, with the file tools, index first.
+    assert.match((await call('read_file', { path: '_context/index.md' })).output, /_context\/youtube\.md/);
+    const notes = (await call('read_file', { path: '_context/youtube.md' })).output;
+    const name = notes.match(/Owner: (.+)/)[1], url = notes.match(/Channel: (\S+)/)[1];
+    // One field per call, a check (the result's window) after each.
+    for (const [label, value] of [['Name:', name], ['Channel URL:', url]]) {
+      const r = await call('act_in_app', { target: 'front', steps: [{ do: 'click_text', text: label }, { do: 'key', key: 'end' }, { do: 'type', text: ` ${value}` }] });
+      assert.equal(r.error, undefined, r.error);
+      assert.match(r.output, /Name:/, 'the window after the step comes back to check');
+    }
+    const typed = acts().map((x) => x.steps.find((st) => st.do === 'type')?.text);
+    assert.deepEqual(typed, [' Eric Tech', ' https://www.youtube.com/@EricTech'], 'each value typed into its line');
+    assert.deepEqual(acts().map((x) => x.steps[0].text), ['Name:', 'Channel URL:']);
+    fs.rmSync(textsFile);
+  });
+} else console.log('e2e live: hands paths (CP-5, CP-6 act_in_app, CP-7, CP-11) skipped (macOS and Windows only)');
 
 // ---- Subagents from Live.
 const ended = () => new Promise((resolve, reject) => {

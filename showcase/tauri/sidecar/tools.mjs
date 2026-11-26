@@ -257,7 +257,8 @@ export function oneYesNoAtATime(ask) {
 
 export function createTools({ allowActions, ui, ask, openUrl, onCommitments, focus = null, firedReminders = () => [], showList, fmtWhen, commitmentsText, userName, onPlan = () => {}, speak = () => false, onHandoff = () => {}, watchClicks = () => {}, onInkGone = () => {}, askShell = async () => ({ ok: false, error: 'Jarvis isn\'t running.' }), workdir = HOME, fileDir = () => '', readOnly = () => [], own = null, sideSearch = async () => null, pointScale = () => 'pixels', skipAllow = () => false, rememberAllow = true, jobs = null, skills = null }) {
   // Relative paths (and run_command) start in workdir: ~/Jarvis for the chat, its own folder for an agent.
-  // fileDir: where the file tools' relative paths start instead, when set (the chat's second brain, secondbrain.mjs).
+  // fileDir: where the file tools' relative paths and run_command start instead, when set (the chat's second brain,
+  // secondbrain.mjs), so `grep x _context/…` finds the same notes read_file does. Its read-only folders still hold.
   // readOnly: folders write_file and run_command never change (the second brain's _raw, safety.mjs).
   const at = (p) => resolveAt(p, fileDir() || workdir);
   const where = workdir === HOME ? "the user's home folder" : `its working folder (${workdir})`;
@@ -965,17 +966,18 @@ A drawing stays until the user clears it or the window changes; your next drawin
       },
     },
     {
-      name: 'run_command', description: `Run a shell command in ${where} and return its output. Use it for what the other tools can't do (counting, sorting, wc, mdfind, git, moving or copying); to open a file, folder, app or link use the open tool, which needs no yes. Prefer write_file for creating or editing files (several files: one write_file call each, in the same turn); never edit with sed -i or tee, and never make files in a shell loop (for/while), which always needs a yes. A > redirect into a new file is fine; overwriting an existing file, and commands that change things, make the user confirm first, which is slow.`,
+      name: 'run_command', description: `Run a shell command in ${where} (in the user's second brain instead, when one is set) and return its output. Use it for what the other tools can't do (counting, sorting, wc, mdfind, git, moving or copying); to open a file, folder, app or link use the open tool, which needs no yes. Prefer write_file for creating or editing files (several files: one write_file call each, in the same turn); never edit with sed -i or tee, and never make files in a shell loop (for/while), which always needs a yes. A > redirect into a new file is fine; overwriting an existing file, and commands that change things, make the user confirm first, which is slow.`,
       parameters: z.object({ command: z.string() }), executionMode: 'sequential', timeoutMs: 190_000, // up to 2 min to answer, then the 60 s run
       execute: async ({ command }, ctx) => {
         if (!allowActions()) throw new Error(actionsOff);
-        const v = classifyCommand(command, HOME, { exists: existsSync, cwd: workdir, own, readOnly: readOnly() });
+        const cwd = fileDir() || workdir;
+        const v = classifyCommand(command, HOME, { exists: existsSync, cwd, own, readOnly: readOnly() });
         if (v.level === BLOCK) throw new Error(`Blocked for safety: ${v.reason} Don't try to get around this; tell ${userName} what you wanted to do instead.`);
         if (v.level === ASK && !(await confirm(`Run \`${command.length > 70 ? command.slice(0, 67) + '…' : command}\`?${v.reason ? ' ' + v.reason : ''}`, ctx))) {
           throw new Error(`${userName} said no, so the command didn't run.`);
         }
         const [sh, shArgs, shOpts] = shellFor(command);
-        const r = await run(sh, shArgs, { ...shOpts, cwd: workdir, env: { ...process.env, ...GIT_SAFE } });
+        const r = await run(sh, shArgs, { ...shOpts, cwd, env: { ...process.env, ...GIT_SAFE } });
         const out = clip((r.stdout + (r.stderr ? `\n[stderr]\n${r.stderr}` : '')).trim() || '(no output)', 12_000);
         if (r.err && r.err.code !== 0) throw new Error(`Exit ${r.err.code ?? r.err.signal}\n${out}`);
         return out;

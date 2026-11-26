@@ -147,3 +147,12 @@ console.log('prompt (live handoff) tests: passed');
   assert.match(side, /\nOn screen or in an app: [^\n]*use the screen tools \(take_screenshot, read_window, open, act_in_app, draw\) directly[^\n]*never read, search or run commands on Jarvis's own code or tool definitions/, 'no reading its own source first');
 }
 console.log('prompt (own code) tests: passed');
+
+// "Fill this in from what you know about me" (Eric's sponsor doc in a Live call): it took screenshots, ran grep with
+// paths relative to ~/Jarvis and never typed. One rule for Classic and Live: list the blank fields, answer each from
+// memory then the second brain with the file tools, fill each yourself and check it, ask only for what's missing.
+assert.match(side, /Filling something in from what you know about \$\{userName\}[^\n]*read_window[^\n]*the memory section[^\n]*second brain with read_file and search_files[^\n]*not run_command[^\n]*without asking about each field[^\n]*click_text on the label, key end, then type[^\n]*one field per act_in_app call[^\n]*check[^\n]*ask only for the fields you couldn't find/, 'the fill-in rule');
+// A call does a fill-in itself (an operator would not know the values), and checks from act_in_app's result.
+assert.match(side, /Filling in a few fields from what you know about them is the exception: do it yourself/, 'Live fills in itself');
+console.log('prompt: fill-in ok');
+
