@@ -226,7 +226,7 @@ h2 { margin: 0; font: 700 13px/1.35 var(--mono); font-stretch: 87.5%; color: var
 
 /* ---------- providers ---------- */
 .providers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-/* The two sign-ins and the two reply choices: two wide cards a row, room for "Downloading Claude Code… 40%". */
+/* Classic or Live, and the two reply choices: two wide cards a row. (The sign-ins, Claude, ChatGPT and Gemini, take the default three.) */
 .providers.two { grid-template-columns: repeat(2, 1fr); }
 /* Fourteen kinds of API key: smaller cards, three a row. */
 .providers.keys { gap: 6px; margin-bottom: 10px; }
@@ -249,7 +249,7 @@ h2 { margin: 0; font: 700 13px/1.35 var(--mono); font-stretch: 87.5%; color: var
 .prov.on { --bc: var(--accent); --fill: #0a2a28; }
 .prov.on small { color: var(--accent); }
 /* Picked (an API-key provider whose field is open, or a reply choice): a lit frame on the plain fill. */
-.prov[aria-pressed="true"], .prov[aria-checked="true"] { --bc: var(--accent); }
+.prov[aria-pressed="true"], .prov[aria-checked="true"], .prov[aria-expanded="true"] { --bc: var(--accent); }
 .prov[aria-checked="true"] small { color: var(--accent); }
 
 .inline { margin: 4px 0 8px; }

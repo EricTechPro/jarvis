@@ -1,6 +1,14 @@
 {
   "updates": [
     {
+      "version": "0.2.2",
+      "date": "2026-11-25",
+      "items": [
+        { "kind": "new", "title": "Pick Classic or Live in setup", "text": "Setup asks Classic or Live first. Live goes straight to your Gemini key." },
+        { "kind": "new", "title": "Gemini on the sign-in step", "text": "Gemini sits next to Claude and ChatGPT now. Tap it and paste your free key." }
+      ]
+    },
+    {
       "version": "0.2.1",
       "date": "2026-11-25",
       "items": [

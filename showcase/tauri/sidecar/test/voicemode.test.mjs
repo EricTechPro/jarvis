@@ -41,4 +41,20 @@ assert.match(sw, /menu\(\)/);
 assert.match(side, /voiceMode: voiceModeOf\(config\)/, 'panelState reports the active mode');
 assert.match(panel, /picks\('Voice mode', \[\['classic', 'Classic'\], \['live', 'Live'\]\], state\.voiceMode/);
 assert.match(panel, /act\(`voicemode_\$\{x\}`\)/);
+// Setup's "Give me a brain" step asks Classic or Live first: the pick goes through switchVoiceMode, obState reports it,
+// Live opens the Gemini key field (and Continue needs that key), and Classic's sign-in row has a Gemini card.
+const guide = src('../../../onboarding/onboarding.js'), page = src('../../../onboarding/index.html');
+assert.match(side, /m\.type === 'ob_voicemode'\) \{ switchVoiceMode\(m\.mode\); obState\(\); \}/, 'the setup pick saves through switchVoiceMode');
+const ob = side.slice(side.indexOf('function obState()'), side.indexOf('\n}\n', side.indexOf('function obState()')));
+assert.match(ob, /voiceMode: voiceModeOf\(config\)/, 'obState reports the mode, so setup starts on the saved one');
+assert.match(page, /id="ai-version" role="radiogroup"/);
+assert.match(page, /class="providers" id="providers"/, 'three sign-in cards a row, not two');
+assert.match(guide, /send\(\{ type: 'ob_voicemode', mode: id \}\)/);
+assert.match(guide, /\['classic', 'Classic', 'Type or talk, any AI you have'\], \['live', 'Live', 'Talk out loud in real time, uses Gemini'\]/);
+assert.match(guide, /ver: \(\) => ai\.version \?\? \(state\?\.voiceMode === 'live' \? 'live' : 'classic'\)/, 'Classic unless Live was saved');
+assert.match(guide, /ready: \(\) => \(ai\.ver\(\) === 'live' \? ai\.geminiOn\(\) : !!state\?\.connected\)/, 'Live continues on a Gemini key');
+assert.match(guide, /if \(live\) ai\.key = 'gemini';/, 'Live shows the Gemini key field straight away');
+assert.match(guide, /\.\.\.\(gem \? \[ai\.geminiCard\(gem\)\] : \[\]\)/, 'Classic lists a Gemini card after the sign-ins');
+assert.match(guide, /name: 'ai',[^\n]*ready: \(\) => ai\.ready\(\)/);
+assert.match(guide, /'sizes', 'ai-version'\]\)/, 'arrow keys move between Classic and Live');
 console.log('voice mode tests: passed');

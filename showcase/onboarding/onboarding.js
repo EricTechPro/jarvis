@@ -356,17 +356,40 @@
   }
 
   // ---------------------------------------------------------------- step 2: connect AI
+  // First the version: Classic (type or talk, any brain) or Live (a Gemini Live call, so it needs a Gemini key). The pick
+  // is saved as the voice mode (ob_voicemode). Live shows the Gemini key field straight away. Classic shows the sign-in
+  // cards: Claude, ChatGPT, and Gemini, which has no sign-in, so its card opens the Gemini key field.
   // Sign-in cards, or (Use an API key instead) a card per key provider with a field for its key. A sign-in can
   // always be cancelled (click its card again) or swapped for another (click that one), and gives up after
   // 3 minutes, so a browser tab closed halfway never leaves it stuck on "Waiting".
   const LOGIN_MS = 3 * 60_000;
   const ai = {
     busy: null, loginId: null, status: '', timer: null, mode: 'signin', key: null, keyBusy: null,
+    version: null, // 'classic' | 'live' once picked here; until then the saved voice mode
+    ver: () => ai.version ?? (state?.voiceMode === 'live' ? 'live' : 'classic'),
+    // Live speaks with the Gemini key: its own voice key or the AI's Gemini key, either counts.
+    geminiOn: () => !!state?.geminiKey || !!(state?.apikey ?? []).find((p) => p.id === 'gemini')?.connected,
+    ready: () => (ai.ver() === 'live' ? ai.geminiOn() : !!state?.connected),
     render() {
-      $('ai-lead').textContent = ai.mode === 'key' ? 'Pick where your key is from, then paste it.' : "Sign in with an AI account you have. Using GG Coder? You're already in.";
-      $('providers').hidden = ai.mode !== 'signin';
-      $('key-providers').hidden = ai.mode !== 'key';
+      const live = ai.ver() === 'live';
+      if (live) ai.key = 'gemini';
+      const kept = $('ai-version').contains(document.activeElement); // a re-render keeps keyboard focus on the pick
+      $('ai-version').replaceChildren(...[['classic', 'Classic', 'Type or talk, any AI you have'], ['live', 'Live', 'Talk out loud in real time, uses Gemini']].map(([id, name, sub]) => {
+        const checked = ai.ver() === id;
+        const b = el('button', { className: 'px prov', type: 'button', role: 'radio', tabIndex: checked ? 0 : -1 },
+          el('span', { textContent: name }), led(checked ? 'on' : ''), el('small', { textContent: sub }));
+        b.setAttribute('aria-checked', String(checked));
+        b.onclick = () => ai.pickVersion(id);
+        return b;
+      }));
+      if (kept) $('ai-version').querySelector('[aria-checked="true"]')?.focus();
+      $('ai-lead').textContent = live ? (ai.geminiOn() ? "Live talks through Gemini. Your Gemini key is connected, you're set." : 'Live talks through Gemini. Paste a Gemini API key, it is free to get.')
+        : ai.mode === 'key' ? 'Pick where your key is from, then paste it.' : "Sign in with an AI account you have. Using GG Coder? You're already in.";
+      $('providers').hidden = live || ai.mode !== 'signin';
+      $('key-providers').hidden = live || ai.mode !== 'key';
+      $('key-toggle').hidden = live;
       $('key-toggle').textContent = ai.mode === 'key' ? 'Sign in instead' : 'Use an API key instead';
+      const gem = (state?.apikey ?? []).find((p) => p.id === 'gemini');
       $('providers').replaceChildren(...(state?.oauth ?? []).map((p) => {
         const busy = ai.busy === p.id;
         const b = el('button', { className: `px prov${p.connected ? ' on' : ''}${busy ? ' busy' : ''}`, type: 'button' },
@@ -375,7 +398,7 @@
         if (busy) b.setAttribute('aria-label', `${p.name}: ${ai.waitText()}. Click to cancel.`);
         b.onclick = () => (busy ? ai.cancel() : ai.login(p));
         return b;
-      }));
+      }), ...(gem ? [ai.geminiCard(gem)] : []));
       $('key-providers').replaceChildren(...(state?.apikey ?? []).map((p) => {
         const busy = ai.keyBusy === p.id;
         // One line each, so fourteen fit with the key field under them: the light says Connected (and the field's label).
@@ -387,14 +410,41 @@
         return b;
       }));
       const k = (state?.apikey ?? []).find((p) => p.id === ai.key);
-      $('key-form').hidden = ai.mode !== 'key' || !k;
+      // The key field: Live's Gemini key, the Gemini card's, or the one picked under Use an API key instead.
+      $('key-form').hidden = !k || !(live || ai.mode === 'key' || ai.key === 'gemini');
       if (k) {
-        $('key-label').textContent = k.connected ? `${k.name} is connected. Paste a new key to replace it` : `Paste your ${k.name} API key`;
+        const on = k.connected || (k.id === 'gemini' && ai.geminiOn());
+        $('key-label').textContent = on ? `${k.name} is connected. Paste a new key to replace it` : `Paste your ${k.name} API key`;
         $('key-link').hidden = !k.link;
-        $('key-link').setAttribute('aria-label', `Get a ${k.name} API key (opens your browser)`);
+        $('key-link').textContent = k.id === 'gemini' ? 'Get a free key' : 'Get a key';
+        $('key-link').setAttribute('aria-label', `Get a ${k.id === 'gemini' ? 'free ' : ''}${k.name} API key (opens your browser)`);
         $('key-save').disabled = !!ai.keyBusy;
       }
       nav();
+    },
+    // Gemini on the sign-in row: no sign-in, so it opens (or closes) the Gemini key field.
+    geminiCard(g) {
+      const busy = ai.keyBusy === 'gemini', on = g.connected || ai.geminiOn(), open = ai.key === 'gemini';
+      const b = el('button', { className: `px prov${on ? ' on' : ''}${busy ? ' busy' : ''}`, type: 'button' },
+        el('span', { textContent: 'Gemini' }), led(on ? 'on' : busy ? 'busy' : ''),
+        el('small', { textContent: busy ? 'Checking the key…' : on ? 'Connected' : 'Google' }));
+      b.setAttribute('aria-label', `Gemini, Google${busy ? ', checking the key' : on ? ', connected' : ''}. Opens the key field`);
+      b.setAttribute('aria-controls', 'key-form');
+      b.setAttribute('aria-expanded', String(open));
+      b.onclick = () => {
+        if (ai.busy) ai.stop();
+        ai.key = open ? null : 'gemini'; $('login-error').hidden = true; ai.render();
+        if (!open) $('key-input').focus();
+      };
+      return b;
+    },
+    pickVersion(id) {
+      if (ai.version === id) return;
+      ai.version = id; ai.mode = 'signin'; ai.key = id === 'live' ? 'gemini' : null;
+      $('login-error').hidden = true;
+      send({ type: 'ob_voicemode', mode: id });
+      quip(id === 'live' ? 'Ooh, real-time talk!' : 'Classic it is', 2.4);
+      ai.render();
     },
     // What the waiting card says: Claude's download progress, else how to get out of it.
     waitText() {
@@ -406,6 +456,7 @@
     },
     login(p) {
       if (ai.busy) ai.stop();
+      if (ai.key === 'gemini' && ai.mode === 'signin') ai.key = null; // the Gemini field closes for a sign-in
       ai.busy = p.id; ai.status = ''; ai.loginId = `g${Date.now().toString(36)}`;
       $('login-error').hidden = true; ai.render();
       poseFn = POSE.think();
@@ -445,10 +496,10 @@
     },
     enter() {
       ai.render();
-      setTimeout(() => at('ai') && quip(state?.connected ? 'Already connected!' : 'Pick one you have'), 700);
-      if (state?.connected) setTimeout(() => at('ai') && act('hype'), 900);
+      setTimeout(() => at('ai') && quip(ai.ready() ? 'Already connected!' : 'Classic or Live?'), 700);
+      if (ai.ready()) setTimeout(() => at('ai') && act('hype'), 900);
       else poseFn = POSE.point(1.7, 0.05);
-      aim($('providers'));
+      aim($('ai-version'));
     },
     // A sign-in carries on after leaving the step; it's only cancelled by the card or the timeout.
     leave() { if (!ai.busy) poseFn = null; },
@@ -808,7 +859,7 @@
     },
   };
 
-  for (const id of ['chords', 'write-chords', 'looks', 'sizes']) $(id).addEventListener('keydown', (e) => {
+  for (const id of ['chords', 'write-chords', 'looks', 'sizes', 'ai-version']) $(id).addEventListener('keydown', (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
     e.preventDefault();
     const btns = [...$(id).children], i = btns.findIndex((b) => b.getAttribute('aria-checked') === 'true');
@@ -1187,7 +1238,7 @@
     { name: 'perms', enter: 'materialize', next: 'Continue', onEnter: perms.enter, onLeave: perms.leave, ready: () => perms.done(), get skip() { return !isMac(); } },
     // Why the model matters (Jarvis isn't a chatbot): read before picking one.
     { name: 'brain', enter: 'drop', next: 'Got it', onEnter: () => setTimeout(() => { if (at('brain')) quip('I need a good brain!'); }, 650) },
-    { name: 'ai', enter: 'crt', next: 'Continue', onEnter: ai.enter, onLeave: ai.leave, ready: () => !!state?.connected, skip: true },
+    { name: 'ai', enter: 'crt', next: 'Continue', onEnter: ai.enter, onLeave: ai.leave, ready: () => ai.ready(), skip: true },
     { name: 'voice', enter: 'materialize', next: 'Continue', onEnter: replies.enter, onLeave: replies.leave, ready: () => replies.ready(), skip: true },
     { name: 'demo', enter: 'crt', next: 'Continue', onEnter: demo.enter, onLeave: demo.leave },
     { name: 'keys', enter: 'materialize', next: 'Continue', onEnter: keys.enter, onLeave: keys.leave },
@@ -1329,6 +1380,8 @@
       // &tts=gemini&gemini=1: Gemini as the voice, its key saved.
       replies: q.get('replies') === 'voice' ? 'voice' : 'text', fishKey: q.get('fish') === '1',
       bind: q.get('session') === 'wayland' ? Object.fromEntries(['summon', 'talk', 'ask', 'list', 'panel'].map((k) => [k, `'/home/sam/Apps/Jarvis 0.1.33.AppImage' --${k}`])) : null,
+      // &voicemode=live: Live picked in an earlier run (the Gemini key field shows straight away).
+      voiceMode: q.get('voicemode') === 'live' ? 'live' : 'classic',
       tts: q.get('tts') === 'gemini' ? 'gemini' : 'fish', geminiKey: q.get('gemini') === '1', geminiVoice: 'Kore',
       geminiVoices: [['Zephyr', 'Bright'], ['Puck', 'Upbeat'], ['Charon', 'Informative'], ['Kore', 'Firm']].map(([id, style]) => ({ id, style })),
       keys: q.get('platform') === 'win32' ? { talk: ['control', 'option'], write: ['control', 'shift'], summon: 'Control+Shift+KeyS', snap: 'Control+Shift+KeyA' } : { talk: ['control', 'option'], write: win ? ['control', 'shift'] : ['option', 'command'], summon: 'Control+Alt+KeyS', snap: 'Control+Alt+KeyA' }, connected: null,
@@ -1336,7 +1389,7 @@
       oauth: [['anthropic', 'Claude', 'Anthropic'], ['openai', 'ChatGPT', 'OpenAI']].map(([id, name, company]) => ({ id, name, company, connected: false })),
       apikey: [['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['gemini', 'Gemini'], ['xai', 'xAI'], ['kimi-code', 'Kimi Code'], ['moonshot', 'Moonshot'], ['glm', 'Z.AI'], ['minimax', 'MiniMax'],
         ['xiaomi', 'MiMo Plan'], ['xiaomi-credits', 'MiMo Credits'], ['deepseek', 'DeepSeek'], ['sakana', 'Sakana'], ['openrouter', 'OpenRouter'], ['huggingface', 'Hugging Face']]
-        .map(([id, name]) => ({ id, name, connected: id === 'openrouter' && q.get('keys') === '1', link: id === 'xiaomi' ? null : `https://example.com/${id}` })),
+        .map(([id, name]) => ({ id, name, connected: id === 'openrouter' && q.get('keys') === '1', link: id === 'xiaomi' ? null : id === 'gemini' ? 'https://aistudio.google.com/apikey' : `https://example.com/${id}` })),
     };
     let filesAsked = st.filesAsked;
     const logins = new Map(); // sign-in id → its timers, so Cancel stops the simulated one
@@ -1376,9 +1429,11 @@
         setTimeout(() => {
           if (m.key === 'bad') return window.__onboard?.({ kind: 'login', provider: m.provider, phase: 'error', error: 'That key was refused.' });
           st.apikey.find((p) => p.id === m.provider).connected = true; st.connected = { provider: m.provider, model: 'A model' };
+          if (m.provider === 'gemini') st.geminiKey = true; // the Gemini voice and Live share the AI's Gemini key
           window.__onboard?.({ kind: 'login', provider: m.provider, phase: 'done' }); window.__onboard?.({ ...st });
         }, 900);
-      } else if (m.type === 'ob_replies') { st.replies = m.mode; reply({ ...st }); reply({ kind: 'say', text: m.mode === 'voice' ? 'Voice is on!' : 'Text only from now on.' }, 50); }
+      } else if (m.type === 'ob_voicemode') { st.voiceMode = m.mode === 'live' ? 'live' : 'classic'; reply({ ...st }); }
+      else if (m.type === 'ob_replies') { st.replies = m.mode; reply({ ...st }); reply({ kind: 'say', text: m.mode === 'voice' ? 'Voice is on!' : 'Text only from now on.' }, 50); }
       else if (m.type === 'ob_fishkey' || m.type === 'ob_geminikey') {
         // A key of "bad" is refused, like a wrong one.
         const p = m.type === 'ob_geminikey' ? 'gemini' : 'fish';

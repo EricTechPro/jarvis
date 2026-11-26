@@ -2804,6 +2804,7 @@ function obState() {
     // global shortcuts (bind: the commands to bind in the desktop's settings instead) and no Cursor size.
     snap: SNAP_OK, circle: CIRCLE_OK, session: SESSION, bind: HOTKEYS_OK ? null : BIND, sizes: SIZES,
     step: config.onboardStep ?? 0,
+    voiceMode: voiceModeOf(config), // the step-2 pick: Classic (any brain) or Live (a Gemini Live call, needs a Gemini key)
     oauth: signInCards(Object.keys(OAUTH), (id) => oauthOn.get(id), PROVIDER_LABELS),
     apikey: keyCards(AUTH_PROVIDERS, (id) => keyOn.get(id)),
     connected: current && signedIn.get(config.provider) ? { provider: PROVIDER_LABELS[config.provider] ?? config.provider, model: current.name } : null,
@@ -2852,6 +2853,7 @@ async function onGuide(m) {
   else if (m.type === 'chat_answer' && typeof m.text === 'string') introAnswer(m.text.trim().slice(0, 2000));
   else if (m.type === 'chat_skip') { endIntro(); config.introDone = true; saveConfig(); menu(); }
   else if (m.type === 'chat_forget' && typeof m.id === 'string') { await forgetFact(m.id); ob({ kind: 'chat_facts', facts: introFacts() }); menu(); }
+  else if (m.type === 'ob_voicemode') { switchVoiceMode(m.mode); obState(); } // Classic or Live, picked on step 2
   else if (m.type === 'ob_step') { config.onboardStep = Math.max(0, Math.min(8, m.step | 0)); saveConfig(); }
   // Voice needs a working key first: without one, the guide asks for it (ob_fishkey or ob_geminikey) instead.
   else if (m.type === 'ob_replies' && (m.mode === 'text' || (m.mode === 'voice' && speech.on))) { await voiceKeysLoaded; await setReplies(m.mode); }
