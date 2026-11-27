@@ -4,6 +4,9 @@
       "version": "0.2.11",
       "date": "2026-11-27",
       "items": [
+        { "kind": "fixed", "title": "No more \"sent\" that wasn't", "text": "When I can't confirm typing landed, I check the screen before saying a reply was sent." },
+        { "kind": "fixed", "title": "Diagrams get drawn", "text": "Asking me to draw a diagram now draws it, instead of starting a skill first." },
+        { "kind": "improved", "title": "Effort warns when it's slow", "text": "Picking Max or Ultra effort now says answers can take a minute." },
         { "kind": "fixed", "title": "Reply boxes found by name", "text": "A field shown as \"Add a reply…\" now matches when I'm asked for \"Add a reply...\"." }
       ]
     },

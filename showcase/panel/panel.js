@@ -547,6 +547,8 @@
   const effortStops = (m) => (m?.levels?.length ? ['off', ...m.levels.filter((x) => x !== 'off')] : null);
   // Where a slider starts: the slot's level when its model has it, else low, else the model's lowest level.
   const effortStart = (stops, v) => stops.indexOf(stops.includes(v) ? v : stops.includes('low') ? 'low' : stops[1]);
+  // Max and Ultra can take a minute before the first word (GPT-6.2 Sol on Max: 37-52 s), so the hint says so.
+  const effortNote = (level) => (level === 'max' || level === 'ultra' ? 'Much slower: answers can take a minute.' : EFFORT_HINT);
   const effortHint = () => el('p', { className: 'why wrap effort-hint', textContent: EFFORT_HINT });
   // The Effort slider for a slot ('default', a job kind, 'backup1' or 'backup2') running `value` ('provider:modelId').
   // Nothing when no model is chosen; a note when the model can't think. hint: show the explanation under it.
@@ -558,7 +560,9 @@
     const ticks = el('div', { className: 'effort-ticks', 'aria-hidden': 'true' }, stops.map((s, i) => { const t = el('span', { textContent: EFFORT_NAMES[s] ?? s }); t.style.setProperty('--i', i); return t; }));
     ticks.style.setProperty('--n', stops.length);
     // Moving the thumb (input) highlights its stop; letting go (change) sends it.
+    const hintEl = hint ? effortHint() : null;
     const show = (i) => {
+      if (hintEl) hintEl.textContent = effortNote(stops[i]);
       range.style.setProperty('--p', i / (stops.length - 1));
       range.setAttribute('aria-valuetext', EFFORT_NAMES[stops[i]] ?? stops[i]);
       [...ticks.children].forEach((t, j) => t.classList.toggle('on', j === i));
@@ -569,7 +573,7 @@
       on: { input: (e) => show(Number(e.target.value)), change: (e) => act(`effort_${slot}:${stops[Number(e.target.value)]}`) },
     });
     show(Number(range.value));
-    return el('div', { className: 'effort' }, el('p', { className: 'sub', textContent: 'Effort' }), range, ticks, hint ? effortHint() : null);
+    return el('div', { className: 'effort' }, el('p', { className: 'sub', textContent: 'Effort' }), range, ticks, hintEl);
   }
   function modelPage() {
     const on = state.providers.filter((p) => p.on);
