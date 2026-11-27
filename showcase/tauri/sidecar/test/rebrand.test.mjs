@@ -10,10 +10,14 @@ import { fileURLToPath } from 'node:url';
 import { REBRAND, rebrandFiles } from '../rebrand.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const dep = (p) => fs.readFileSync(path.join(here, '..', 'node_modules', '@kenkaiiii', p), 'utf8');
+// Every .js file in a library's dist folder (its chunk names change with each release).
+const distJs = (pkg) => {
+  const dir = path.join(here, '..', 'node_modules', '@kenkaiiii', pkg, 'dist');
+  return fs.readdirSync(dir, { recursive: true }).filter((f) => /\.(c|m)?js$/.test(f)).map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+};
 
 // Each page's words are still in the libraries as installed (else the build would fail; this says why sooner).
-const libs = dep('gg-core/dist/chunk-T367MVTP.js') + dep('ggcoder/dist/core/mcp/client.js');
+const libs = distJs('gg-core') + distJs('ggcoder');
 for (const [from] of REBRAND) assert.ok(libs.includes(from), `still in the library: ${from}`);
 assert.ok(REBRAND.some(([from, to]) => /signed in to GG Coder/.test(from) && /signed in to Jarvis\./.test(to)), 'the ChatGPT sign-in page');
 assert.ok(REBRAND.some(([from, to]) => /return to GG Coder/.test(from) && /return to Jarvis\./.test(to)), 'a connection\'s sign-in page');

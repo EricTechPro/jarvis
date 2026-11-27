@@ -29,7 +29,7 @@ import {
   addFact, applySynced, syncSnapshot, DIR as STORE_DIR, repeatLabel, startOfDay, applyFold, approxTokens, archiveFolded, clearFacts, clearFinished, compactTrigger, fitContext, flushWrites, forgetFact, isSummary, listItems, listFacts, nextDue, pickFacts, planFold,
   touchFacts, forDisk, forProvider, loadLatestSession, newSession, openCommitments, pruneSessions, readJson, saveSession, takeDueReminders, updateCommitment, writeJson,
 } from './store.mjs';
-import { foldInput, foldPrompt, memoryFacts, oneShot, parseBrain, parseSkill, shouldLearn, skillInput, skillPrompt, soundsWrong, transcript } from './brain.mjs';
+import { foldInput, foldPrompt, memoryFacts, oneAtATime, oneShot, parseBrain, parseSkill, shouldLearn, skillInput, skillPrompt, soundsWrong, transcript } from './brain.mjs';
 import { briefNote } from './brief.mjs';
 import { CHECK_MS, DEFAULT_DISTRACTIONS, check as focusCheck, parseDistractions, startBlock } from './focus.mjs';
 import { saveCardImage } from './cardimage.mjs';
@@ -1229,8 +1229,11 @@ async function learnFacts(facts) {
   if (added.length) menu();
   return added;
 }
-// s: a Classic session, or a Live call's { id: 'live', messages } (livecall's onEnd).
-async function memoryPass(s, why) {
+// s: a Classic session, or a Live call's { id: 'live', messages } (livecall's onEnd). One pass at a time
+// (memoryQueue): a Live call's and a Classic conversation's never forget or add the same fact twice.
+const memoryQueue = oneAtATime();
+const memoryPass = (s, why) => memoryQueue(() => memoryPassNow(s, why));
+async function memoryPassNow(s, why) {
   const messages = s.messages.filter((m) => !isSummary(m));
   if (!config.model || !transcript(messages, userName, stripNote).trim()) return [];
   const t0 = Date.now();

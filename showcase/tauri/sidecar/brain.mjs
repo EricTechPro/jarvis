@@ -6,6 +6,7 @@ import { REDACTION_MARKER, environmentSecrets, redactText } from '@kenkaiiii/gg-
 import { getLowestThinkingLevel, getModel, getSummaryModel } from '@kenkaiiii/gg-core';
 import { ClaudeCodeAgent } from './claudecode.mjs';
 import { agentEvents } from './agentstream.mjs';
+import { redactArgs } from './safety.mjs';
 
 const TIMEOUT_MS = 120_000;
 const TIER = { low: 0, medium: 1, high: 2 };
@@ -140,10 +141,20 @@ export function parseBrain(text, { knownIds = [], wantSummary = false } = {}) {
 /** The memory pass over finished turns (a Classic conversation ending, a Live call hung up): null when nothing was
  *  said, else { model, facts } to learn. ask({ system, text }) → { text, model }: the side model (oneShot). */
 export async function memoryFacts({ messages, name, facts = [], ask, clean }) {
-  const turns = transcript(messages, name, clean);
+  // What was typed into an app or written into a file (a password, a draft) goes as its length only (redactArgs).
+  const told = messages.map((m) => (m.role === 'assistant' && Array.isArray(m.content)
+    ? { ...m, content: m.content.map((p) => (p.type === 'tool_call' ? { ...p, args: redactArgs(p.name, p.args ?? {}) } : p)) } : m));
+  const turns = transcript(told, name, clean);
   if (!turns.trim()) return null;
   const { text, model } = await ask({ system: memoryPrompt(name), text: memoryInput({ facts, turns }) });
   return { model, ...parseBrain(text, { knownIds: facts.map((f) => f.id) }) };
+}
+
+/** A queue for the memory passes: run(fn) starts fn once every earlier one has settled (a failure too), so two
+ *  passes never read and change the facts at the same time. Returns fn's result. */
+export function oneAtATime() {
+  let last = Promise.resolve();
+  return (fn) => { const p = last.then(fn); last = p.catch(() => {}); return p; };
 }
 
 // ---------- the skill pass ----------

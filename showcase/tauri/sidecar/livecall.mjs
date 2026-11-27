@@ -29,6 +29,8 @@ export const CUT_IN = { rms: 0.04, holdMs: 150 };
 // After a hang-up the wake word waits until her voice sent so far has had time to play, plus this long, so her goodbye
 // ("Very good, Jarvis signing off") can't open a new call.
 export const WAKE_SETTLE_MS = 1000;
+// A hung-up call gets a memory pass only when he said at least this many characters in it.
+export const MIN_LEARN_CHARS = 20;
 
 // RMS of a base64 16 kHz s16le mono frame, as a fraction of full scale, and its length in ms.
 const frameLevel = (data) => {
@@ -44,7 +46,8 @@ const frameLevel = (data) => {
  * up, for the listening bubble (a value or a function). newTurn: each of their turns in the call starts a new request,
  * the way Classic starts one per message (per-turn Allows, freshness and the hold after send_agent). onEnd(messages,
  * why): at hang-up, what was said in the call as conversation messages (brain.mjs transcript's shape: his words, hers,
- * the tools and what they returned), for the memory pass Classic runs when a conversation ends; only when he spoke.
+ * the tools and what they returned), for the memory pass Classic runs when a conversation ends; only when he said
+ * enough (MIN_LEARN_CHARS), and never when the app quits.
  */
 export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () => null, hangUpHint = '', newTurn = () => {}, log = () => {}, inkStarted = () => {}, onEnd = () => {}, holdMs = DRAW_HOLD_MS, cutIn = CUT_IN, now = Date.now }) {
   let brain = null, call = 0, capturing = false, opening = false;
@@ -183,7 +186,10 @@ export function createLiveCall({ makeBrain, ui, send, ask, toClassic, anim = () 
     log('live_end', { why, ...callStats() });
     keepAll();
     const said = messages; messages = [];
-    if (said.some((m) => m.role === 'user')) {
+    // Quitting cuts a pass off at exit (maybe after forgetting a fact, before adding its replacement); a call where he
+    // said under ~20 characters ("Hey", "Stop") has nothing to learn.
+    const heard = said.filter((m) => m.role === 'user').reduce((n, m) => n + m.content.length, 0);
+    if (why !== 'quit' && heard >= MIN_LEARN_CHARS) {
       try { Promise.resolve(onEnd(said, why)).catch((err) => console.error('[live] memory pass', err?.message)); } catch (err) { console.error('[live] memory pass', err?.message); }
     }
     return true;

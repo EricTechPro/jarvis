@@ -16,7 +16,7 @@ process.on('exit', () => fs.rmSync(TMP, { recursive: true, force: true }));
 const { z } = await import('zod');
 const { createLiveBrain, LIVE_GUIDANCE } = await import('../livebrain.mjs');
 const { createLiveCall } = await import('../livecall.mjs');
-const { memoryFacts } = await import('../brain.mjs');
+const { memoryFacts, oneAtATime } = await import('../brain.mjs');
 const S = await import('../store.mjs');
 const { secondBrainBlock } = await import('../secondbrain.mjs');
 
@@ -85,12 +85,52 @@ const setup = (tools = []) => {
 { // A second call starts fresh: the last call's words aren't handed over again.
   const { calls, call, ended } = setup();
   await call.toggle(); await until(() => calls.length === 1);
-  calls[0].server({ serverContent: { inputTranscription: { text: 'First call.' } } });
+  calls[0].server({ serverContent: { inputTranscription: { text: 'This is the first call today.' } } });
   call.hangUp('tap');
   await call.toggle(); await until(() => calls.length === 2);
-  calls[1].server({ serverContent: { inputTranscription: { text: 'Second call.' } } });
+  calls[1].server({ serverContent: { inputTranscription: { text: 'And this is the second call.' } } });
   call.hangUp('tap');
-  assert.deepEqual(ended.map((e) => e.messages.map((x) => x.content)), [['First call.'], ['Second call.']]);
+  assert.deepEqual(ended.map((e) => e.messages.map((x) => x.content)), [['This is the first call today.'], ['And this is the second call.']]);
+}
+
+{ // Too little said to learn from (under 20 characters from him, like "Hey" or "Stop"): no memory pass.
+  const { calls, call, ended } = setup();
+  await call.toggle(); await until(() => calls.length === 1);
+  calls[0].server({ serverContent: { inputTranscription: { text: 'Hey Jarvis, stop.' } } });
+  call.hangUp('tap');
+  assert.deepEqual(ended, []);
+}
+
+{ // Quitting the app: no pass (it would be cut off at exit, maybe after forgetting a fact but before adding the new one).
+  const { calls, call, ended } = setup();
+  await call.toggle(); await until(() => calls.length === 1);
+  calls[0].server({ serverContent: { inputTranscription: { text: 'My name is Eric and I make videos.' } } });
+  call.hangUp('quit');
+  assert.deepEqual(ended, []);
+}
+
+{ // What was typed into an app (a password in a login field) or written into a file never reaches the memory model.
+  let sent = null;
+  const messages = [
+    { role: 'user', content: 'Log me in to the dashboard please.' },
+    { role: 'assistant', content: [{ type: 'tool_call', name: 'act_in_app', args: { target: 'front', steps: [{ do: 'fill', field: 'Password', text: 'hunter2-secret' }, { do: 'type', text: 'more-secret' }, { do: 'click_text', text: 'Sign in' }] } }] },
+    { role: 'assistant', content: [{ type: 'tool_call', name: 'write_file', args: { path: 'a.md', content: 'private words' } }] },
+  ];
+  await memoryFacts({ messages, name: 'Eric', ask: async (o) => { sent = o; return { text: '{"facts":[]}', model: 'fake' }; } });
+  assert.ok(!/hunter2|more-secret|private words/.test(sent.text), sent.text);
+  assert.match(sent.text, /Password[^\n]*\[14 chars\]/, 'only its length');
+  assert.match(sent.text, /Sign in/, 'the rest of the steps stay');
+}
+
+{ // Memory passes run one at a time: a Live call's and a Classic conversation's can't overlap (both forgetting the
+  // same fact, or adding it twice).
+  const run = oneAtATime(), order = [];
+  const slow = (name, ms) => run(async () => { order.push(`${name} start`); await new Promise((r) => setTimeout(r, ms)); order.push(`${name} end`); return name; });
+  const failing = run(async () => { throw new Error('boom'); });
+  const [a, b] = await Promise.all([slow('live', 30), slow('classic', 1)]);
+  await assert.rejects(failing, /boom/, 'a failed pass still reports its error');
+  assert.deepEqual([a, b], ['live', 'classic']);
+  assert.deepEqual(order, ['live start', 'live end', 'classic start', 'classic end'], 'the second waits for the first, even after a failure');
 }
 
 { // With a second brain set, the prompt sends questions about him to it before any "I don't know".
