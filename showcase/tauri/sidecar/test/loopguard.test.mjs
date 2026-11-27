@@ -255,12 +255,19 @@ assert.equal(LOOP_LIMIT, 3);
   assert.notEqual(await go(at(405, 172)), STUCK_MESSAGE, 'a second spot runs too');
   assert.equal(await go(at(405, 174)), STUCK_MESSAGE, 'a third failed spot is refused');
   assert.equal(await go(ct('Untitled document')), STUCK_MESSAGE, 'and words stay refused');
-  // One that works starts the pixels over, as a goal that worked always does.
-  const [act2] = guardTools([{ name: 'act_in_app', execute: async (args) => { if (args.fail) throw new Error('Step 1: no visible text "x" in Chrome.'); return 'done.\nNow showing: Doc'; } }], { request: () => 1, goals: true });
-  const go2 = (steps, fail) => act2.execute({ target: 'front', steps, ...(fail ? { fail } : {}) }, {}).then(() => 'ok', (e) => e.message);
-  for (const t of ['a', 'b', 'c']) await go2(ct(t), true);
-  await go2(at(1, 1), true); assert.equal(await go2(at(1, 2)), 'ok');
-  assert.equal(await go2(at(1, 3), true), 'Step 1: no visible text "x" in Chrome.', 'after a click that worked, a new spot gets its tries again');
+  // Once stuck, the pixels get two tries in all, worked or not (a click_at rarely fails, so counting failures left
+  // them unbounded), and never a plan that selects all or deletes.
+  const [act2] = guardTools([{ name: 'act_in_app', execute: async () => 'done.\nNow showing: Doc' }], { request: () => 1, goals: true });
+  const [act3] = guardTools([{ name: 'act_in_app', execute: async (args) => { if (args.steps[0].do !== 'click_at') throw new Error('Step 1: no visible text "x" in Chrome.'); return 'done.\nNow showing: Doc'; } }], { request: () => 1, goals: true });
+  const go3 = (steps) => act3.execute({ target: 'front', steps }, {}).then(() => 'ok', (e) => (e.message === STUCK_MESSAGE ? 'stuck' : e.message));
+  for (const t of ['a', 'b', 'c']) await go3(ct(t));
+  assert.deepEqual([await go3(at(1, 1)), await go3(at(1, 2)), await go3(at(1, 3))], ['ok', 'ok', 'stuck'], 'two click_at after stuck, even when they work');
+  const [act4] = guardTools([{ name: 'act_in_app', execute: async (args) => { if (args.steps[0].do !== 'click_at') throw new Error('Step 1: no visible text "x" in Chrome.'); return 'done.\nNow showing: Doc'; } }], { request: () => 1, goals: true });
+  const go4 = (steps) => act4.execute({ target: 'front', steps }, {}).then(() => 'ok', (e) => (e.message === STUCK_MESSAGE ? 'stuck' : e.message));
+  for (const t of ['a', 'b', 'c']) await go4(ct(t));
+  for (const k of ['cmd+a', 'Command + A', 'delete', 'backspace']) assert.equal(await go4([{ do: 'click_at', x: 1, y: 1 }, { do: 'key', key: k }, { do: 'type', text: 'x' }]), 'stuck', `no ${k} once stuck`);
+  // Before stuck, a click that works still starts its goal over.
+  assert.equal(await act2.execute({ target: 'front', steps: at(1, 1) }, {}), 'done.\nNow showing: Doc');
 }
 
 console.log('loop guard tests: passed');

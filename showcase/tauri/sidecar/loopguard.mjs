@@ -23,6 +23,9 @@ const goalOf = (name, args) => {
   return !s ? null : s.do === 'click_at' ? AT : `${name}|${String(s.text ?? s.id ?? '').trim().toLowerCase()}`;
 };
 
+// Select all, or a delete key: a plan that clears what's there.
+const wipes = (args) => (Array.isArray(args?.steps) ? args.steps : []).some((x) => x?.do === 'key'
+  && /^((cmd|command|meta)\+a|delete|backspace|forward_?delete)$/i.test(String(x.key ?? '').replace(/\s/g, '')));
 const sorted = (v) => (Array.isArray(v) ? v.map(sorted)
   : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v);
 /** What makes two calls "the same action": the tool and its arguments, except that scrolls are the same scroll on the
@@ -79,14 +82,17 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
         throw new Error(LOOP_MESSAGE);
       }
       const goal = goals ? goalOf(t.name, args) : null;
-      if (fails.req !== req) fails = { req, n: 0, by: new Map() };
+      if (fails.req !== req) fails = { req, n: 0, by: new Map(), pixels: 0 };
       const mine = fails; // counted into the request this call started in, even if it ends in a later one
-      // FAIL_LIMIT spent on words or ids still leaves clicking by pixels its own GOAL_LIMIT tries: a canvas page (Google
-      // Docs) has no words for click_text to find, and a click_at from a fresh screenshot is a different way in.
-      if (goals && t.name === 'act_in_app' && ((fails.n >= FAIL_LIMIT && goal !== AT) || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
+      // FAIL_LIMIT spent on words or ids still leaves clicking by pixels GOAL_LIMIT tries in all (worked or not: a
+      // click_at rarely fails): a canvas page (Google Docs) has no words for click_text to find, and a click_at from a
+      // fresh screenshot is a different way in. Never one that selects all or deletes: stuck is no time to wipe a page.
+      const stuck = fails.n >= FAIL_LIMIT;
+      if (goals && t.name === 'act_in_app' && ((stuck && (goal !== AT || fails.pixels >= GOAL_LIMIT || wipes(args))) || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
         log('tool_outcome', { id, name: t.name, ok: false, reason: 'loop_guard', fails: fails.n });
         throw new Error(STUCK_MESSAGE);
       }
+      if (goals && stuck && goal === AT) fails.pixels++;
       let raw, err = null;
       try { raw = await run.call(this, args, ctx); } catch (e) { err = e; }
       if (ctx?.signal?.aborted) log('tool_outcome', { id, name: t.name, ok: false, reason: 'aborted', ms: Date.now() - t0 });
