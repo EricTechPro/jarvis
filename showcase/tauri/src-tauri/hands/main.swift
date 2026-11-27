@@ -300,6 +300,14 @@ func findText(_ app: AXUIElement, _ w: Win, _ query: String) -> [[String: Any]] 
 /// How text (lowercased, trimmed) holds the query: 0 the whole text, 1 a whole word or phrase in it, 2 only inside other
 /// words. Joined by . : _ / @ or \ isn't a word of its own: "speed" in a clip called "MTLSVideoP:speed.mp4" is part of a
 /// name. (\b fails when the text starts or ends with a symbol, like "$1,250".)
+/// Text as click_text compares it: lowercased, with "…" (one character) spelled as the three dots a model writes.
+func textFold(_ s: String) -> String { s.lowercased().replacingOccurrences(of: "\u{2026}", with: "...") }
+/// The ways the same words may be written on screen, for matching against pixels read as they are ("…" or "...").
+func dotSpellings(_ q: String) -> [String] {
+    var out = [q]
+    for alt in [q.replacingOccurrences(of: "...", with: "\u{2026}"), q.replacingOccurrences(of: "\u{2026}", with: "...")] where !out.contains(alt) { out.append(alt) }
+    return out
+}
 func matchScore(_ low: String, _ q: String) -> Int {
     if low == q { return 0 }
     let pat = "(?<![\\p{L}\\p{N}_./:@\\\\])\(NSRegularExpression.escapedPattern(for: q))(?![\\p{L}\\p{N}_])(?![./:@\\\\][\\p{L}\\p{N}])"
@@ -340,7 +348,7 @@ func inDialog(_ e: AXUIElement) -> Bool {
 
 func findTextEls(_ app: AXUIElement, _ w: Win, _ query: String, hidden: Bool = false, limit: Int = 8) -> [(AXUIElement, [String: Any])] {
     guard let root = axWindow(app, w) else { return [] }
-    let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let q = textFold(query.trimmingCharacters(in: .whitespacesAndNewlines))
     guard !q.isEmpty else { return [] }
     let win = CGRect(x: w.x, y: w.y, width: w.w, height: w.h)
     var hits: [(rank: TextRank, frame: CGRect, el: (AXUIElement, [String: Any]))] = []
@@ -353,8 +361,8 @@ func findTextEls(_ app: AXUIElement, _ w: Win, _ query: String, hidden: Bool = f
         let own = isModal(strOf(a[7]) ?? "", strOf(a[8]) ?? ""), dialog = inside || own
         if own, let f = frameOf(a[5], a[6]) { dialogs.append(strOf(a[7]) == "AXSheet" || strOf(a[8]) == "AXDialog" || (a[9] as? Bool) == true ? win : f) }
         let texts = a[0..<4].compactMap { strOf($0) }
-        if let t = texts.first(where: { $0.lowercased().contains(q) }), let f = frameOf(a[5], a[6]), f.width > 1, f.height > 1, hidden || win.intersects(f) {
-            let low = t.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let t = texts.first(where: { textFold($0).contains(q) }), let f = frameOf(a[5], a[6]), f.width > 1, f.height > 1, hidden || win.intersects(f) {
+            let low = textFold(t.trimmingCharacters(in: .whitespacesAndNewlines))
             // A whole word: no letter or digit right before or after. (\\b fails when the text starts or ends with a symbol, like "$1,250".)
             let score = matchScore(low, q)
             let role = strOf(a[7]) ?? ""
@@ -933,6 +941,7 @@ func ocrFind(_ win: Win?, _ needle: String, all: Bool) -> [[String: Any]] {
     for obs in req.results ?? [] {
         guard let cand = obs.topCandidates(1).first else { continue }
         let s = cand.string
+        for q in dotSpellings(q) {
         var from = s.startIndex
         while from < s.endIndex, let r = s.range(of: q, options: single ? [] : [.caseInsensitive], range: from ..< s.endIndex) {
             from = r.upperBound
@@ -948,6 +957,7 @@ func ocrFind(_ win: Win?, _ needle: String, all: Bool) -> [[String: Any]] {
             // Vision's box for one character is loose: fit it to the glyph's own pixels.
             if single, let tight = fitRect(in: img, area: area, guess: rect) { rect = tight }
             found.append((rect, s))
+        }
         }
     }
     found.sort { abs($0.0.minY - $1.0.minY) > 4 ? $0.0.minY < $1.0.minY : $0.0.minX < $1.0.minX }
@@ -1537,13 +1547,16 @@ case "--self-test":
     // Regression (v0.2.9, Classic and Live, 2026-11-27): Google Docs types through a focused hidden "Document content"
     // text area that only ever holds zero-width spaces, so "the field still shows \u{200B}\u{200B}" stopped every fill.
     check("typing into a web document's hidden input counts", typingTook(before: "\u{200B}\u{200B}", now: "\u{200B}\u{200B}", text: "Eric Tech"))
-    check("an empty field that stays empty after typing still stops", !typingTook(before: "", now: "", text: "Eric Tech"))
     // Regression (v0.2.10, Classic, 2026-11-27): YouTube Studio's empty reply box gave no value to read back, so the
     // check was skipped, "typed text" was reported, Reply was clicked on an empty box and Jarvis said it had replied.
+    // str() reads an empty value as nil (see str), so an empty field, before or after typing, is nil here, never "".
     check("a field with no value to read back is unconfirmed, not typed", typeVerdict(before: nil, now: nil, text: "Thank you for watching") == .unconfirmed)
     check("a field that only shows its value after typing is checked from empty", typeVerdict(before: nil, now: "Thank you for watching", text: "Thank you for watching") == .took)
-    check("a field that stays empty after typing still stops", typeVerdict(before: "", now: "", text: "Thank you") == .dropped)
+    check("a field that still shows its old text after typing stops", typeVerdict(before: "old search", now: "old search", text: "new") == .dropped)
     check("a label's … matches three typed dots", fold("Add a reply\u{2026}") == fold("Add a reply..."))
+    // Same session: click_text "Add a reply..." has to find the words when the page writes "Add a reply…".
+    check("click_text \"Add a reply...\" finds \"Add a reply…\"", textFold("Add a reply\u{2026}").contains(textFold("Add a reply...")) && matchScore(textFold("Add a reply\u{2026}"), textFold("Add a reply...")) == 0)
+    check("reading the screen tries both spellings of …", dotSpellings("Add a reply...").contains("Add a reply\u{2026}") && dotSpellings("Add a reply\u{2026}").contains("Add a reply...") && dotSpellings("Upload") == ["Upload"])
     check("a field that kept its old text still stops", !typingTook(before: "old search", now: "old search", text: "new"))
     check("a field that shows the typing counts", typingTook(before: "", now: "Eric Tech", text: "Eric Tech"))
     // Review of #33: the pause before keys after a click_at was only for the OCR fallback's click; the model's own

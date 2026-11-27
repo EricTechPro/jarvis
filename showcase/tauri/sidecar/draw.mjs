@@ -253,6 +253,10 @@ export function shapeRadius(w, h, role = '', r) {
   return clamp(short * 0.12, 8, 18);
 }
 
+/** The same words on screen: case, spaces at the ends, and "…" (one character) against "..." don't count. */
+export const sameWords = (a, b) => String(a ?? '').trim().toLowerCase().replace(/\u2026/g, '...') === String(b ?? '').trim().toLowerCase().replace(/\u2026/g, '...');
+/** Lines read off the screen that are one of `qs` whole (bar a list number like "1." or "-"), not words inside one. */
+export const wholeLines = (hits, qs) => (hits ?? []).filter((h) => qs.some((q) => sameWords(String(h.text ?? '').trim().replace(/^(\d+[.)]|[-•*])\s+/, ''), q)));
 /** The text match to mark: a whole label or heading (exact or word), not words buried in a paragraph. */
 export function pickTextMatch(matches, find) {
   const q = String(find).trim();

@@ -228,8 +228,8 @@ fn windows_main(cmd: &str, args: &[String]) -> ! {
                 all = search();
             }
             // Exact text in any window beats a partial match in the front one.
-            let ql = q.trim().to_lowercase();
-            let (exact, rest): (Vec<Value>, Vec<Value>) = all.into_iter().partition(|m| m["text"].as_str().unwrap_or("").trim().to_lowercase() == ql);
+            let ql = logic::text_fold(q.trim());
+            let (exact, rest): (Vec<Value>, Vec<Value>) = all.into_iter().partition(|m| logic::text_fold(m["text"].as_str().unwrap_or("").trim()) == ql);
             out(json!({ "ok": true, "matches": exact.into_iter().chain(rest).take(8).collect::<Vec<_>>() }))
         }
         "act" => {

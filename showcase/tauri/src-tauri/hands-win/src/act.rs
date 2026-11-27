@@ -628,21 +628,25 @@ impl Ctx {
                 }
                 let text = s_str(s, "text").unwrap_or("");
                 let password = focus_el.as_ref().is_some_and(|f| unsafe { f.0.CurrentIsPassword() }.is_ok_and(|b| b.as_bool()));
-                let before = focus_el.as_ref().map(|f| value(&f.0));
+                let before = focus_el.as_ref().and_then(|f| readable_value(&f.0));
                 let into = focus_el.as_ref().map(|f| empty_node(f.0.clone(), password));
                 self.emit_step("type", into.as_ref(), None, "", Some(text));
                 type_text(text);
                 // Typing the app dropped must stop here: a following Return would submit whatever the field held before.
-                if let (Some(f), Some(before)) = (&focus_el, before) {
-                    if !text.is_empty() && !password && editable {
-                        ms(120);
-                        let now = value(&f.0);
-                        if now == before && !fold(&now).contains(&prefix(&fold(text), 40)) {
-                            return Err(format!("Step {n}: typed, but the text field still shows \"{}\", so I stopped before the next step. Use {{do:'fill', field, text}} instead, or the open tool for a web address or a site's search results page.", prefix(&now, 80)));
+                // A field with nothing to read back can't be checked: unconfirmed (as on the Mac), not a stop.
+                let mut unconfirmed = false;
+                if !text.is_empty() && !password && editable {
+                    ms(120);
+                    let now = focus_el.as_ref().and_then(|f| readable_value(&f.0));
+                    match type_verdict(before.as_deref(), now.as_deref(), text) {
+                        TypeVerdict::Dropped => {
+                            return Err(format!("Step {n}: typed, but the text field still shows \"{}\", so I stopped before the next step. Use {{do:'fill', field, text}} instead, or the open tool for a web address or a site's search results page.", prefix(now.as_deref().unwrap_or(""), 80)));
                         }
+                        TypeVerdict::Unconfirmed => unconfirmed = true,
+                        TypeVerdict::Took => {}
                     }
                 }
-                self.done.push(if editable { "typed text".into() } else { "typed text (the app doesn't show its fields, so check the result on screen)".into() });
+                self.done.push(if !editable { "typed text (the app doesn't show its fields, so check the result on screen)".into() } else if unconfirmed { TYPED_UNCONFIRMED.into() } else { "typed text".into() });
             }
             "fill" => {
                 let text = s_str(s, "text").unwrap_or("");

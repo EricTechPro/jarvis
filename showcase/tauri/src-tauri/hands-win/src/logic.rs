@@ -232,6 +232,28 @@ pub fn may_type(editable: bool, focus_ct: Option<i32>, clicked_spot: bool) -> bo
 
 // ---------- text ----------
 
+/// Text as click_text compares it: lowercased, with "…" (one character) spelled as the three dots a model writes.
+pub fn text_fold(s: &str) -> String {
+    s.to_lowercase().replace('\u{2026}', "...")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TypeVerdict {
+    Took,
+    Dropped,
+    Unconfirmed,
+}
+/// Whether typed text landed, from the focused field's readable value before and after (None: it gives none). Like the
+/// Mac helper, an empty value counts as nothing to read: typing there is unconfirmed (check the screen), never a stop.
+pub fn type_verdict(before: Option<&str>, now: Option<&str>, text: &str) -> TypeVerdict {
+    let Some(now) = now.filter(|v| !v.is_empty()) else { return TypeVerdict::Unconfirmed };
+    let before = before.unwrap_or("");
+    let want: String = fold(text).chars().take(40).collect();
+    if now == before && !fold(now).contains(&want) { TypeVerdict::Dropped } else { TypeVerdict::Took }
+}
+/// The done line for typing that couldn't be read back (the same words as the Mac helper's TYPED_UNCONFIRMED).
+pub const TYPED_UNCONFIRMED: &str = "typed text, but couldn't confirm the field took it (check the screen)";
+
 pub fn fold(s: &str) -> String {
     // "…" (one character) on the page and "..." typed from a screenshot are the same words.
     s.to_lowercase().replace('\u{2026}', "...").replace(['*', ':'], "").split_whitespace().collect::<Vec<_>>().join(" ")
@@ -801,6 +823,12 @@ pub fn self_test() -> Vec<(&'static str, bool)> {
         ("an OCR phrase spans its words", ocr_matches(&line, "open now") == vec![Rect::new(150.0, 0.0, 80.0, 12.0)]),
         ("one character is cut from its word, case and all", ocr_matches(&line, "O") == vec![Rect::new(150.0, 0.0, 10.0, 12.0)]),
         ("the item below the anchor wins", nearest_after(&Rect::new(0.0, 100.0, 50.0, 10.0), &[Rect::new(0.0, 50.0, 20.0, 10.0), Rect::new(0.0, 130.0, 20.0, 10.0), Rect::new(0.0, 300.0, 20.0, 10.0)]) == Some(1)),
+        ("click_text \"Add a reply...\" finds \"Add a reply…\"", text_fold("Add a reply…").contains(&text_fold("Add a reply...")) && match_score(&text_fold("Add a reply…"), &text_fold("Add a reply...")) == 0),
+        // Regression (v0.2.10, 2026-11-27): a field that gives no value to read stopped every typing as not typed; like the
+        // Mac helper it's unconfirmed (typed, check the screen). A readable field that kept its old text still stops.
+        ("a field with nothing to read back is unconfirmed", type_verdict(None, None, "Thank you") == TypeVerdict::Unconfirmed && type_verdict(Some(""), Some(""), "Thank you") == TypeVerdict::Unconfirmed),
+        ("a field that shows the text after typing took it", type_verdict(Some(""), Some("Thank you"), "Thank you") == TypeVerdict::Took),
+        ("a field that kept its old text stops", type_verdict(Some("old search"), Some("old search"), "new") == TypeVerdict::Dropped),
         ("a label's … matches three typed dots", fold("Add a reply…") == fold("Add a reply...") && fold("Add a reply…").contains(&fold("Add a reply..."))),
         ("long scrolled-off text keeps its start and end", offscreen_text((0..50).map(|i| (i as f64, format!("line number {i}"))).collect(), 100).last().map(String::as_str) == Some("line number 49")),
     ]

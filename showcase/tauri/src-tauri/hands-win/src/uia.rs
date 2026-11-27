@@ -320,18 +320,18 @@ impl Tree {
     /// Any element whose text matches `query`, best first: exact, then whole words, then contains; words on the page
     /// before the browser's own tabs and toolbar; smallest first.
     pub fn find_text(&self, win: Rect, query: &str, hidden: bool, limit: usize) -> Vec<(Node, Value)> {
-        let q = query.trim().to_lowercase();
+        let q = text_fold(query.trim());
         if q.is_empty() {
             return vec![];
         }
         let mut hits: Vec<(usize, bool, f64, &Node, Value)> = vec![];
         for n in &self.nodes {
-            let Some(t) = [&n.value, &n.name, &n.help].into_iter().find(|t| t.to_lowercase().contains(&q)) else { continue };
+            let Some(t) = [&n.value, &n.name, &n.help].into_iter().find(|t| text_fold(t).contains(&q)) else { continue };
             let Some(f) = n.r.filter(|f| f.w > 1.0 && f.h > 1.0) else { continue };
             if !hidden && !win.intersects(&f) {
                 continue;
             }
-            let score = match_score(t.trim().to_lowercase().as_str(), &q);
+            let score = match_score(text_fold(t.trim()).as_str(), &q);
             hits.push((score, n.web, f.area(), n, json!({ "text": t.chars().take(80).collect::<String>(), "match": MATCH_NAMES[score], "role": n.kind(), "bounds": f.ints() })));
         }
         hits.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)).then(a.2.total_cmp(&b.2)));
@@ -431,6 +431,16 @@ pub fn set_value(el: &IUIAutomationElement, text: &str) -> bool {
     unsafe { el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId).and_then(|p| p.SetValue(&BSTR::from(text))) }.is_ok()
 }
 /// What a field shows now: its value, else its document text.
+/// A field's own text, or None when it exposes none to read (no value or text pattern: value() would fall back to
+/// its name, which typing never changes).
+pub fn readable_value(el: &IUIAutomationElement) -> Option<String> {
+    unsafe {
+        if let Ok(v) = el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId).and_then(|p| p.CurrentValue()) {
+            return Some(v.to_string());
+        }
+        el.GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId).and_then(|p| p.DocumentRange()).and_then(|r| r.GetText(4000)).ok().map(|t| t.to_string())
+    }
+}
 pub fn value(el: &IUIAutomationElement) -> String {
     unsafe {
         if let Ok(v) = el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId).and_then(|p| p.CurrentValue()) {
