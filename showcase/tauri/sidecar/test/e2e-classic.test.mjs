@@ -30,7 +30,7 @@ const win = { id: 7, app: 'Chrome', title: 'Cards', bounds: [0, 0, 800, 600] };
 const texts = fs.existsSync(${JSON.stringify(textsFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(textsFile)}, 'utf8')) : ['Info cards'];
 const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(canvasFile)}, 'utf8')) : null;
 let o = { ok: true, window: win };
-if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts };
+if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => (s.do === 'type' && fs.existsSync(${JSON.stringify(canvasFile)} + '.unconfirmed') ? fs.readFileSync(${JSON.stringify(canvasFile)} + '.unconfirmed', 'utf8') : s.do)), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts };
 if (a[0] === 'act' && canvas) { const p = JSON.parse(a[1]), k = p.steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + p.steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.', done: p.steps.slice(0, k).map((s) => 'pressed ' + s.key) }; }
 if (a[0] === 'act' && fs.existsSync(${JSON.stringify(canvasFile)} + '.actfail')) { o = { ok: false, error: fs.readFileSync(${JSON.stringify(canvasFile)} + '.actfail', 'utf8'), done: [] }; fs.rmSync(${JSON.stringify(canvasFile)} + '.actfail'); }
 if (a[0] === 'ocr-find') o = { ok: true, matches: fs.existsSync(${JSON.stringify(canvasFile)} + '.noocr') ? [] : (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
@@ -131,6 +131,26 @@ await cp('CP-3 tool round trip: show_list and remember_commitment run and answer
   assert.equal(shown.length, 1, 'show_list put the list on screen');
   assert.match(r[1].result, /^Saved as \S+, due .+\. I'll remind them when it is due\.$/);
   assert.equal(committed.at(-1)?.text, 'Record the Jarvis regression video', 'the saved commitment reached the app');
+});
+
+// Regression (v0.2.10, Classic, 2026-11-27): YouTube Studio's reply box gave the helper no value to read back, the
+// typing went unchecked, Reply was clicked on an empty box and Jarvis said "I replied". The helper now says the typing
+// is unconfirmed (hands/main.swift TYPED_UNCONFIRMED), and the result the model gets tells it to look before claiming it.
+if (HANDS_OK) await cp('CP-5b unconfirmed typing: act_in_app says to check the screen before saying it was sent', async () => {
+  const swift = fs.readFileSync(new URL('../../src-tauri/hands/main.swift', import.meta.url), 'utf8');
+  const phrase = swift.match(/let TYPED_UNCONFIRMED = "([^"]+)"/)?.[1];
+  assert.ok(phrase, 'the helper names its unconfirmed-typing line');
+  made.nextTurn?.();
+  fs.writeFileSync(canvasFile + '.unconfirmed', phrase);
+  try {
+    const [r] = await play([['act_in_app', { target: 'front', steps: [{ do: 'type', text: 'Thank you for watching' }, { do: 'click_text', text: 'Reply' }] }]]);
+    assert.ok(r.ok, text(r.result));
+    assert.match(r.result, /Not confirmed: /, 'the result flags the unconfirmed typing');
+    assert.match(r.result, /take_screenshot/, 'and says to look');
+    assert.match(r.result, /before (?:telling|saying)[^\n]*(?:done|sent|replied)/, 'before claiming it went through');
+  } finally { fs.rmSync(canvasFile + '.unconfirmed', { force: true }); }
+  const [plain] = await play([['act_in_app', { target: 'front', steps: [{ do: 'type', text: 'Hi' }] }]]);
+  assert.doesNotMatch(plain.result, /Not confirmed/, 'checked typing carries no note');
 });
 
 // 2. The screen: list windows, read the window, click and scroll in it, look at it.

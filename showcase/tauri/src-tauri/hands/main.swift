@@ -508,6 +508,16 @@ func typingTook(before: String, now: String, text: String) -> Bool {
     now != before || fold(now).contains(fold(text).prefix(40)) || (onlyInvisible(before) && onlyInvisible(now))
 }
 
+enum TypeVerdict { case took, dropped, unconfirmed }
+/// Whether typed text landed, from the focused field's value before and after (nil: the field gives none to read).
+/// With nothing to read back it's unconfirmed: never reported as plain success.
+func typeVerdict(before: String?, now: String?, text: String) -> TypeVerdict {
+    guard let now else { return .unconfirmed }
+    return typingTook(before: before ?? "", now: now, text: text) ? .took : .dropped
+}
+/// The done line for typing that couldn't be read back; the sidecar keys its "check the screen" note on it.
+let TYPED_UNCONFIRMED = "typed text, but couldn't confirm the field took it (check the screen)"
+
 /// Puts the cursor in a field, replaces its text and reads back what it shows. Never types unless the field
 /// really has focus, so text can't land in some other field or set off page shortcuts.
 func typeInto(_ app: AXUIElement, _ e: AXUIElement, _ text: String) -> (ok: Bool, shows: String) {
@@ -1528,6 +1538,12 @@ case "--self-test":
     // text area that only ever holds zero-width spaces, so "the field still shows \u{200B}\u{200B}" stopped every fill.
     check("typing into a web document's hidden input counts", typingTook(before: "\u{200B}\u{200B}", now: "\u{200B}\u{200B}", text: "Eric Tech"))
     check("an empty field that stays empty after typing still stops", !typingTook(before: "", now: "", text: "Eric Tech"))
+    // Regression (v0.2.10, Classic, 2026-11-27): YouTube Studio's empty reply box gave no value to read back, so the
+    // check was skipped, "typed text" was reported, Reply was clicked on an empty box and Jarvis said it had replied.
+    check("a field with no value to read back is unconfirmed, not typed", typeVerdict(before: nil, now: nil, text: "Thank you for watching") == .unconfirmed)
+    check("a field that only shows its value after typing is checked from empty", typeVerdict(before: nil, now: "Thank you for watching", text: "Thank you for watching") == .took)
+    check("a field that stays empty after typing still stops", typeVerdict(before: "", now: "", text: "Thank you") == .dropped)
+    check("a label's … matches three typed dots", fold("Add a reply\u{2026}") == fold("Add a reply..."))
     check("a field that kept its old text still stops", !typingTook(before: "old search", now: "old search", text: "new"))
     check("a field that shows the typing counts", typingTook(before: "", now: "Eric Tech", text: "Eric Tech"))
     // Review of #33: the pause before keys after a click_at was only for the OCR fallback's click; the model's own
@@ -1972,16 +1988,21 @@ case "act":
             emitStep(i, "type", into, text: text)
             typeText(text)
             // Typing the app dropped (some ignore keys sent in the background) must stop here: a following
-            // Return would submit whatever the field held before.
-            if let into, let before, !text.isEmpty, axRole(into) != "AXSecureTextField", str(into, kAXSubroleAttribute) != "AXSecureTextField" {
+            // Return would submit whatever the field held before. A field with no value to read back can't be
+            // checked, so it's reported as unconfirmed instead of typed.
+            var unconfirmed = false
+            if !hidden, !text.isEmpty, into.map({ axRole($0) != "AXSecureTextField" && str($0, kAXSubroleAttribute) != "AXSecureTextField" }) ?? true {
                 Thread.sleep(forTimeInterval: 0.12)
-                let now = str(into, kAXValueAttribute) ?? before
-                if !typingTook(before: before, now: now, text: text) {
-                    out(["ok": false, "error": "Step \(i + 1): typed, but the text field still shows \"\(qt(now.prefix(80)))\", so I stopped before the next step. Use {do:'fill', field, text} instead, or the open tool for a web address or a site's search results page.", "done": done])
+                let now = into.flatMap { str($0, kAXValueAttribute) }
+                switch typeVerdict(before: before, now: now, text: text) {
+                case .dropped:
+                    out(["ok": false, "error": "Step \(i + 1): typed, but the text field still shows \"\(qt((now ?? "").prefix(80)))\", so I stopped before the next step. Use {do:'fill', field, text} instead, or the open tool for a web address or a site's search results page.", "done": done])
+                case .unconfirmed: unconfirmed = true
+                case .took: break
                 }
             }
             let canvas = into.flatMap { str($0, kAXValueAttribute) }.map(onlyInvisible) ?? false
-            done.append(hidden ? "typed text (the app doesn't show its fields, so check the result on screen)" : canvas ? "typed text (a page drawn without readable text, so check the result on screen)" : "typed text")
+            done.append(hidden ? "typed text (the app doesn't show its fields, so check the result on screen)" : canvas ? "typed text (a page drawn without readable text, so check the result on screen)" : unconfirmed ? TYPED_UNCONFIRMED : "typed text")
         case "fill":
             // A form field by its label, placeholder or id: put the cursor in it, replace its text, check it took.
             let text = s["text"] as? String ?? ""

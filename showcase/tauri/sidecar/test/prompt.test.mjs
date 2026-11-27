@@ -166,3 +166,14 @@ assert.match(side, /Filling something in[^\n]*the exact value as you found it, n
 assert.match(side, /On a Mac, shortcuts use cmd \(cmd\+a, cmd\+right\), never control/, 'cmd on a Mac');
 console.log('prompt: fill-in ok');
 
+// Regression (v0.2.10, Classic, 2026-11-27): Jarvis typed a YouTube reply that never landed, clicked Reply on the empty
+// box and said "I replied". A send-type click needs a look at the result before it's reported done (Classic and Live
+// share this prompt), and act_in_app's own description says the same.
+assert.match(side, /After a click that sends something \(Reply, Send, Post, Comment, Submit, Save\), take_screenshot and check the result \(the text is posted, the box is cleared\) before you say it's done; never say you replied, sent or posted without that look\./, 'a send is checked on screen before it is claimed');
+assert.match(tools, /After a click that sends \(Reply, Send, Post, Submit, Save\), take_screenshot to check it went through before saying so\./, 'act_in_app says to check a send');
+// Regression (same session): "draw a diagram of how binary search works" went to the teach skill instead of draw, and
+// after use_skill had returned yt-reply's steps the model read the same SKILL.md again with read_file.
+assert.match(side, /A skill never stands in for a built-in tool: a request to draw, diagram, show or mark something on screen \("draw a diagram of how X works"\) is draw, straight away, even when a skill \(like teach\) also matches\./, 'draw requests use draw, not a skill');
+assert.match(side, /use_skill returns the whole skill: never read its SKILL\.md again with read_file/, 'no second read of a skill');
+assert.match(tools, /This is the whole skill: don\\?'t read its SKILL\.md with read_file\./, 'use_skill says it returns everything');
+console.log('prompt rules for sends and skills ok');
