@@ -1,0 +1,1618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gemini Live Voice Agents</title>
+<style>
+/* Google Fonts, latin subset, vendored for offline use */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/DMMono-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/DMMono-500.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fragment Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/FragmentMono-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/InstrumentSerif-400i.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/InstrumentSerif-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/Inter-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/Inter-500.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/Inter-600.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(assets/fonts/Inter-800.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/JetBrainsMono-500.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/JetBrainsMono-700.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Kalam';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/Kalam-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Kalam';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/Kalam-700.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/PublicSans-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(assets/fonts/PublicSans-500.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(assets/fonts/PublicSans-600.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(assets/fonts/PublicSans-700.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+/* ---------- page + themes (tokens copied from theme-explorer A + D + E) ---------- */
+:root{color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--fb);-webkit-font-smoothing:antialiased}
+.t-a{--bg:#141414;--ink:#f5f5f5;--dim:#a8a8a8;--mut:#8a8a8a;--line:#343434;--panel:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.02)),rgba(20,20,20,.78);
+  --pb:rgba(255,255,255,.08);--acc:#2BAADF;--acc2:#55C5F0;--hot:#ff5c5c;--bad:#ff5c5c;--good:#3fcf8e;--rad:22px;
+  --fh:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--fb:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--fm:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --hw:800;--ht:-.03em;--edge:#5a5a5a;--node:#1e1e1e;--node-s:#3a3a3a;--agent-f:#26223d;--agent-s:#a99bff;--post-bg:#000;--post-b:#2f3336;--post-dim:#71767b;--track:rgba(255,255,255,.05);
+  --chip-bg:#111;--n-ink:#0d1c22;--tag-ink:#0d1c22;--lab-bg:rgba(11,11,11,.78);--lab-ink:#fff;--solid:#1b1b1b;--hl:rgba(43,170,223,.18)}
+.t-e{--bg:#F5F1E8;--ink:#1B1A17;--dim:#57534B;--mut:#8A857A;--line:#CFC8BA;--panel:#FFFFFF;--pb:#DDD6C8;--acc:#E8590C;--acc2:#C2410C;--hot:#E8590C;--bad:#C2410C;--good:#1f8a4c;--rad:14px;
+  --fh:'Instrument Serif',ui-serif,Georgia,'Times New Roman',serif;--fb:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--fm:'Fragment Mono',ui-monospace,Menlo,Consolas,monospace;
+  --hw:400;--ht:-.015em;--hs:1.18;--hwn:400;--edge:#1B1A17;--node:#FFFFFF;--node-s:#1B1A17;--agent-f:#EFEBFF;--agent-s:#6a58d6;--post-bg:#fff;--post-b:#DDD6C8;--post-dim:#536471;--track:rgba(27,26,23,.12);
+  --n-bg:#1B1A17;--n-ink:#F5F1E8;--tag-ink:#ffffff;--lab-bg:#F5F1E8;--lab-ink:#1B1A17;--chip-bg:#FFFFFF;--bar-t:#ECE6DA;--bar-base:#B9B2A3;--ticket:#F5F1E8;--trk:#8A857A;--solid:#fff;--hl:rgba(232,89,12,.12)}
+html.t-e{color-scheme:light}
+.t-d{--bg:#272824;--ink:#ECEAE3;--dim:#B5B2A8;--mut:#8F8C84;--line:#8F8C84;--panel:#31322D;--pb:rgba(201,198,188,.42);--acc:#FFC857;--acc2:#FFD98A;--hot:#FF6B5B;--bad:#FF6B5B;--good:#7FD08A;--rad:10px;
+  --fh:'DM Mono',ui-monospace,Menlo,Consolas,monospace;--fb:'DM Mono',ui-monospace,Menlo,Consolas,monospace;--fm:'DM Mono',ui-monospace,Menlo,Consolas,monospace;--fhand:'Kalam','Comic Sans MS','Segoe Print',cursive;
+  --hw:500;--ht:-.03em;--hs:.92;--hwn:500;--edge:#C9C6BC;--node:#30312C;--node-s:#C9C6BC;--agent-f:#48412D;--agent-s:#FFC857;--post-bg:#2F302B;--post-b:#5E5C55;--post-dim:#A3A096;--track:rgba(236,234,227,.08);
+  --chip-bg:transparent;--n-bg:transparent;--n-ink:#FFC857;--tag-ink:#272824;--lab-bg:#FFC857;--lab-ink:#272824;--bar-t:rgba(236,234,227,.06);--bar-base:#8F8C84;--ticket:#272824;--trk:#B5B2A8;--solid:#31322D;--hl:rgba(255,200,87,.16)}
+
+/* ---------- stage ---------- */
+.stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%) scale(var(--scale,1));transform-origin:center}
+.slide{position:absolute;inset:0;display:none;overflow:hidden;background:var(--bg)}
+.slide.active{display:block}
+.st{--u:1px;position:absolute;inset:0;font-family:var(--fb);color:var(--ink)}
+.st *{margin:0;padding:0}
+.st ul,.st ol{list-style:none}
+.notes{display:none!important}
+em{font-style:normal;color:var(--acc)}
+.t-e .h2 em,.t-e .claim em,.t-e .hq em{font-style:italic;color:#E8590C}
+
+/* shared chrome (explorer) */
+.trk{position:absolute;top:54px;right:72px;font:500 22px/1 var(--fm);letter-spacing:.14em;color:var(--trk,var(--dim));text-transform:uppercase;z-index:3}
+.trk b{color:var(--acc2);font-weight:inherit}
+.t-e .trk b{color:#E8590C}
+.brand{position:absolute;left:56px;bottom:40px;display:flex;align-items:center;gap:12px;font:600 20px/1 var(--fb);color:var(--dim);z-index:3}
+.brand .av{width:40px;height:40px;border-radius:50%;background:url(assets/eric-avatar.jpg) center/cover;box-shadow:0 0 0 2px var(--line)}
+.t-e .brand .av{box-shadow:0 0 0 2px #fff,0 0 0 3px #DDD6C8}
+.kick{font:500 24px/1 var(--fm);letter-spacing:.16em;text-transform:uppercase;color:var(--acc2)}
+.t-e .kick{color:#E8590C}
+.h2{font:var(--hw) calc(var(--hs,1)*88px)/1.02 var(--fh);letter-spacing:var(--ht);color:var(--ink);text-wrap:balance}
+.h2.sm{font-size:calc(var(--hs,1)*64px)}
+.h2.xl{font-size:calc(var(--hs,1)*112px)}
+.sub{font:400 30px/1.3 var(--fb);color:var(--dim)}
+.box{background:var(--panel);border:1.5px solid var(--pb);border-radius:var(--rad)}
+.t-a .box{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.45)}
+.t-e .box{box-shadow:0 1px 0 rgba(0,0,0,.03),0 10px 24px rgba(60,40,10,.06)}
+.chip{display:inline-flex;align-items:center;gap:10px;padding:12px 24px;border-radius:999px;background:var(--chip-bg,var(--panel));border:1.5px solid var(--pb);font:500 26px/1 var(--fm);color:var(--ink)}
+.t-a .chip{color:#fff}
+.chip b{font-weight:inherit;color:var(--acc)}
+.glow{display:none}
+.t-a .glow{display:block;position:absolute;left:50%;top:48%;width:1100px;height:760px;transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,rgba(43,170,223,.24),rgba(43,170,223,.08) 50%,rgba(43,170,223,0));pointer-events:none}
+.src{position:absolute;right:72px;bottom:44px;font:500 20px/1.2 var(--fm);color:var(--mut);letter-spacing:.02em;text-align:right;max-width:1300px;z-index:3}
+.hd{position:absolute;left:110px;top:84px;right:460px;display:grid;gap:16px;z-index:2}
+
+/* hook / big question (explorer s1) */
+.s1 .kick{position:absolute;left:160px;right:160px;top:250px;text-align:center}
+.s1 .hq{position:absolute;left:160px;right:160px;top:320px;font:var(--hw) calc(var(--hs,1)*132px)/1.0 var(--fh);letter-spacing:var(--ht);text-align:center;text-wrap:balance}
+.t-a .s1 .hq em{background:linear-gradient(135deg,#55C5F0,#2BAADF);-webkit-background-clip:text;background-clip:text;color:transparent}
+.t-e .s1 .hq em{color:#1B1A17;font-style:italic;background:linear-gradient(transparent 62%,rgba(232,89,12,.30) 62%,rgba(232,89,12,.30) 90%,transparent 90%);padding:0 .08em}
+.s1 .cue{position:absolute;left:160px;right:160px;bottom:150px;display:flex;justify-content:center;align-items:center;gap:22px;font:500 40px/1 var(--fm);color:var(--ink)}
+.s1 .cue .hand{font-size:110px;line-height:1}
+.t-a .s1 .cue::before{content:"";position:absolute;left:50%;top:-40px;width:48px;height:3px;margin-left:-24px;border-radius:2px;background:#2BAADF;box-shadow:0 0 12px rgba(85,197,240,.35)}
+.s1 .ans{position:absolute;left:160px;right:160px;top:620px;text-align:center;font:var(--hw) calc(var(--hs,1)*80px)/1.05 var(--fh);letter-spacing:var(--ht);color:var(--hot)}
+.handbig{font-size:220px;line-height:1}
+.s1 .lgs{position:absolute;left:160px;right:160px;top:150px;display:flex;justify-content:center;gap:0}
+.s1 .lgs figure{margin:0;width:230px;display:grid;justify-items:center;gap:14px;font:500 22px/1 var(--fm);color:var(--mut);letter-spacing:.04em}
+.s1 .lgs .lg{width:104px;height:104px;padding:20px}
+.s1.lgx .kick{top:340px}.s1.lgx .hq{top:410px}
+
+/* photos */
+.ph{position:relative;border-radius:var(--rad);overflow:hidden;box-shadow:0 0 0 1.5px var(--pb)}
+.ph img{display:block;width:100%;height:100%;object-fit:cover}
+.t-e .ph{box-shadow:0 0 0 12px #fff,0 16px 36px rgba(60,40,10,.18);border-radius:2px}
+.ph-label{position:absolute;left:20px;bottom:20px;padding:10px 18px;border-radius:999px;background:var(--lab-bg);color:var(--lab-ink);font:500 24px/1 var(--fm);letter-spacing:.06em;text-transform:uppercase}
+.t-e .ph-label{box-shadow:0 0 0 1.5px #1B1A17;bottom:28px;left:28px}
+
+/* logo tile */
+.lg{display:inline-flex;align-items:center;justify-content:center;flex:none;background:#fff;border-radius:18px;padding:16px;box-shadow:0 0 0 1.5px var(--pb)}
+.lg img{display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain}
+
+/* video tile */
+.vt{display:grid;gap:16px;min-width:0}
+.vt img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:calc(var(--rad)*.7);box-shadow:0 0 0 1.5px var(--pb)}
+.t-e .vt img{box-shadow:0 0 0 8px #fff,0 12px 28px rgba(60,40,10,.16);border-radius:2px}
+.vt b{font:600 32px/1.15 var(--fb);color:var(--ink)}
+.vt span{font:500 26px/1.2 var(--fm);color:var(--acc)}
+.ytl{writing-mode:vertical-rl;transform:rotate(180deg);align-self:center;font:500 26px/1 var(--fm);letter-spacing:.2em;text-transform:uppercase;color:var(--mut)}
+.ytl.now{color:var(--acc2)}
+.t-e .ytl.now{color:#E8590C}
+
+/* playlist wall (slide 3): 3x3 journey panels, side header + 2x2 thumbs */
+.ywlg{position:absolute;left:110px;top:80px;width:180px;height:112px;padding:14px 18px}
+.yw{position:absolute;left:100px;right:100px;top:236px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 24px}
+.pg{display:grid;grid-template-columns:150px minmax(0,1fr);gap:0 14px;padding:12px 14px;border-radius:16px;background:var(--panel);border:1.5px solid var(--pb);transition:opacity .35s,box-shadow .35s}
+.t-e .pg{border-radius:10px}
+.pg p{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
+.pg .sn{display:flex;align-items:center;gap:10px}
+.pg .sn em{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;border:2px solid var(--acc);font:600 22px/1 var(--fm);font-style:normal;color:var(--acc)}
+.pg p b{font:600 25px/1.15 var(--fb);color:var(--ink)}
+.pg .vw{margin-top:auto;font:500 26px/1.1 var(--fm);color:var(--acc)}
+.pg p i{font:500 17px/1 var(--fm);font-style:normal;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);border:1.5px solid var(--line);border-radius:6px;padding:5px 6px}
+.pg .th{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.pg img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px;box-shadow:0 0 0 1px var(--pb)}
+.t-e .pg img{border-radius:2px}
+.yw.spot .pg:not(.on){opacity:.28}
+.yw.spot .pg.on{box-shadow:0 0 0 3px var(--acc)}
+.yw.spot .pg.on p b{color:var(--acc)}
+
+/* stats */
+.stat{display:grid;gap:10px}
+.stat b{font:var(--hw) calc(var(--hs,1)*130px)/.95 var(--fh);letter-spacing:-.03em;color:var(--ink)}
+.stat span{font:500 30px/1.25 var(--fb);color:var(--dim)}
+.stat.hot b{color:var(--hot)}
+.t-a .stat.hot b{background:linear-gradient(180deg,#ff8a8a,#ff5c5c);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* quotes + code */
+.qt{font:var(--hw) calc(var(--hs,1)*58px)/1.12 var(--fh);letter-spacing:var(--ht);color:var(--ink);text-wrap:balance}
+.t-a .qt{font-weight:600}
+.t-e .qt{font-style:italic}
+.qby{font:500 26px/1.3 var(--fm);color:var(--dim);margin-top:24px}
+.code{font:500 40px/1.3 var(--fm);padding:36px 44px;color:var(--ink);white-space:pre-wrap}
+.code i{font-style:normal;color:var(--acc)}
+.date{display:inline-block;font:500 26px/1 var(--fm);padding:10px 18px;border-radius:10px;border:1.5px solid var(--acc);color:var(--acc);letter-spacing:.04em}
+/* timeline cards (slide 8) */
+.tlc{position:absolute;width:260px;display:grid;justify-items:center;gap:10px;text-align:center}
+.tlc .tln{width:26px;height:26px;border-radius:50%;background:var(--acc);margin:6px 0;box-shadow:0 0 0 8px var(--bg)}
+.tlc img{width:190px;aspect-ratio:16/9;object-fit:cover;border-radius:12px;box-shadow:0 0 0 1.5px var(--pb)}
+.tlc .tth{position:relative;display:block;line-height:0;margin-bottom:2px}
+.tlc .gh{position:absolute;right:-14px;top:-14px;width:36px;height:36px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 2px var(--bg),0 2px 6px rgba(0,0,0,.25)}
+.tlc .gh img{width:24px;height:24px;aspect-ratio:auto;border-radius:0;box-shadow:none}
+.tlc .who{position:absolute;left:-10px;bottom:-12px;display:flex;align-items:center;gap:0;line-height:1}
+.tlc .who img{width:46px;height:46px;aspect-ratio:auto;border-radius:50%;box-shadow:0 0 0 2.5px var(--acc);position:relative;z-index:1}
+.tlc .who span{font:600 19px/1 var(--fm);background:var(--lab-bg);color:var(--lab-ink);padding:5px 10px 5px 14px;border-radius:0 8px 8px 0;margin-left:-6px}
+.tlc b{font:600 30px/1.1 var(--fb);color:var(--ink);min-height:2.2em;display:grid;align-items:start}
+.tlc .sub{font-size:24px;line-height:1.2;margin-top:-2px}
+.tlc .date{font-size:21px;padding:9px 11px;white-space:nowrap;letter-spacing:.02em}
+.tlrail{position:absolute;height:4px;background:var(--pb)}
+.tlrail.go{background:var(--acc)}
+.tlrail.go::after{content:"";position:absolute;right:-16px;top:-10px;border:12px solid transparent;border-left:18px solid var(--acc);border-right:0}
+.tlgoal{position:absolute;width:254px;display:grid;gap:12px;justify-items:stretch;text-align:center;padding:20px 18px 18px;border:2.5px solid var(--acc);border-radius:20px;background:var(--hl)}
+.tlgoal .gk{font:500 20px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--acc)}
+.tlgoal .gp{font:700 23px/1.15 var(--fb);color:var(--tag-ink);background:var(--acc);border-radius:999px;padding:12px 4px;white-space:nowrap}
+.tlgoal small{font:500 21px/1.25 var(--fm);color:var(--dim)}
+/* GitHub repo header (Star Super Board slide) */
+.ghr{--gbg:#0d1117;--gfg:#e6edf3;--gmu:#9198a1;--gln:#4493f8;--gbtn:#21262d;--gbd:#30363d;--gtab:#fd8c73;position:absolute;left:110px;right:110px;top:110px;bottom:120px;display:flex;flex-direction:column;background:var(--gbg);color:var(--gfg);border:1.5px solid var(--gbd);border-radius:18px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+.t-e .ghr{--gbg:#ffffff;--gfg:#1f2328;--gmu:#59636e;--gln:#0969da;--gbtn:#f6f8fa;--gbd:#d0d7de}
+.ghr svg{width:1em;height:1em;fill:currentColor;flex:none}
+.ghr-top{display:flex;align-items:center;gap:22px;padding:34px 44px 26px}
+.ghr-mark{font-size:60px;line-height:0}
+.ghr-av{width:72px;height:72px;border-radius:50%;box-shadow:0 0 0 2px var(--gbd)}
+.ghr-name{display:grid;gap:6px}
+.ghr-who{font-size:26px;color:var(--gmu);font-weight:500}
+.ghr-repo{display:flex;align-items:center;gap:12px;font-size:46px;line-height:1.1;color:var(--gln)}
+.ghr-repo .o{font-weight:400}.ghr-repo .sl{color:var(--gmu)}.ghr-repo b{font-weight:600}
+.ghr-pub{margin-left:12px;font-size:22px;font-weight:500;color:var(--gmu);border:1.5px solid var(--gbd);border-radius:999px;padding:5px 16px}
+.ghr-btns{margin-left:auto;display:flex;gap:14px}
+.ghb{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:500;color:var(--gfg);background:var(--gbtn);border:1.5px solid var(--gbd);border-radius:10px;padding:0 18px;height:56px}
+.ghb svg{color:var(--gmu);font-size:24px}
+.ghb i,.ghr-tabs i{font-style:normal;font-size:20px;font-weight:600;background:var(--gbd);border-radius:999px;padding:3px 12px;margin-left:4px}
+.ghb.star svg{color:#e3b341}
+.ghr-tabs{display:flex;gap:10px;padding:0 36px;border-bottom:1.5px solid var(--gbd);font-size:26px}
+.ghr-tabs span{display:flex;align-items:center;gap:12px;padding:14px 18px 20px;color:var(--gfg);border-bottom:4px solid transparent;margin-bottom:-1.5px}
+.ghr-tabs span svg{color:var(--gmu)}
+.ghr-tabs span.on{border-bottom-color:var(--gtab);font-weight:600}
+.ghr-body{flex:1;display:flex;justify-content:space-between;align-items:center;gap:60px;padding:30px 70px 40px 56px}
+.ghr-about h3{font-size:30px;font-weight:600;margin:0 0 18px}
+.ghr-desc{font-size:44px;line-height:1.3;margin:0 0 26px;max-width:1000px}
+.ghr-link{display:flex;align-items:center;gap:14px;font-size:30px;font-weight:600;color:var(--gln);margin:0 0 30px}
+.ghr-link svg{color:var(--gmu)}
+.ghr-stats{list-style:none;margin:0;padding:0;display:grid;gap:14px;font-size:28px;color:var(--gmu)}
+.ghr-stats li{display:flex;align-items:center;gap:14px}.ghr-stats b{color:var(--gfg)}
+.ghr-qr{flex:none}
+.ghr-qr .ql span:last-child{color:var(--gfg)}
+.t-d .ghr{border-width:2.5px;border-radius:14px 8px 12px 6px/8px 12px 6px 14px}
+/* eras (slide 8) */
+.era{position:absolute;width:365px;bottom:150px;display:flex;flex-direction:column;gap:18px;padding:30px 30px;background:var(--panel);border:1.5px solid var(--pb);border-radius:var(--rad)}
+.era .date{align-self:flex-start}
+.era b{font:600 50px/1.05 var(--fb);color:var(--ink);letter-spacing:-.01em}
+.era span:last-child{font:500 28px/1.3 var(--fb);color:var(--dim)}
+.era.now{border:3px solid var(--acc);background:var(--hl)}
+.era.now b{color:var(--acc)}
+.era.next{background:transparent;border:3px dashed var(--mut);opacity:.6;align-items:center;justify-content:center;text-align:center}
+.era.next .q{font:700 150px/1 var(--fh);color:var(--mut)}
+.era.next b{font-size:44px;color:var(--dim)}
+.era-ar{position:absolute;top:740px;width:60px;height:4px;background:var(--mut)}
+.era-ar::after{content:"";position:absolute;right:-4px;top:-10px;border:12px solid transparent;border-left:18px solid var(--mut);border-right:0}
+.era-ar.go{background:var(--acc)}.era-ar.go::after{border-left-color:var(--acc)}
+/* fresh-agent context bars (slide 23) */
+.cx-bar{fill:none;stroke:var(--dim);stroke-width:2.5}
+.t-d .cxs .dg-txt{font-size:36px!important;letter-spacing:-.02em}
+.cx-fill{fill:var(--acc)}
+.cx-gone{fill:var(--bg);fill-opacity:.32;stroke:var(--mut);stroke-width:3;stroke-dasharray:12 9}
+.cx-xc{fill:var(--bad)}
+.cx-xx{stroke:#fff;stroke-width:4.5;stroke-linecap:round;fill:none}
+/* kanban board (plan-first slide) */
+.kb-col{fill:var(--bg);stroke:var(--pb);stroke-width:2}
+.kb-col.on{stroke:var(--acc);stroke-width:3.5}
+.kb-h{fill:var(--ink);font-family:var(--fb);font-size:26px;font-weight:600}
+.kb-lane{fill:var(--hl);stroke:var(--agent-s);stroke-width:2}
+.kb-lt{fill:var(--ink);font-family:var(--fm);font-size:21px;font-weight:600}
+.kb-card{fill:var(--node);stroke:var(--node-s);stroke-width:2}
+.kb-card.on{stroke:var(--acc);stroke-width:3}
+.kb-card.done{opacity:.5}
+.kb-ct{fill:var(--ink);font-family:var(--fm);font-size:22px;font-weight:600}
+.kb-ln{fill:var(--mut);opacity:.6}
+.t-d .kbs .kb-h{font-size:23px}
+.t-d .kbs .kb-lt{font-size:18px}
+/* career timeline (slide 2) */
+.car{position:absolute;left:110px;right:110px;top:715px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 30px}
+.car::before{content:"";position:absolute;left:0;right:0;top:62px;height:3px;background:var(--line)}
+.car>div{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-width:0}
+.car .date{font-size:23px;padding:8px 12px;white-space:nowrap;justify-self:start}
+.car .tln{width:22px;height:22px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 7px var(--bg)}
+.car .co{display:flex;gap:18px;align-items:center}
+.car .co .lg{width:76px;height:76px;padding:12px;border-radius:14px}
+.car .co p b{display:block;font:600 30px/1.15 var(--fb);color:var(--ink)}
+.car .co p span{display:block;font:500 24px/1.25 var(--fb);color:var(--dim)}
+.lg.tx{font:800 26px/1 'Inter',sans-serif;color:#1b1a17;letter-spacing:-.02em}
+.car .yt{grid-row:2;grid-column:1/-1;margin-left:330px;white-space:nowrap;display:flex;align-items:center;gap:16px;height:52px;padding:0 24px 0 10px;border-radius:999px;background:var(--hl);border:1.5px solid var(--acc);font:500 24px/1 var(--fm);color:var(--ink)}
+.car .yt img{height:32px}
+.car .yt b{font-weight:inherit;color:var(--acc);margin-left:auto}
+/* YouTube video card (slide 6) */
+.yv{position:absolute;display:grid;gap:22px}
+.yv .tb{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1.5px var(--pb)}
+.yv .tb img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.yv .tb i{position:absolute;right:14px;bottom:14px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.82);color:#fff;font:600 26px/1 'Inter',sans-serif;font-style:normal}
+.yv .meta{display:grid;grid-template-columns:64px 1fr;gap:20px}
+.yv .meta .av{width:64px;height:64px;border-radius:50%;background:url(assets/eric-avatar.jpg) center/cover}
+.yv .meta b{display:block;font:600 36px/1.2 var(--fb);color:var(--ink)}
+.yv .meta span{display:block;margin-top:8px;font:500 26px/1.3 var(--fb);color:var(--dim)}
+.yvc{padding:20px 20px 26px;border-radius:22px;background:var(--solid);border:1.5px solid var(--pb);box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.t-e .yvc{border-color:#DDD6C8;box-shadow:0 14px 34px rgba(60,40,10,.12)}
+.yvc .meta{padding:0 6px}
+.qrv{justify-items:start;gap:10px}
+
+/* guess-who */
+.face{width:520px;height:520px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 6px var(--acc)}
+.face img{width:100%;height:100%;object-fit:cover;display:block}
+.face.blur img{filter:blur(28px) saturate(.6);transform:scale(1.2)}
+.qmark{position:absolute;inset:0;display:grid;place-items:center;font:800 260px/1 var(--fh);color:#fff;text-shadow:0 8px 40px rgba(0,0,0,.5)}
+
+/* X post / blog card (real handle styling) */
+.post{position:absolute;display:grid;gap:36px;padding:56px 64px;background:var(--post-bg);border:1.5px solid var(--post-b);border-radius:28px;font-family:'Inter',system-ui,sans-serif;color:var(--ink)}
+.t-a .post{box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.t-e .post{box-shadow:0 10px 30px rgba(60,40,10,.10)}
+.post .who{display:flex;align-items:center;gap:24px}
+.post .pav{flex:none;width:124px;height:124px;border-radius:50%;overflow:hidden;background:#3a3f44}
+.post .pav img{width:100%;height:100%;object-fit:cover;display:block}
+.post .pav.mask{display:grid;place-items:center;font:800 60px/1 'Inter',sans-serif;color:#fff}
+.post .nm{display:grid;gap:10px;flex:1;min-width:0}
+.post .nm b{display:flex;align-items:center;gap:12px;font:700 46px/1.1 'Inter',sans-serif;color:var(--ink)}
+.post .nm span{display:flex;align-items:center;gap:4px;font:500 34px/1.1 'Inter',sans-serif;color:var(--post-dim)}
+.post .vb{width:44px;height:44px;flex:none}
+.post .xl{font:700 62px/1 'Inter',sans-serif;color:var(--ink);align-self:flex-start}
+.redact{display:inline-block;height:.9em;border-radius:6px;background:var(--post-dim);opacity:.55;vertical-align:middle}
+.post .ptitle{font:700 58px/1.15 'Inter',sans-serif;color:var(--ink)}
+.post .ptx{font:500 62px/1.28 'Inter',sans-serif;color:var(--ink);text-wrap:pretty}
+.post mark{background:rgba(255,122,89,.32);color:inherit;padding:0 .12em;border-radius:6px}
+.t-e .post mark{background:rgba(232,89,12,.22)}
+.post .pcode{font:500 48px/1.3 var(--fm);padding:30px 36px;border-radius:16px;background:var(--bar-t,rgba(255,255,255,.06));white-space:nowrap}
+.post .pcode i{font-style:normal;color:var(--acc)}
+.post .meta{font:500 32px/1 'Inter',sans-serif;color:var(--post-dim)}
+
+/* skill card (explorer s4) */
+.sk .hd4{position:absolute;left:110px;top:70px;display:grid;gap:12px}
+.sk .skill{font:600 96px/1 var(--fm);letter-spacing:-.02em;color:var(--ink)}
+.t-e .sk .skill{font-family:'Fragment Mono',ui-monospace,monospace;font-weight:400}
+.sk .cols{position:absolute;left:110px;right:110px;top:262px;bottom:118px;display:grid;grid-template-columns:660px 1fr 560px;gap:40px;align-items:stretch}
+.sk.wp .cols{bottom:318px}
+.sk .col{min-width:0;min-height:0;display:flex;flex-direction:column}
+.sk .ct{font:500 26px/1 var(--fm);letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:20px}
+.sk .c1{padding:34px 40px}
+.steps{flex:1;display:grid;align-content:space-evenly;gap:18px}
+.steps li{display:flex;align-items:center;gap:24px;font:500 46px/1.15 var(--fb);color:var(--ink)}
+.sk.wp .steps li{font-size:40px}
+.steps .n{flex:none;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--n-bg,var(--acc));color:var(--n-ink,#000);font:600 28px/1 var(--fm)}
+.sk.wp .steps .n{width:54px;height:54px}
+.feats{flex:1;display:grid;grid-auto-rows:1fr;gap:24px}
+.feat{display:grid;align-content:center;gap:10px;padding:24px 36px}
+.feat b{font:600 50px/1.1 var(--fb);color:var(--ink)}
+.sk.wp .feat b{font-size:42px}
+.sk.wp .feat{padding:12px 30px}
+.sk.wp .feats{grid-auto-rows:minmax(0,1fr);gap:18px}
+.sk .lane{min-height:0}
+.sk.wp .ex{margin-top:14px;font-size:34px}
+.sk .col>.rows,.sk .col>.ladder,.sk .col>.sboard{flex:1;min-height:0}
+.sk2 .chips{position:absolute;left:110px;top:236px;display:flex;gap:20px}
+.sk2 .chips li{padding:12px 28px;border-radius:999px;font:600 32px/1 var(--fb);color:var(--ink);white-space:nowrap}
+.sk2 .cols{top:340px;bottom:120px;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:60px}
+.sk2 .c1{padding:36px 48px}
+.sk2 .steps li{font-size:54px;gap:28px}
+.sk2 .steps .n{width:74px;height:74px;font-size:32px}
+.sk2 .rows{padding:36px 44px}
+.sk2 .rows li{font-size:52px;gap:26px}
+.sk2 .rows li i{width:66px;height:66px;font-size:30px}
+.sk2 .rows .hdr{font-size:38px}
+.sk2 .ladder{padding:26px 40px}
+.sk2 .ladder li{font-size:42px;gap:22px}
+.sk2 .ladder li span{width:54px;height:54px;font-size:28px}
+.sk2 .sboard{gap:22px}
+.sk2 .lane{padding:24px}
+.sk2 .lh{font-size:28px}
+.sk2 .ticket{font-size:42px;padding:24px;gap:16px}
+.sk2 .tid{font-size:30px}
+.sk2 .tag,.sk2 .fail{font-size:30px;padding:6px 14px}
+.sk2 .ex{font-size:44px;margin-top:28px}
+.sk2 .steps .lg{width:74px!important;height:74px!important;padding:10px!important}
+.skpanel{position:absolute;left:110px;right:110px;bottom:104px;height:194px;display:flex;align-items:center;gap:30px}
+.skpanel .kick{flex:none;width:250px;line-height:1.4;color:var(--mut)}
+.skpanel .pimg{flex:1;height:100%;display:flex;align-items:center;justify-content:flex-start;background:#fff;border-radius:16px;padding:10px 18px;box-shadow:0 0 0 1.5px var(--pb)}
+.skpanel .pimg img{display:block;max-width:100%;max-height:100%}
+.feat span{font:500 24px/1.25 var(--fm);color:var(--dim)}
+.sboard{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lane{padding:18px;min-height:240px}
+.lh{font:500 24px/1 var(--fm);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:14px}
+.ticket{display:grid;gap:10px;padding:16px;font:600 28px/1.2 var(--fb);color:var(--ink);background:var(--ticket,var(--bg))}
+.ticket.back{border-color:var(--acc);box-shadow:0 0 0 1.5px var(--acc)!important}
+.ticket.ghost{opacity:.5;border-style:dashed}
+.tid{font:500 24px/1 var(--fm);color:var(--mut)}
+.tag,.fail,.okp{justify-self:start;padding:4px 10px;border-radius:6px;font:600 24px/1.1 var(--fm)}
+.tag{background:var(--acc);color:var(--tag-ink,#000)}
+.fail{color:var(--bad);border:1.5px solid var(--bad)}
+.okp{color:var(--good);border:1.5px solid var(--good)}
+.ex{margin-top:24px;font:500 38px/1.25 var(--fb);color:var(--ink)}
+.ex b{color:var(--acc)}
+.rows{display:grid;align-content:space-evenly;gap:18px;padding:34px 34px}
+.rows li{display:flex;align-items:center;gap:20px;font:500 44px/1.2 var(--fb)}
+.sk.wp .rows li{font-size:40px}
+.rows li i{font-style:normal;width:54px;height:54px;display:grid;place-items:center;border-radius:10px;font:600 24px/1 var(--fm);flex:none}
+.i-good{background:rgba(63,207,142,.16);color:var(--good)}
+.i-bad{background:rgba(255,92,92,.14);color:var(--bad)}
+.i-warn{background:rgba(255,200,87,.16);color:#d9a227}
+.i-acc{background:var(--hl);color:var(--acc)}
+.rows .hdr{font:600 34px/1.2 var(--fm);color:var(--acc);padding-bottom:6px;border-bottom:1.5px solid var(--pb)}
+.ladder{display:grid;align-content:space-evenly;gap:8px;padding:24px 30px}
+.ladder li{display:flex;align-items:center;gap:16px;font:500 34px/1.15 var(--fb)}
+.ladder li span{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font:600 24px/1 var(--fm);border:1.5px solid var(--acc);color:var(--acc)}
+
+/* data (explorer s5) */
+.s5 .hd5{position:absolute;left:110px;right:110px;top:110px;display:grid;gap:20px}
+.s5 .claim{font-size:calc(var(--hs,1)*72px);max-width:1500px}
+.s5 .big{position:absolute;left:96px;top:440px;font:var(--hw) calc(var(--hs,1)*240px)/0.9 var(--fh);letter-spacing:-.04em;color:var(--hot)}
+.t-a .s5 .big{background:linear-gradient(180deg,#ff8a8a,#ff5c5c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.t-e .s5 .big{font-style:italic}
+.s5 .bars{position:absolute;left:760px;right:110px;top:440px;display:grid;gap:28px}
+.bar{display:grid;grid-template-columns:300px 1fr 130px;align-items:center;gap:22px}
+.bl{font:500 30px/1.1 var(--fb);color:var(--dim)}
+.bv{font:600 40px/1 var(--fm);color:var(--ink);text-align:right}
+.track{height:72px;border-radius:10px;background:var(--bar-t,rgba(127,127,127,.12));overflow:hidden}
+.track i{display:block;height:100%;width:var(--w);border-radius:inherit;background:var(--bar-base,var(--mut))}
+.bar.hot .track i{background:var(--hot)}
+.bar.hot .bl,.bar.hot .bv{color:var(--ink)}
+.bnote{font:500 24px/1.3 var(--fm);color:var(--mut)}
+.minis{position:absolute;left:110px;right:110px;top:800px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.mini{padding:20px 26px;display:flex;align-items:baseline;gap:16px}
+.mini b{font:600 44px/1 var(--fm);color:var(--hot)}
+.mini span{font:500 26px/1.2 var(--fb);color:var(--dim)}
+
+/* diagram: thin straight arrows, curve only for the loop, one emphasis colour (--acc) = new this slide */
+.dg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dg-edge{fill:var(--edge);stroke:var(--edge);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.dg-edge.nw{stroke:var(--acc);fill:var(--acc);stroke-width:3.5}
+.dg-loop{fill:none;stroke:var(--edge);stroke-width:2.5;stroke-dasharray:10 9;stroke-linecap:round;stroke-linejoin:round}
+.dg-loop.nw{stroke:var(--acc);stroke-width:4;stroke-dasharray:none}
+.dg-node{fill:var(--node);stroke:var(--node-s);stroke-width:2.5}
+.dg-txt{fill:var(--ink);font-family:var(--fb);font-size:50px;font-weight:600}
+.dg-sub{fill:var(--agent-s);font-family:var(--fm);font-size:26px;letter-spacing:.08em;font-weight:600}
+.dg-sub-ic{font-size:21px;letter-spacing:0}
+.dg-cap{fill:var(--dim);font-family:var(--fm);font-size:26px}
+.dg-x{fill:none;stroke:var(--bad);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round}
+.dg-agent{fill:var(--agent-f);stroke:var(--agent-s);stroke-width:3}
+.dg-nw{stroke:var(--acc)!important;stroke-width:5!important}
+.dg-center{fill:var(--ink);font-family:var(--fh);font-size:calc(var(--hs,1)*62px);font-weight:var(--hwn,700);letter-spacing:-.01em}
+.t-e .dg-center:not(.k){font-style:italic;font-size:72px}
+.dg-center.k{fill:var(--dim);font-family:var(--fm);font-size:28px;letter-spacing:.18em;font-weight:500}
+.dg-hchip{fill:var(--bg);stroke:var(--dim);stroke-width:2.5}
+.dg-hico{fill:var(--dim)}
+.dg-lgbg{fill:#fff}
+.dg-pill{fill:var(--hl);stroke:var(--acc);stroke-width:2.5}
+.dg-pill-t{fill:var(--ink);font-family:var(--fm);font-size:30px;font-weight:500}
+.dg-col{fill:var(--acc)}
+.dg-col-t{fill:var(--tag-ink,#000);font-family:var(--fm);font-size:26px;font-weight:700;letter-spacing:.06em}
+.t-e .dg-col-t{fill:#fff}
+.dg-hw{font-family:'Kalam',cursive;font-size:42px;font-weight:700;fill:var(--bad)}
+/* hand-drawn feel: rough strokes on shapes only, never on text */
+.dg-node,.dg-agent,.dg-edge,.dg-loop,.dg-pill,.dg-x,.dg-hchip{filter:url(#rough)}
+.dg-hw.acc{fill:var(--acc)}.dg-hw.mut{fill:var(--mut)}
+.spinewrap{position:absolute;inset:0}
+
+/* flows (pipes of boxes) */
+.flow{display:flex;align-items:stretch;gap:18px}
+.flow .fbox{flex:1 1 0;min-width:0;padding:30px 12px;align-content:center}
+.flow .arr{align-self:center}
+.pf>.arr{align-self:center}
+.fbox{padding:28px 28px;font:600 44px/1.15 var(--fb);color:var(--ink);text-align:center;display:grid;gap:10px;justify-items:center}
+.fbox small{font:500 28px/1.2 var(--fm);color:var(--dim)}
+.fbox.big{font-size:54px;padding:70px 24px;gap:18px}
+.fbox.big small{font-size:30px}
+.fbox.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)!important;background:var(--hl)}
+.fbox.ghost{border-style:dashed;opacity:.7}
+.arr{font:500 52px/1 var(--fm);color:var(--acc);flex:none}
+/* real screenshot in a browser frame + highlighter overlay (not baked into the image) */
+.shot{position:absolute;border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 0 0 1.5px var(--pb),0 24px 60px rgba(0,0,0,.35)}
+.t-e .shot{box-shadow:0 0 0 1.5px #DDD6C8,0 14px 34px rgba(60,40,10,.12)}
+.shot .bar{display:flex;align-items:center;gap:12px;height:56px;padding:0 20px;background:#ECECEC;border-bottom:1px solid #d6d6d6}
+.shot .bar i{width:14px;height:14px;border-radius:50%;background:#c9c9c9;flex:none}
+.shot .bar span{margin-left:14px;flex:1;height:36px;border-radius:18px;background:#fff;display:flex;align-items:center;padding:0 18px;font:500 24px/1 'JetBrains Mono',monospace;color:#555;white-space:nowrap;overflow:hidden}
+.shot .im{position:relative}
+.shot .im img{display:block;width:100%;height:auto}
+.hl{position:absolute;border-radius:6px;background:rgba(255,214,0,.48);mix-blend-mode:multiply;transform:rotate(-.6deg);box-shadow:0 0 0 3px rgba(255,190,0,.35)}
+.t-e .hl{background:rgba(255,140,40,.40);box-shadow:0 0 0 3px rgba(232,89,12,.30)}
+/* fanned thumbnail collage */
+.fan img{position:absolute;display:block;aspect-ratio:16/9;object-fit:cover;border-radius:14px;box-shadow:0 0 0 2px var(--pb),0 18px 44px rgba(0,0,0,.45)}
+.t-e .fan img{border-radius:3px;box-shadow:0 0 0 8px #fff,0 14px 30px rgba(60,40,10,.18)}
+/* FAQ objection (Tereza style) */
+.faq{position:absolute;left:110px;right:110px;top:250px;bottom:120px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
+.faq .q{display:grid;align-content:center;gap:48px;padding:56px 56px}
+.faq .q h3{font:var(--hw) calc(var(--hs,1)*76px)/1.06 var(--fh);letter-spacing:var(--ht);color:var(--ink);text-wrap:balance}
+.t-e .faq .q h3{font-style:italic}
+.faq .q li{display:flex;gap:20px;align-items:baseline;font:500 46px/1.25 var(--fb);color:var(--ink)}
+.faq .q li b{flex:none;font:600 34px/1 var(--fm);color:var(--acc)}
+
+/* simulated board */
+.sim{position:absolute;left:60px;right:60px;top:290px;bottom:100px;display:grid;grid-template-columns:260px repeat(5,1fr);gap:8px}
+.scol{display:flex;flex-direction:column;gap:8px;padding:6px;min-width:0;border-radius:14px;background:var(--bar-t,rgba(127,127,127,.08));border:1.5px solid var(--pb)}
+.scol h4{font:600 30px/1 var(--fm);letter-spacing:.02em;gap:8px;text-transform:uppercase;color:var(--dim);padding:8px 6px 10px;border-bottom:3px solid var(--cc,var(--line));display:flex;justify-content:space-between}
+.scol h4 small{font:500 28px/1 var(--fm);color:var(--mut)}
+.card{display:grid;gap:6px;padding:8px 10px;border-radius:12px;background:var(--solid);border:1.5px solid var(--pb);box-shadow:0 6px 16px rgba(0,0,0,.18);font:600 32px/1.15 var(--fb);color:var(--ink)}
+.card .ctop{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.card .cid{font:500 26px/1 var(--fm);color:var(--mut)}
+.card .lb{padding:2px 6px;border-radius:999px;font:600 26px/1.2 var(--fm);border:1.5px solid currentColor}
+.lb.feature{color:#7c6cf2}.lb.bug{color:var(--bad)}.lb.qa{color:#d9a227}.lb.model{color:var(--acc)}
+.card .stt{font:500 28px/1.25 var(--fm);color:var(--dim);white-space:pre-line}
+.card.done .stt{color:var(--good)}
+.card.bounce{border-color:var(--bad);box-shadow:0 0 0 1.5px var(--bad)}
+.card.bounce .stt{color:var(--bad)}
+.card.flash{box-shadow:0 0 0 3px var(--acc)}
+.card.ghostc{opacity:.55;border-style:dashed}
+.sim.end{grid-template-columns:280px 1.5fr 150px 150px 150px 2.2fr}
+.sim.end .scol:not(:has(.card))::after{content:"clear";margin:auto;font:500 28px/1 var(--fm);color:var(--mut);letter-spacing:.06em}
+.sim.end .scol:not(:has(.card)) h4{font-size:26px}
+.sim.end .card:not(.ghostc){font-size:44px;padding:12px 20px;gap:8px}
+.sim.end .card:not(.ghostc) .cid,.sim.end .card:not(.ghostc) .lb{font-size:32px}
+.sim.end .card:not(.ghostc) .stt{font-size:34px}
+.sim.end [data-col=done] .card{flex:1;min-height:0;align-content:center}
+.sim.end .scol{min-height:0;overflow:hidden}
+.simbar{position:absolute;left:110px;right:110px;top:214px;display:flex;align-items:center;gap:22px}
+.simcap{flex:1;font:500 36px/1.2 var(--fb);color:var(--ink)}
+.simcap b{font:600 24px/1 var(--fm);color:var(--acc);margin-right:14px}
+.playbtn{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:12px;padding:14px 26px;border-radius:999px;border:1.5px solid var(--acc);background:var(--hl);color:var(--ink);font:600 24px/1 var(--fm)}
+.playbtn:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.simtag{font:500 24px/1 var(--fm);color:var(--mut);letter-spacing:.1em;text-transform:uppercase;padding:10px 14px;border:1.5px dashed var(--mut);border-radius:8px}
+
+/* QR */
+.qr{display:grid;justify-items:center;gap:14px}
+.qr .qi{background:#fff;padding:18px;border-radius:18px;box-shadow:0 0 0 1.5px var(--pb)}
+.qr .qi img{display:block;width:100%;height:100%;image-rendering:pixelated}
+.qr span{font:600 28px/1.2 var(--fb);color:var(--ink);text-align:center}
+.qr small{font:500 24px/1.2 var(--fm);color:var(--dim)}
+.qr .ql{display:flex;align-items:center;gap:14px}
+.qr .lgc{flex:none;display:grid;place-items:center;width:52px;height:52px;background:#fff;border-radius:12px;padding:7px;box-shadow:0 0 0 1.5px var(--pb)}
+.qr .lgc img{width:100%;height:100%;object-fit:contain}
+.qr .ql.s .lgc{width:40px;height:40px;padding:5px}
+
+
+/* ---------- D · Whiteboard Dark (theme-explorer D): olive charcoal, mono everywhere, wobbly marker boxes ---------- */
+.t-d .box,.t-d .chip{border-color:transparent;box-shadow:none}
+.t-d .box:not([style*="position:absolute"]),.t-d .chip{position:relative}
+.t-d .box::before,.t-d .box::after,.t-d .chip::before,.t-d .chip::after{content:"";position:absolute;inset:0;pointer-events:none;
+  border:2.5px solid #C9C6BC;border-radius:240px 16px 200px 14px/14px 200px 16px 240px}
+.t-d .box::after,.t-d .chip::after{transform:rotate(.6deg) translate(3px,-2px);opacity:.45;border-radius:16px 220px 14px 200px/200px 14px 220px 16px}
+.t-d .box.on::before,.t-d .ticket.back::before{border-color:#FFC857}
+.t-d .fbox.on,.t-d .ticket.back{box-shadow:none!important}
+.t-d .fbox.ghost::before{border-style:dashed}
+.t-d .chip{color:var(--ink)}
+.t-d .h2 em,.t-d .claim em{color:#FFC857}
+.t-d .trk b{color:#FFC857}
+.t-d .kick{color:#FFC857}
+.t-d .s1 .hq em{color:#ECEAE3;background:linear-gradient(transparent 60%,rgba(255,200,87,.38) 60%,rgba(255,200,87,.38) 90%,transparent 90%)}
+.t-d .s1.lgx .hq em{position:relative;background:none}
+.t-d .s1.lgx .hq em::after{content:"";position:absolute;left:-16%;top:0;width:132%;height:104%;border:5px solid #FFC857;border-radius:50% 45% 52% 48%/55% 48% 52% 45%;transform:rotate(-4deg);pointer-events:none}
+.t-d .s1.lgx .hq em::before{content:"";position:absolute;left:-12%;top:6%;width:124%;height:96%;border:3px solid rgba(255,200,87,.55);border-radius:48% 52% 45% 55%/50% 55% 45% 50%;transform:rotate(3deg);pointer-events:none}
+.t-d .ph{border-radius:4px;box-shadow:0 0 0 10px #ECEAE3;transform:rotate(-.6deg)}
+.t-d .ph+.ph{transform:rotate(.7deg)}
+.t-d .ph-label{border-radius:3px;transform:rotate(-2deg);font:700 28px/1 var(--fhand);letter-spacing:0;text-transform:none;bottom:26px;left:26px}
+.t-d .lg,.t-d .qr .qi,.t-d .qr .lgc{box-shadow:none}
+.t-d .vt img,.t-d .tlc img,.t-d .yv .tb{box-shadow:0 0 0 2px #C9C6BC;border-radius:6px}
+.t-d .tlc b{font-size:26px;letter-spacing:-.02em}
+.t-d .era b{font-size:42px;letter-spacing:-.02em}
+.t-d .tlgoal .gp{font-size:20px;letter-spacing:-.02em}
+.t-d .tlgoal{border-radius:18px 8px 16px 6px/8px 16px 6px 18px}
+.t-d .tlc .who img{border-radius:50%;box-shadow:0 0 0 2.5px var(--acc)}
+.t-d .tlc .gh img{border-radius:0;box-shadow:none}
+.t-d .yvc{border:2.5px solid #C9C6BC;border-radius:10px;box-shadow:0 22px 50px rgba(0,0,0,.45)}
+.t-d .pg{border:2px solid rgba(201,198,188,.5);border-radius:18px 8px 16px 10px/10px 16px 8px 18px}
+.t-d .pg img{border-radius:3px;box-shadow:none}
+.t-d .yw.spot .pg.on{border-color:#FFC857;box-shadow:0 0 0 2px #FFC857}
+.t-d .ytl.now{color:#FFC857}
+.t-d .date{border-width:2px;border-radius:12px 6px 10px 5px/6px 10px 5px 12px}
+.t-d .car::before{background:#8F8C84}
+.t-d .car .yt{border-width:2px}
+.t-d .qt{font-weight:500}
+.t-d .post{box-shadow:none;border-width:2px}
+.t-d .post mark{background:rgba(255,200,87,.28)}
+.t-d .sk .skill{font-weight:500;display:inline-block;background:linear-gradient(transparent 58%,rgba(255,200,87,.38) 58%,rgba(255,200,87,.38) 92%,transparent 92%)}
+.t-d .steps .n{border:2.5px solid #FFC857;border-radius:50% 45% 55% 50%}
+.t-d .rows .hdr{border-bottom:2px dashed #8F8C84}
+.t-d .ladder li span{border-width:2px;border-radius:50% 45% 55% 50%}
+.t-d .track i{background-image:repeating-linear-gradient(-45deg,rgba(0,0,0,.2) 0 6px,transparent 6px 16px)}
+.t-d .scol{border-width:2px;border-radius:16px 8px 14px 10px/10px 14px 8px 16px}
+.t-d .card{box-shadow:none;border-width:2px}
+.t-d .card.bounce{box-shadow:0 0 0 1.5px var(--bad)}
+.t-d .card.flash{box-shadow:0 0 0 3px var(--acc)}
+.t-d .dg-txt{font-size:44px;font-weight:500}
+.t-d .dg-center:not(.k){font-size:54px}
+.t-d .dg-agent{stroke:#FFC857}
+.t-d .dg-agent-t{fill:#FFC857}
+.t-d .dg-pill-t{font-size:28px}
+.t-d .shot{box-shadow:0 0 0 2.5px #C9C6BC,0 22px 50px rgba(0,0,0,.45);border-radius:10px}
+.t-d .fan img{border-radius:6px;box-shadow:0 0 0 2px #C9C6BC,0 18px 40px rgba(0,0,0,.45)}
+.t-d .faq .q h3{font-weight:500}
+.t-d .ovc{box-shadow:0 0 0 1.5px var(--pb)}
+.t-d .hd.wd{right:110px}
+.t-d .t-d .tlc .date{font-size:20px;padding:8px 10px;letter-spacing:0}
+
+/* build mode (off by default: static-first). Reveal = fade + small rise.
+   Uses the standalone `translate` property so inline/class transforms (centering, rotation, .hl) still compose.
+   SVG parts (the spine) only fade: their old/new node layers must stay registered. */
+html.build .slide [data-s]{transition:opacity .35s cubic-bezier(.22,1,.36,1),translate .35s cubic-bezier(.22,1,.36,1)}
+html.build .slide [data-s].hid{opacity:0}
+html.build .slide [data-s].hid:not(svg *){translate:0 14px}
+@media (prefers-reduced-motion:reduce){html.build .slide [data-s]{transition:none}html.build .slide [data-s].hid{translate:none}}
+
+/* presenter controls: fixed bottom-right, outside the stage, quiet until hovered */
+.ctl{position:fixed;right:12px;bottom:4px;z-index:31;display:flex;align-items:center;gap:6px;padding:4px;border-radius:999px;background:transparent;box-shadow:none;font:500 13px/1 var(--fm);color:var(--dim);opacity:.3;transition:opacity .2s,background .2s,box-shadow .2s}
+.ctl:hover,.ctl:focus-within{opacity:1;background:var(--solid);box-shadow:0 0 0 1px var(--pb),0 6px 20px rgba(0,0,0,.18)}
+.ctl button{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:999px;cursor:pointer;color:var(--dim);font:inherit}
+.ctl button:hover{color:var(--ink);background:var(--track)}
+.ctl button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.ctl .ic{width:30px;padding:0;justify-content:center}
+.ctl svg{width:15px;height:15px;fill:currentColor}
+.ctl .tg i{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+.ctl .ic[aria-pressed="true"]{color:var(--ink);background:var(--track)}
+.ctl .tg[aria-pressed="true"]{color:var(--acc);background:var(--hl)}
+.ctl .tg[aria-pressed="true"] i{background:var(--acc)}
+.ctl .seg{display:inline-flex;gap:2px;padding:2px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--pb)}
+.ctl .seg button{height:26px;padding:0 10px}
+.ctl .seg button[aria-pressed="true"]{color:var(--acc);background:var(--hl)}
+.ctl .cn{padding:0 10px 0 4px;min-width:58px;text-align:right;font-variant-numeric:tabular-nums}
+html.noui .ctl{display:none}
+@media print{.ctl,.hud{display:none}}
+
+/* HUD, notes, overview */
+.hud{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;background:rgba(0,0,0,.78);color:#fff;font:500 14px/1.2 'JetBrains Mono',monospace;z-index:20;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+.hud.show{opacity:1}
+.npanel{position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;background:rgba(10,10,10,.94);color:#f2f2f2;padding:18px 28px 22px;font:400 18px/1.5 'Inter',system-ui,sans-serif;z-index:15;display:none;border-top:2px solid #2BAADF}
+.npanel.show{display:block}
+.npanel h5{margin:0 0 8px;font:600 14px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#55C5F0;text-transform:uppercase}
+.npanel ul{margin:0;padding-left:20px}
+.npanel p{margin:6px 0}
+.npanel .tm{color:#55C5F0;font:600 14px/1.2 'JetBrains Mono',monospace}
+.npanel .nx{margin-top:10px;color:#9a9a9a;font-size:15px}
+.ov{position:fixed;inset:0;z-index:30;overscroll-behavior:contain;padding-bottom:72px!important;background:var(--bg);overflow:auto;display:none;padding:24px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;align-content:start;grid-auto-rows:max-content}
+.ov.show{display:grid;padding-top:60px}
+.ovc[draggable]{cursor:grab}.ovc.drag{opacity:.4}.ovc.over{outline:3px dashed var(--acc);outline-offset:3px}
+.ovbar{position:fixed;right:16px;top:12px;z-index:32;display:none;align-items:center;gap:8px;padding:4px 4px 4px 14px;border-radius:999px;background:var(--solid);box-shadow:0 0 0 1px var(--pb),0 6px 20px rgba(0,0,0,.18);font:500 13px/1 var(--fm);color:var(--dim)}
+.ovbar.show{display:flex}
+.ovbar button{all:unset;box-sizing:border-box;height:30px;padding:0 13px;border-radius:999px;cursor:pointer;color:var(--ink);background:var(--track)}
+.ovbar button[hidden]{display:none}
+.ovbar button.pri{background:var(--acc);color:var(--tag-ink,#000)}
+.ovbar button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.ovc::before{content:"";display:block;padding-top:56.25%}
+.ovc{position:relative;overflow:hidden;border-radius:8px;cursor:pointer;box-shadow:0 0 0 1.5px var(--pb)}
+.ovc.cur{box-shadow:0 0 0 4px var(--acc)}
+.ovc .ovi{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;pointer-events:none}
+.ovc .ovi .slide{display:block}
+.ovc .num{position:absolute;left:8px;bottom:8px;z-index:5;background:rgba(0,0,0,.7);color:#fff;font:600 13px/1 'JetBrains Mono',monospace;padding:5px 7px;border-radius:6px}
+
+/* ---------- gemini-live-agents additions (v2, Paper Light default). sf-slides rules above stay verbatim; everything below is sf tokens + the closest sf component, matching _slides/gemini-slides v8 ---------- */
+.t-a{--live1:#4f8dff;--live2:#9b6bff;--live-ink:#fff}
+.t-d{--live1:#FFC857;--live2:#F2A93B;--live-ink:#272824}
+.t-e{--live1:#E8590C;--live2:#B8430A;--live-ink:#fff}
+/* arrows with marker heads (same stroke as .dg-edge) */
+.dg{pointer-events:none}
+.dg .ar{fill:none;marker-end:url(#ah)}
+.dg .ar.two{marker-start:url(#ah)}
+.dg .ar.nw{marker-end:url(#aha)}
+.dg .ar.nw.two{marker-start:url(#aha)}
+.mh{fill:var(--edge)}.mha{fill:var(--acc)}
+.dg-cap.acc{fill:var(--acc)}
+.dg-plain{fill:var(--ink);font-family:var(--fb);font-size:26px;font-weight:500}
+.dg-wave{fill:var(--mut)}.dg-wave.on{fill:var(--acc)}
+.dg-mark{fill:none;stroke:var(--mut);stroke-width:2.5;stroke-dasharray:8 8}
+.dg-lab{fill:var(--dim);font-family:var(--fm);font-size:26px;font-weight:500}
+.dg-lab.acc{fill:var(--acc)}
+.dg-seg{fill:var(--node);stroke:var(--node-s);stroke-width:2}
+.dg-seg.bad{fill:rgba(255,92,92,.12);stroke:var(--bad);stroke-dasharray:10 8}
+.dg-seg.good{fill:rgba(63,207,142,.16);stroke:var(--good)}
+.dg-seg.acc{fill:var(--hl);stroke:var(--acc)}
+/* sf spine node (.dg-node + drawNode) as HTML so labels wrap: 2.5px ink rough rect r16, 64px logo tile, 50px/600 name, 26px mono sub */
+.dn{position:absolute;isolation:isolate;display:grid;grid-template-columns:auto minmax(0,1fr);align-content:center;align-items:center;column-gap:22px;row-gap:6px;padding:20px 26px;font:600 50px/1.05 var(--fb);color:var(--ink);text-align:left;z-index:2}
+.dn::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--node);border:2.5px solid var(--node-s);border-radius:16px;filter:url(#rough);pointer-events:none}
+.dn:not(:has(>.lg)){grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center}
+.dn>.lg{grid-row:1/span 3;width:64px;height:64px;padding:6px;border-radius:12px;box-shadow:none}
+.dn>b{font-weight:inherit;align-self:end}
+.dn>small{font:500 26px/1.2 var(--fm);color:var(--dim);align-self:start}
+.dn small em{font-style:normal;color:var(--acc)}
+.dn.v{grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;row-gap:8px}
+.dn.v>.lg{grid-row:auto;margin-bottom:4px}
+.dn.v>b{align-self:auto}
+.dn.on::before{border-color:var(--acc);border-width:3.5px}
+.dn.bk{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:18px;padding:26px 32px}
+.dn.bk .nh{display:flex;align-items:center;gap:20px}
+.dn.bk .nh .lg{width:64px;height:64px;padding:6px;border-radius:12px;box-shadow:none}
+.dn .fl{font:500 30px/1.2 var(--fm);color:var(--ink);white-space:nowrap}
+.dn .fl i{font-style:normal;color:var(--acc)}
+.dn .fl span{font-family:var(--fb);color:var(--dim);margin-left:18px}
+/* step badge = sf person chip (.dg-hchip) holding the step number; label = sf handwritten note (.dg-hw mut) */
+.hw{position:absolute;display:inline-flex;align-items:center;gap:14px;font:700 42px/1 'Kalam','Comic Sans MS',cursive;color:var(--mut);white-space:nowrap;z-index:4}
+.hw.acc{color:var(--acc)}
+.pb{position:relative;isolation:isolate;flex:none;width:52px;height:52px;display:grid;place-items:center;font:600 26px/1 var(--fm);font-style:normal;color:var(--dim)}
+.pb::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:50%;background:var(--bg);border:2.5px solid var(--dim);filter:url(#rough)}
+.hw.acc .pb,.pb.acc{color:var(--acc)}.hw.acc .pb::before,.pb.acc::before{border-color:var(--acc)}
+.pb.lg2{width:68px;height:68px;font-size:30px}
+/* chips: sf .chip; mine = .fbox.on treatment, lib = dashed like .fbox.ghost */
+.chip.mine{border-color:var(--acc);background:var(--hl);color:var(--ink)}
+.chip.lib{border-style:dashed;border-color:var(--mut);background:transparent;color:var(--dim)}
+.chip .lg{width:32px;height:32px;padding:3px;border-radius:8px;box-shadow:none}
+.chips{position:absolute;display:flex;flex-wrap:wrap;gap:14px;z-index:3}
+.chips.col{flex-direction:column;align-items:flex-start}
+.kick .lg{width:40px;height:40px;padding:6px;border-radius:10px;vertical-align:middle;margin-right:10px}
+.st .kick[style*="top"]{position:absolute;z-index:3}
+.kick small{font:inherit;color:var(--mut);margin-left:14px}
+.kick small::before{content:"· ";color:var(--mut)}
+/* fbox cards laid out absolutely, one step down the scale (40/24) */
+.st>.fbox.box{position:absolute;font-size:40px;align-content:center}
+.st>.fbox.box small{font-size:24px}
+/* dashed region (what the open line carries) = .era.next dashed border + .tlgoal tint */
+.st .region{position:absolute;border:2.5px dashed var(--acc);border-radius:var(--rad);background:var(--hl)}
+.st .card{position:absolute}
+/* one takeaway line = .h2.sm */
+.tk{position:absolute;left:110px;right:110px;top:872px;font:var(--hw) calc(var(--hs,1)*64px)/1.02 var(--fh);letter-spacing:var(--ht);color:var(--ink);text-wrap:balance}
+.t-e .tk em,.t-e .hkn em{font-style:italic;color:#E8590C}
+/* footnote chip = .simtag (dashed, mono, muted) */
+.mchip{position:absolute;font:500 24px/1 var(--fm);color:var(--mut);padding:12px 18px;border-radius:8px;border:1.5px dashed var(--mut);background:var(--bg);z-index:5;white-space:nowrap}
+.mchip b{font-weight:500;color:var(--ink)}
+/* hook (sf .s1, left aligned) */
+.hkm{position:absolute;left:110px;top:560px;display:flex;align-items:center;gap:18px;font:500 30px/1 var(--fm);color:var(--dim)}
+.hkm .lg{width:56px;height:56px;padding:10px;border-radius:12px}
+.hkn{position:absolute;left:110px;top:870px;font:var(--hw) calc(var(--hs,1)*64px)/1.02 var(--fh);letter-spacing:var(--ht);color:var(--ink)}
+/* live channel stats over the screenshot line (27 Nov 2026 numbers) */
+.ytfix{position:absolute;left:37.9%;top:34.4%;width:31%;height:4.6%;background:#fff;display:flex;align-items:center;padding-left:.3%;font:400 18.5px/1 Roboto,Arial,Helvetica,sans-serif;color:#606060;white-space:pre}
+.ytfix b{font-weight:500;color:#0f0f0f}
+/* title */
+.ttl .kick{position:absolute;left:110px;top:250px}
+.ttl .h2{position:absolute;left:110px;top:310px;width:1500px}
+.ttl .by{position:absolute;left:110px;top:720px;display:flex;align-items:center;gap:26px}
+.ttl .by .av{width:96px;height:96px;border-radius:50%;background:url(assets/eric-avatar.jpg) center/cover;box-shadow:0 0 0 3px var(--acc)}
+.ttl .by b{display:block;font:600 40px/1.15 var(--fb);color:var(--ink)}
+.ttl .by span{display:block;font:500 30px/1.3 var(--fm);color:var(--dim)}
+/* numbered part cards (agenda, recap) = .box + person-chip number */
+.parts{position:absolute;left:110px;right:110px;top:270px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px}
+.part{padding:44px 40px;display:grid;align-content:start;gap:22px;min-height:560px}
+.part .pk{font:500 24px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.part b{font:600 54px/1.08 var(--fb);color:var(--ink);letter-spacing:-.01em}
+.t-d .part b{font-size:44px;font-weight:500}
+.part span{font:400 30px/1.3 var(--fb);color:var(--dim)}
+.part small{font:500 24px/1.3 var(--fm);color:var(--mut)}
+/* two-panel compare (slide 18) */
+.duo{position:absolute;left:110px;right:110px;top:260px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
+.duo .box{padding:40px 44px;display:grid;align-content:start;gap:22px}
+.duo .pk{font:500 24px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.duo h3{font:var(--hw) calc(var(--hs,1)*64px)/1.04 var(--fh);letter-spacing:var(--ht);color:var(--ink)}
+.duo h3 small{display:block;margin-top:10px;font:500 24px/1 var(--fm);letter-spacing:0;color:var(--mut);font-style:normal}
+.t-e .duo h3{font-style:italic}
+.duo ul{display:grid;gap:14px}
+.duo li{display:flex;gap:16px;align-items:baseline;font:400 40px/1.3 var(--fb);color:var(--ink)}
+.duo li i{flex:none;font:600 26px/1 var(--fm);font-style:normal;color:var(--acc)}
+.duo .box.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)!important}
+.duo .tagp{justify-self:start;padding:10px 20px;border-radius:6px;background:var(--acc);color:var(--tag-ink,#000);font:600 24px/1 var(--fm)}
+.t-e .duo .tagp{color:#fff}
+/* layers (LiveKit) */
+.lay{position:absolute;left:110px;width:1110px;padding:24px 34px;display:grid;grid-template-columns:330px 1fr;gap:6px 28px;align-items:center}
+.lay .ln{font:500 24px/1.2 var(--fm);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.lay b{font:600 40px/1.1 var(--fb);color:var(--ink)}
+.lay span{font:400 30px/1.25 var(--fb);color:var(--dim)}
+.lay span small{font:500 24px/1 var(--fm);color:var(--mut);margin-left:12px}
+.lay .chips{position:static;grid-column:1/-1;margin-top:10px;gap:12px}
+.lay .chips .chip{padding:10px 18px}
+.side{position:absolute;left:1270px;right:110px;padding:30px 34px;display:grid;gap:16px}
+.side .pk{font:500 24px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--acc)}
+.side li{font:400 30px/1.3 var(--fb);color:var(--ink);display:flex;gap:14px}
+.side li::before{content:"·";color:var(--acc);font-weight:700}
+.side p{font:400 30px/1.3 var(--fb);color:var(--dim)}
+/* numbered steps (Jarvis) */
+.jst{position:absolute;left:110px;width:1080px;top:270px;display:grid;gap:34px}
+.jst li{display:grid;grid-template-columns:68px 1fr;gap:6px 28px;align-items:center}
+.jst .pb{grid-row:1/3}
+.jst b{font:600 40px/1.15 var(--fb);color:var(--ink)}
+.jst span{font:400 30px/1.3 var(--fb);color:var(--dim)}
+/* comparison table = .rows .hdr header + .rows li body + .i-good cells */
+.st .cmp{position:absolute;left:110px;top:236px;width:1700px;border-collapse:separate;border-spacing:0;font:400 30px/1.2 var(--fb);color:var(--ink)}
+.cmp th,.cmp td{position:relative;height:84px;padding:0 24px;text-align:left;border-bottom:1.5px solid var(--pb)}
+.cmp thead th{height:104px;font:600 34px/1.2 var(--fm);color:var(--acc)}
+.cmp th small{display:block;margin-top:6px;font:500 24px/1.2 var(--fm);color:var(--mut)}
+.cmp tbody th{font:600 30px/1.2 var(--fb);width:420px}
+.cmp tbody th small{margin-top:4px}
+.cmp td>span{position:relative;z-index:1}
+.cmp .gf{position:absolute;inset:8px 6px;border-radius:10px;background:rgba(63,207,142,.16)}
+.t-e .cmp .gf{background:rgba(31,138,76,.12)}
+.cmp td:has(.gf)>span{color:var(--good);font-weight:600}
+.cmp .lg2{display:inline-flex;align-items:center;gap:12px;font:500 24px/1 var(--fm);color:var(--dim)}
+.cmp .lg2 i{width:26px;height:26px;border-radius:6px;background:rgba(63,207,142,.16)}
+.t-e .cmp .lg2 i{background:rgba(31,138,76,.12)}
+/* waveform card */
+.wave{position:absolute;left:110px;top:250px;width:1700px;height:380px}
+/* generated scene art (_slides/gemini-slides pattern): theme e framed like .t-e .shot, no dark mask */
+.st .art{position:absolute;margin:0;z-index:6}
+.art .scene-art{display:block;width:100%;height:100%;object-fit:cover;border-radius:16px;box-shadow:0 0 0 1.5px var(--pb),0 14px 34px rgba(60,40,10,.12);background:#F5F1E8}
+.t-a .art .scene-art,.t-d .art .scene-art{-webkit-mask-image:radial-gradient(ellipse 70% 72% at 50% 52%,black 58%,transparent 100%);mask-image:radial-gradient(ellipse 70% 72% at 50% 52%,black 58%,transparent 100%);box-shadow:none;background:transparent}
+.art .cap{position:absolute;left:0;right:0;top:30px;text-align:center;font:600 40px/1.15 var(--fb);color:var(--ink);text-wrap:balance}
+.art.miss{border:1.5px dashed var(--line);border-radius:var(--rad)}
+.art.miss img{visibility:hidden}
+.art.miss::after{content:"art pending";position:absolute;inset:0;display:grid;place-items:center;font:500 24px/1 var(--fm);color:var(--mut)}
+.slide [data-until]{transition:opacity .35s cubic-bezier(.22,1,.36,1)}
+.slide [data-until].gone{opacity:0;pointer-events:none}
+/* big layers (LiveKit) */
+.lyr{position:absolute;left:110px;right:110px;height:170px;padding:0 44px;display:grid;grid-template-columns:68px 460px 1fr;align-items:center;column-gap:34px}
+.lyr b{font:600 54px/1.05 var(--fb);color:var(--ink)}
+.lyr span{font:400 40px/1.15 var(--fb);color:var(--dim)}
+.lyr span small{display:block;margin-top:8px;font:500 24px/1 var(--fm);color:var(--mut)}
+.lyr.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)!important}
+.lgrow{display:flex;align-items:center;gap:18px}
+.lgrow .lg{width:72px;height:72px;padding:14px;border-radius:14px}
+.lgrow .lg.on{box-shadow:0 0 0 3px var(--acc)}
+.lgrow small{font:500 24px/1 var(--fm);color:var(--mut);margin-left:6px}
+/* Jarvis Classic / Live switch (sf .chip + .fbox.on tokens) */
+.swrow{position:absolute;left:110px;right:110px;top:300px;display:flex;justify-content:center;align-items:center;gap:48px}
+.swrow b{font:600 72px/1 var(--fb);color:var(--mut)}
+.swrow b.on{color:var(--acc)}
+.sw{position:relative;display:block;width:300px;height:150px;border-radius:75px;background:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.sw>i{position:absolute;right:13px;top:13px;width:124px;height:124px;border-radius:50%;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+kbd{display:inline-flex;align-items:center;height:56px;padding:0 18px;border-radius:10px;background:var(--panel);border:1.5px solid var(--pb);box-shadow:0 3px 0 var(--pb);font:600 30px/1 var(--fm);color:var(--ink)}
+.kbdl{position:absolute;left:110px;right:110px;top:760px;display:flex;justify-content:center;align-items:center;gap:12px;font:500 30px/1 var(--fm);color:var(--dim)}
+.kbdl span{margin-left:20px}
+.jst kbd{height:44px;font-size:24px;padding:0 12px;margin-right:6px}
+.tcode{font:500 26px/1 var(--fm);color:var(--acc)}
+/* brand/icon tile on cards = .car .co .lg; side-by-side with .ic (from _slides/gemini-slides v8) */
+.fbox .lg.fi{width:76px;height:76px;padding:12px;border-radius:14px}
+.fbox .lg.fi.s{width:64px;height:64px;padding:9px;border-radius:12px}
+.fbox.ic{grid-template-columns:auto minmax(0,1fr);justify-items:start;text-align:left;align-content:center;align-items:center;column-gap:24px;row-gap:6px;padding-left:28px;padding-right:20px}
+.fbox.ic>.lg{grid-column:1;grid-row:1/span 2}
+.fbox.ic>:not(.lg){grid-column:2}
+.fbox.ic>b{font-weight:inherit}
+.fbox.ic.one>b{grid-row:1/span 2;align-self:center}
+.st>.fbox.box.sm{font-size:34px}
+
+/* round 6: direction tags, code cards, lanes */
+.dtag{position:absolute;display:inline-flex;align-items:center;padding:8px 16px;border-radius:999px;font:500 22px/1 var(--fm);letter-spacing:.04em;border:1.5px solid var(--acc);color:var(--acc);background:var(--hl)}
+.dtag.no{border-color:var(--bad);color:var(--bad);background:transparent}
+.t-e .dtag.no{border-color:#B3261E;color:#B3261E;background:rgba(179,38,30,.07)}
+.cmp.r6 th,.cmp.r6 td{height:72px}
+.cc{position:absolute;background:var(--panel);border:1.5px solid var(--pb);border-radius:var(--rad);padding:34px 40px;font:500 32px/1 var(--fm);color:var(--ink);display:grid;gap:18px}
+.cc .ln{display:flex;align-items:center;gap:24px;white-space:pre;min-height:44px}
+.cc .ln.hi{color:var(--acc);background:var(--hl);margin:0 -20px;padding:6px 20px;border-radius:10px}
+.cc .ln .ar2{font-size:26px}
+.cc .tg{flex:none;width:150px;padding:8px 0;border-radius:8px;text-align:center;font:600 20px/1 var(--fm);letter-spacing:.14em;color:var(--acc);background:var(--hl)}
+.cc .cm{color:var(--mut)}
+.cc .ttl{font:500 22px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.ccap{position:absolute;font:500 26px/1.35 var(--fm);color:var(--dim)}
+.jl{position:absolute;height:150px;border-radius:var(--rad);border:1.5px solid var(--pb);background:var(--panel);display:flex;align-items:center;gap:28px;padding:0 36px}
+.jl .tg{font:600 22px/1 var(--fm);letter-spacing:.14em;text-transform:uppercase;color:var(--mut);flex:none}
+.jl b{font:600 44px/1.1 var(--fb);color:var(--ink)}
+.jl.dn2{border-color:var(--acc);background:var(--hl)}
+.jl.dn2 b{color:var(--acc)}
+.loopbr{position:absolute;border:3px solid var(--acc);border-left:none;border-radius:0 18px 18px 0}
+.loopbr span{position:absolute;right:-22px;top:50%;transform:translate(100%,-50%);font:600 22px/1.3 var(--fm);letter-spacing:.14em;color:var(--acc);white-space:nowrap}
+.dbox{position:absolute;border:3px dashed var(--mut);border-radius:var(--rad);display:grid;place-items:center;font:500 34px/1.3 var(--fm);color:var(--mut);letter-spacing:.04em}
+.plug{font:500 24px/1.35 var(--fm);color:var(--dim);text-align:center;max-width:460px}
+
+/* round 8: folder tree card */
+.cc.tree{gap:14px}
+.cc.tree .ln{gap:0}
+.cc.tree .nm{display:inline-block;width:300px;color:var(--ink);font-weight:600}
+.cc.tree .ln.hi .nm{color:var(--acc)}
+.t-e .rd{color:#B3261E!important}
+.car.c2::before{top:11px}
+.car.c2 .co p span{font:500 24px/1.25 var(--fm);color:var(--acc)}
+.car.c2>div{gap:12px}
+.car.c2{grid-template-columns:repeat(4,minmax(0,1fr))}
+.car.c2 .now .tln{width:30px;height:30px;margin:-4px 0;box-shadow:0 0 0 7px var(--bg),0 0 0 10px var(--acc)}
+.car.c2 .now .co p b{color:var(--acc)}
+.car.c2 .co p b{white-space:nowrap}
+.car.c2 .now .co p b{white-space:normal}
+
+/* round 14: icons, levels, checks, editor */
+.ico{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--ink);flex:none}
+.dn .ico{display:block;margin:0 auto}
+.dn small.ml{font:500 22px/1 var(--fm);color:var(--mut);margin-top:8px}
+.lvc{position:absolute;top:270px;width:520px;height:600px;border-radius:var(--rad);background:var(--panel);border:1.5px solid var(--pb);display:grid;justify-items:start;align-content:start;gap:22px;padding:44px 44px}
+.lvc .pb{width:64px;height:64px;font-size:30px}
+.lvc .ico{width:96px;height:96px;color:var(--acc)}
+.lvc b{font:600 52px/1.1 var(--fb);color:var(--ink)}
+.lvc span{font:500 30px/1.35 var(--fm);color:var(--dim)}
+.cmp.chk td{text-align:center}
+.cmp.chk .ok{font:700 60px/1 var(--fb);color:var(--acc)}
+.cmp.chk .no{font:500 40px/1 var(--fm);color:var(--line)}
+.cmp.chk thead th:not(:first-child){text-align:center}
+.ed{position:absolute;border-radius:16px;background:#1E1E1E;box-shadow:0 24px 60px rgba(40,25,5,.28);overflow:hidden}
+.ed .bar{display:flex;align-items:center;gap:10px;height:64px;padding:0 22px;background:#2A2A2A}
+.ed .bar i{width:16px;height:16px;border-radius:50%}
+.ed .bar i:nth-child(1){background:#FF5F57}.ed .bar i:nth-child(2){background:#FEBC2E}.ed .bar i:nth-child(3){background:#28C840}
+.ed .tab{margin-left:22px;height:64px;display:flex;align-items:center;padding:0 26px;background:#1E1E1E;color:#E6E6E6;font:500 24px/1 var(--fm);border-top:2px solid var(--acc)}
+.ed pre{margin:0;padding:26px 40px 30px;font:500 31px/1.5 var(--fm);color:#E6E6E6;white-space:pre}
+.ed .c{color:#7F848E}.ed .k{color:#C678DD}.ed .f{color:#61AFEF}.ed .v{color:#E5C07B}
+.ed .hx{display:block;margin:0 -40px;padding:0 40px;background:rgba(232,89,12,.22);color:#FF8A3D}
+.ed .hx .c{color:#FFB07A}
+
+/* deck-wide pass */
+.ed .cl{display:flex;justify-content:space-between;align-items:center;gap:30px;white-space:pre;font:500 42px/1 var(--fm);color:#E6E6E6;padding:16px 48px}
+.ed .cls{padding:26px 0 30px}
+.ed .tg2{font:600 22px/1 var(--fm);letter-spacing:.14em;color:#FF8A3D;border:1.5px solid rgba(255,138,61,.55);padding:9px 14px;border-radius:8px}
+
+/* round 15 */
+.orb{position:absolute;border-radius:50%;overflow:hidden;box-shadow:0 0 0 10px rgba(255,255,255,.6),0 30px 80px rgba(232,89,12,.28)}
+.orb img{display:block;width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+.orbglow{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(232,89,12,.38) 0%,rgba(232,89,12,.14) 45%,rgba(232,89,12,0) 70%)}
+.lvc{justify-items:center;align-content:center;text-align:center;gap:34px}
+.lvc .tc{display:grid;place-items:center;width:230px;height:230px;border-radius:50%;background:var(--hl)}
+.lvc .tc .ico{width:140px;height:140px;color:var(--acc);stroke-width:2}
+.lvc .tc img{width:140px;height:140px}
+.lvc .pb{position:absolute;left:36px;top:36px}
+.cmp.chk .ok{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:rgba(47,158,68,.14);color:#2F9E44;font:800 44px/1 var(--fb)}
+.ed .bar .tg2{margin-left:auto}
+.ed .edtag{padding:0 40px 30px;display:flex}
+
+/* brain + hands */
+.bhc{position:absolute;top:250px;width:560px;height:620px;border-radius:var(--rad);background:var(--panel);border:1.5px solid var(--pb);padding:36px 40px;display:grid;grid-template-rows:auto 1fr;gap:26px}
+.bhh{display:flex;align-items:center;gap:18px}
+.bhh b{font:600 40px/1.1 var(--fb);color:var(--ink)}
+.bhe{font-size:72px;line-height:1}
+.bht{display:grid;gap:22px;align-content:center}
+.bhf{display:flex;align-items:center;gap:22px;font:500 38px/1 var(--fm);color:var(--ink)}
+.bhm{position:absolute;left:800px;top:330px;width:320px;display:grid;justify-items:center;gap:26px}
+.bhm img{width:240px;height:240px}
+.bhm b{font:600 46px/1.1 var(--fb);color:var(--ink)}
+.bhs{border-radius:16px;border:10px solid #2A2A2A;background:#F9F6EF;display:grid;place-items:center;align-content:center;gap:40px;padding:20px}
+.bhr{display:flex;gap:14px}
+.bha{display:grid;place-items:center;width:64px;height:64px;border-radius:16px;background:#fff;box-shadow:0 0 0 1.5px var(--pb)}
+.bha img,.bha .ico{width:42px;height:42px}
+
+.fstrip{position:absolute;left:110px;right:110px;top:235px;height:96px;display:flex;align-items:center;gap:22px;font:500 30px/1 var(--fm);color:var(--ink)}
+.fstrip .fs{display:flex;align-items:center;gap:14px;height:84px;padding:0 24px;border-radius:999px;background:var(--panel);border:1.5px solid var(--pb)}
+.fstrip .fa{font:600 40px/1 var(--fb);color:var(--acc)}
+.fstrip img{width:60px;height:60px}
+.fstrip .tw{display:grid;gap:6px;font-size:24px}
+.fstrip .tw span{padding:6px 14px;border-radius:8px;background:var(--hl)}
+
+/* QR close slides: big title, image + QR side by side */
+.qx .hd{right:110px;justify-items:center;text-align:center}
+.qx .h2.qxt{font-size:calc(var(--hs,1)*132px)}
+.qx-row{position:absolute;left:110px;right:110px;top:300px;bottom:110px;display:flex;justify-content:center;align-items:center;gap:140px}
+.qx-orb{position:relative;margin:0;width:620px;display:grid;justify-items:center;gap:56px}
+.qx-orb .orbglow{left:50%;top:210px;width:760px;height:760px;transform:translate(-50%,-50%)}
+.qx-orb .orb{position:relative;width:420px;height:420px}
+.qx-orb figcaption{position:relative;font:500 30px/1.2 var(--fm);color:var(--dim);letter-spacing:.04em}
+.gcc{position:relative;width:820px;height:480px;border-radius:28px;background:#fff;box-shadow:0 0 0 1.5px var(--pb),0 24px 60px rgba(60,40,10,.14);overflow:hidden;display:grid;grid-template-rows:auto 1fr auto;padding:58px 56px 44px;color:#1f1f1f;font-family:var(--fb)}
+.gcc-bar{position:absolute;left:0;right:0;top:0;height:14px;background:linear-gradient(90deg,#4285F4 0 25%,#EA4335 25% 50%,#FBBC04 50% 75%,#34A853 75%)}
+.gcc-top{display:flex;align-items:center;gap:22px}
+.gcc-top img{width:84px;height:84px}
+.gcc-top b{font:600 46px/1 var(--fb);color:#3c4043;letter-spacing:-.01em}
+.gcc-amt{align-self:center;justify-self:start;display:flex;align-items:center;gap:20px;padding:18px 40px 18px 22px;border-radius:999px;background:#E8F0FE;color:#1967D2;font:700 88px/1 var(--fb);letter-spacing:-.02em}
+.gcc-amt span{display:grid;place-items:center;width:100px;height:100px;border-radius:50%;background:#34A853;color:#fff;font:700 64px/1 var(--fb)}
+.gcc-ft{display:grid;gap:10px;font:500 28px/1.2 var(--fm);color:#5f6368;white-space:nowrap}
+.gcc-ft b{font:600 40px/1.1 var(--fm);color:var(--acc)}
+.qx-steps{position:absolute;left:110px;right:110px;top:870px;margin:0;padding:0;list-style:none;display:flex;justify-content:center;gap:64px}
+.qx-steps li{display:flex;align-items:center;gap:20px}
+.qx-steps b{font:600 38px/1.1 var(--fb);color:var(--ink);white-space:nowrap}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="liveg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--live1)"/><stop offset="1" style="stop-color:var(--live2)"/></linearGradient><filter id="rough" filterUnits="userSpaceOnUse" x="-200" y="-200" width="2400" height="1500"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter><marker id="ah" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="20" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0.55 L10,5 L0,9.45 z" class="mh"/></marker><marker id="aha" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="20" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0.55 L10,5 L0,9.45 z" class="mha"/></marker></defs><symbol id="vbadge" viewBox="0 0 24 24"><path d="M22.5 12.5c0-1.58-.88-2.95-2.15-3.6.15-.44.23-.92.23-1.4 0-2.21-1.71-4-3.82-4-.47 0-.92.08-1.34.25C14.8 2.48 13.5 1.5 12 1.5s-2.8.97-3.42 2.25c-.42-.17-.87-.25-1.34-.25-2.11 0-3.82 1.79-3.82 4 0 .49.08.96.23 1.4-1.27.65-2.15 2.02-2.15 3.6 0 1.5.8 2.8 1.97 3.5-.02.17-.03.33-.03.5 0 2.210 1.71 4 3.82 4 .47 0 .92-.09 1.34-.25.62 1.29 1.92 2.25 3.42 2.25s2.8-.96 3.42-2.25c.42.16.87.25 1.34.25 2.11 0 3.82-1.79 3.82-4 0-.17-.01-.33-.03-.5 1.17-.7 1.97-2 1.97-3.5z" fill="#1d9bf0"/><path d="M9.5 16.6l-3.8-3.8 1.4-1.4 2.4 2.4 6.6-6.6 1.4 1.4z" fill="#fff"/></symbol></svg>
+<div class="stage" id="stage">
+
+<section class="slide" data-id="hero-who-used-live" data-ch="01" data-chn="Hook" data-title="🙋 Who's used Gemini Live?" data-sec="30">
+<div class="st s1"><div class="glow" aria-hidden="true"></div>
+<div class="kick" style="top:290px;left:110px;right:auto;text-align:left">Quick show of hands</div>
+<h1 class="hq" style="top:345px;left:110px;right:auto;width:760px;text-align:left;font-size:calc(var(--hs,1)*120px)">Who's used<br>Gemini <em>Live</em>?</h1>
+<div class="cue" data-s="1" style="left:110px;right:auto;top:700px;bottom:auto;justify-content:flex-start"><span class="hand" aria-hidden="true">✋</span> Raise your hand</div>
+<figure class="ph" style="position:absolute;left:900px;top:284px;width:910px;height:512px;margin:0"><img src="assets/hero-gemini-live.png" alt="Gemini Live on a phone: camera view of a hand pointing at a city street, with camera and screen-share buttons"></figure>
+</div>
+<aside class="notes"><ul><li>"All right, quick show of hands. Who here has used Gemini Live? The mode in the Gemini app where you just talk to it."</li><li>Wait. Look around. "OK, a good chunk of you."</li><li>"Keep it up if you interrupted it mid-sentence and it actually stopped." Some hands stay. "Yeah. That feels like a phone call, not a chatbot."</li><li>"That's the Gemini Live API. And today, you'll see how to build your own."</li></ul></aside>
+</section>
+<section class="slide" data-id="live-what-it-does" data-ch="01" data-chn="Hook" data-title="What Gemini Live does" data-sec="30">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">What it does</span><h2 class="h2 sm">A video call <em>with AI</em></h2></div>
+<div class="shot" style="left:110px;top:240px;width:684px;height:570px"><div class="im" style="height:100%"><img src="assets/hook/gemini-live-rundown.png" alt="Gemini Live on a phone reading out a daily rundown, with the Live call controls at the bottom" style="display:block;width:100%;height:100%;object-fit:cover;object-position:center"></div></div>
+<div class="shot" style="left:834px;top:240px;width:535px;height:570px"><div class="im" style="height:100%"><img src="assets/hook/gemini-live-show-tell.png" alt="Gemini Live showing running shoe product cards while you ask which shoes fit your stride" style="display:block;width:100%;height:100%;object-fit:cover;object-position:center top"></div></div>
+<div class="shot" style="left:1409px;top:240px;width:401px;height:570px"><div class="im" style="height:100%"><img src="assets/gemini-live-phone-crop.jpg" alt="A hand holding a phone in a Gemini Live video call" style="display:block;width:100%;height:100%;object-fit:cover;object-position:center"></div></div>
+<div class="fbox box ic one sm" style="left:110px;top:850px;width:405px;height:100px" data-s="1"><span class="lg fi s" style="font-size:30px;padding:8px;width:52px;height:52px">📹</span><b>Video call</b></div>
+<div class="fbox box ic one sm" style="left:535px;top:850px;width:405px;height:100px" data-s="1"><span class="lg fi s" style="font-size:30px;padding:8px;width:52px;height:52px">🗣️</span><b>Talk to it</b></div>
+<div class="fbox box ic one sm" style="left:960px;top:850px;width:405px;height:100px" data-s="2"><span class="lg fi s" style="font-size:30px;padding:8px;width:52px;height:52px">🖥️</span><b>Share your screen</b></div>
+<div class="fbox box ic one sm on" style="left:1385px;top:850px;width:405px;height:100px" data-s="2"><span class="lg fi s" style="font-size:30px;padding:8px;width:52px;height:52px">✋</span><b>Cut in anytime</b></div>
+</div>
+<aside class="notes"><ul><li>"So what does it actually do? You can video call it, point your camera at stuff and ask about it."</li><li>"You just talk to it. No typing."</li><li>(→) "You can share your screen and it sees what you see. And you can cut in anytime, mid-sentence, and it stops and listens."</li><li>Screenshots: gemini.google, Gemini Live page.</li></ul></aside>
+</section>
+
+<section class="slide" data-id="live-the-catch" data-ch="01" data-chn="Hook" data-title="The catch: it cannot touch your stuff" data-sec="30">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">The catch</span><h2 class="h2 sm">It can't <em>touch your stuff</em></h2></div>
+<figure class="art" style="left:110px;top:250px;width:1000px;height:563px"><img class="scene-art" src="assets/art/glass-catch.png" alt="An assistant robot stuck behind glass, unable to reach a laptop, a browser window and notebooks" onerror="this.parentNode.classList.add('miss')"></figure>
+<div class="fbox box ic one" style="left:1170px;top:270px;width:640px;height:150px" data-s="1"><span class="lg fi s" style="color:var(--acc);font:700 40px/1 var(--fm)">✕</span><b>Open your browser</b></div>
+<div class="fbox box ic one" style="left:1170px;top:460px;width:640px;height:150px" data-s="2"><span class="lg fi s" style="color:var(--acc);font:700 40px/1 var(--fm)">✕</span><b>Read your notes</b></div>
+<div class="fbox box ic one" style="left:1170px;top:650px;width:640px;height:150px" data-s="3"><span class="lg fi s" style="color:var(--acc);font:700 40px/1 var(--fm)">✕</span><b>Control your computer</b></div>
+</div>
+<aside class="notes"><ul><li>"But here's the catch."</li><li>"It can't open your browser."</li><li>(→) "It can't read your notes, your second brain, the stuff that makes it actually useful to you."</li><li>(→) "And it can't control your computer. It lives in the app, behind glass."</li></ul></aside>
+</section>
+
+<section class="slide" data-id="build-your-own" data-ch="01" data-chn="Hook" data-title="Today: build your own" data-sec="25">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Today</span><h2 class="h2 sm">Build <em>your own</em></h2></div>
+<div class="dn v" style="left:110px;top:330px;width:400px;height:400px" data-s="1"><span class="lg" style="transform:scale(1.7);margin-bottom:36px;width:120px;height:120px;padding:20px"><img src="assets/logos/gemini.svg" alt=""></span><b>Gemini Live</b></div>
+<span class="hw" style="left:534px;top:490px;font-size:72px" data-s="2">+</span>
+<div class="dn v" style="left:600px;top:330px;width:400px;height:400px" data-s="2"><span class="lg" style="transform:scale(1.7);margin-bottom:36px;width:120px;height:120px;font-size:64px">📁</span><b>Your memory</b></div>
+<span class="hw" style="left:1024px;top:490px;font-size:72px" data-s="3">+</span>
+<div class="dn v" style="left:1090px;top:330px;width:400px;height:400px" data-s="3"><span class="lg" style="transform:scale(1.7);margin-bottom:36px;width:120px;height:120px;font-size:64px">💻</span><b>Your computer</b></div>
+<span class="hw acc" style="left:1514px;top:490px;font-size:72px" data-s="4">=</span>
+<div class="dn on v" style="left:1580px;top:330px;width:230px;height:400px;padding:20px 14px" data-s="4"><span class="lg" style="transform:scale(1.45);margin-bottom:36px;width:120px;height:120px;padding:0;border-radius:50%;overflow:hidden;background:#0b1a1c"><img src="assets/jarvis/jarvis-orb.gif" alt="Jarvis orb" style="object-fit:cover;image-rendering:pixelated"></span><b style="font-size:46px">Jarvis</b></div>
+<p class="tk" data-s="4">Gemini Live, plugged into <em>you</em>.</p>
+</div>
+<aside class="notes"><ul><li>"So today, we rebuild it ourselves."</li><li>"Take the Gemini Live API. That is the brain: it hears you, thinks and talks back."</li><li>(→) "Plug it into your memory, your notes."</li><li>(→) "Plug it into your computer: your apps, your browser, your screen."</li><li>(→) "And that's Jarvis. My open-source desktop agent, which now has a Classic and a Live switch."</li><li>Box details: Gemini Live is the brain. Your memory is your notes. Your computer is the hands: your apps, browser and screen.</li></ul></aside>
+</section>
+
+<section class="slide" data-id="title-build-voice-agents" data-ch="01" data-chn="Hook" data-title="Title: Build Voice AI Agents with Gemini Live API" data-sec="15">
+<div class="st ttl"><div class="glow" aria-hidden="true"></div>
+<div class="kick">Talk · Voice AI agents</div>
+<h1 class="h2 xl">Build Voice AI Agents with <em>Gemini Live API</em></h1>
+<div class="by" data-s="1"><i class="av" aria-hidden="true"></i><p><b>Eric Tech</b><span>youtube.com/@EricWTech · skool.com/erictech</span></p><span class="lg" style="width:96px;height:96px;padding:16px;margin-left:30px"><img src="assets/logos/gemini.svg" alt="Gemini"></span></div>
+</div>
+<aside class="notes"><p class="tm">⏱ ~15s</p><ul><li>"So this is the talk. Build voice AI agents with the Gemini Live API."</li><li>"By the end you'll know how a voice agent works, the four steps to build one on Gemini Live, and how I built my own, Jarvis, and why I did it a different way."</li></ul></aside>
+</section>
+<section class="slide" data-id="who-this-guy-microsoft" data-ch="02" data-chn="Who is this guy" data-title="Who is this guy? (Microsoft + AWS)" data-sec="30">
+<div class="st">
+<div class="hd"><h2 class="h2">Who is this guy?</h2></div>
+<div class="ph" style="position:absolute;left:150px;top:200px;width:790px;height:540px"><img src="assets/ms-badge.jpg" alt="Eric holding his Microsoft badge at the MSN office"></div>
+<div class="ph" style="position:absolute;left:980px;top:200px;width:790px;height:540px"><img src="assets/aws-talk.jpg" alt="Eric presenting an AWS Glue demo on a projector"></div>
+<div class="car c2" aria-label="Career timeline" style="top:785px">
+  <div data-s="1"><i class="tln"></i><div class="co"><span class="lg tx">🚀</span><p><b>Startups</b><span>2019–21</span></p></div></div>
+  <div data-s="2"><i class="tln"></i><div class="co"><span class="lg"><img src="assets/logo-microsoft.png" alt="Microsoft"></span><p><b>Microsoft</b><span>2021–22</span></p></div></div>
+  <div data-s="3"><i class="tln"></i><div class="co"><span class="lg"><img src="assets/logo-aws.svg" alt="AWS"></span><p><b>AWS</b><span>2022–25</span></p></div></div>
+  <div data-s="4" class="now"><i class="tln"></i><div class="co"><span class="lg"><img src="assets/logo-youtube.png" alt="YouTube"></span><p><b>Eric Tech</b><span>2025 → now</span></p></div></div>
+</div>
+</div>
+<aside class="notes"><p class="tm">⏱ ~30s</p><ul><li>"But first, quick intro for those who don't know me." That's me with my Microsoft badge, and that's me giving a talk at AWS, just with a lot more slides about Glue. (If the venue fits: "Funny enough, I actually used to work here.")</li><li>Walk the line left to right, one breath each: "Started out at a couple of startups, about two years. Then a year at Microsoft as a software engineer. Then about three years at AWS, also as a software engineer."</li><li>Last beat, the Eric Tech bar: "And since 2025, I've been doing Eric Tech full-time: building with AI and making AI builder and AI automation content."</li></ul></aside>
+</section>
+<section class="slide" data-id="youtube-channel-90-4k" data-ch="02" data-chn="Who is this guy" data-title="YouTube channel: 95.9K subs · 24.0M views" data-sec="15">
+<div class="st"><div class="glow" aria-hidden="true"></div>
+<div class="shot" style="left:90px;top:170px;width:1300px"><div class="bar"><i></i><i></i><i></i><span>youtube.com/@EricWTech/videos</span></div><div class="im"><img src="assets/shot-yt-channel-home.png" alt="Eric Tech YouTube channel page: 95.9K subscribers, 410 videos, latest Claude Code videos" style="display:block;width:100%"><span class="ytfix" aria-hidden="true" style="font-size:19.7px"><b>@EricWTech</b> • 95.9K subscribers • 410 videos</span></div></div>
+<div style="position:absolute;left:1450px;right:90px;top:150px;display:grid;gap:22px;justify-items:start">
+  <div style="display:grid;gap:12px;justify-items:start"><span class="lg" style="width:300px;height:300px;padding:16px"><img src="assets/qr-youtube.png" alt="QR code to the Eric Tech YouTube channel"></span><span style="font:500 24px/1.3 var(--fm);color:var(--dim)">Scan to subscribe</span></div>
+  <div class="stat" data-s="1"><b style="font-family:var(--fm);font-weight:600;font-size:124px;letter-spacing:-.05em">95.9K</b><span>subscribers</span></div>
+  <div class="stat" data-s="2"><b style="font-family:var(--fm);font-weight:600;font-size:110px;letter-spacing:-.05em">24.0M</b><span>views</span></div>
+</div>
+<div class="src">YouTube · youtube.com/@EricWTech · 27 Nov 2026</div>
+</div>
+<aside class="notes"><p class="tm">⏱ ~15s</p><ul><li>Self-deprecating, four seconds: "And yes, I yap about coding agents on YouTube a lot."</li><li>"Almost 96 thousand subscribers, 24 million views, 410 videos." Move on.</li></ul></aside>
+</section>
+<section class="slide" data-id="youtube-system-design-all" data-ch="02" data-chn="Who is this guy" data-title="YouTube: system design → all-in on AI" data-sec="40" data-hook="spot" data-steps="5">
+<div class="st">
+<span class="lg ywlg"><img src="assets/logo-youtube.png" alt="YouTube"></span>
+<div class="hd" style="left:316px;right:110px"><span class="kick">Then YouTube</span><h2 class="h2 sm">System design → <em>all-in on AI</em></h2></div>
+<div class="yw">
+  <div class="pg" data-s="1" data-k="1"><p><span class="sn"><em>1</em><i>Then</i></span><b>System design</b><span class="vw">203K</span></p><div class="th"><img src="assets/thumb-yt-YO7R0rYWDl8.jpg" alt="14 Front End System Design Concepts | Explained in 10 Minutes"><img src="assets/thumb-yt-OmLsV8Dljzo.jpg" alt="Micro-Frontend Architecture Setup &amp; Key Concepts Explained"><img src="assets/thumb-yt-i1YlVHr_BGM.jpg" alt="Master Web Rendering Exposed: SSG, ISR, SSR, CSR, and PPR Strategies"><img src="assets/thumb-yt-aJRUoB-9Qjc.jpg" alt="Event Sourcing Explained in 5 Minutes | CQRS + System Design"></div></div>
+  <div class="pg" data-s="1" data-k="1"><p><span class="sn"><em>2</em><i>Then</i></span><b>Career growth</b><span class="vw">46K</span></p><div class="th"><img src="assets/thumb-yt-MXaneNPDYOU.jpg" alt="What does a Staff Software Engineer do? - Aaron Rehaag (Google Staff Software Engineer)"><img src="assets/thumb-yt-Uagis02DU3s.jpg" alt="How to become a Solutions Architect (SA)? - iLyas Bakouch"><img src="assets/thumb-yt-XKRD3vZnMeU.jpg" alt="From Developer to Engineer Manager - Gregory Witek"><img src="assets/thumb-yt-t4MtI_lp4BY.jpg" alt="From Software Engineer to VP Engineering - Vincent Chu"></div></div>
+  <div class="pg" data-s="2" data-k="2"><p><span class="sn"><em>3</em></span><b>n8n AI agents</b><span class="vw">194K</span></p><div class="th"><img src="assets/thumb-yt-mfj1WGjJuWQ.jpg" alt="How to Build an AI SQL Agent with n8n to Query Databases Effortlessly"><img src="assets/thumb-yt-idT2Igu8X2w.jpg" alt="How to Build AI Chatbots &amp; Chatflow Automation with Dify.ai"><img src="assets/thumb-yt-4Tp4Kx-ThwI.jpg" alt="Gemini File Search Just Killed Traditional RAG (Free Vector DB)"></div></div>
+  <div class="pg" data-s="2" data-k="2"><p><span class="sn"><em>4</em></span><b>Claude Code 101</b><span class="vw">327K</span></p><div class="th"><img src="assets/thumb-yt-q4NP2_ROvPU.jpg" alt="Claude Code Full Course: Zero to Pro in One Hour"><img src="assets/thumb-yt-Jvl_MOBPRXI.jpg" alt="Your Claude Code Terminal Could Look Like This"><img src="assets/thumb-yt-NjOqPbUecC4.jpg" alt="Claude Code Now Has Eyes | Playwright MCP Integration"><img src="assets/thumb-yt-P-5bWpUbO60.jpg" alt="Claude Code Setup That Actually Works | Full Tutorial 2025"></div></div>
+  <div class="pg" data-s="2" data-k="2"><p><span class="sn"><em>5</em></span><b>Claude Code workflows</b><span class="vw">310K</span></p><div class="th"><img src="assets/thumb-yt-vPPAhTYoCdA.jpg" alt="Claude Code Just Got Way Better | Auto Claude Kanban Boards"><img src="assets/thumb-yt-TxsNTqaTrKw.jpg" alt="Shadcn&#x27;s NEW MCP is Here: Build UIs with AI Agents &amp; Claude Code"><img src="assets/thumb-yt-M5CsRj6zSCA.jpg" alt="5 MCP Servers That Make Claude Code 10x More Powerful (Full-Stack App Build)"><img src="assets/thumb-yt-3bej6c3O8d0.jpg" alt="Claude Code Web Changed How I Code | Here&#x27;s My Full Setup"></div></div>
+  <div class="pg" data-s="3" data-k="3"><p><span class="sn"><em>6</em></span><b>Second brain</b><span class="vw">390K</span></p><div class="th"><img src="assets/thumb-second-brain-obsidian.jpg" alt="Obsidian + Claude Code: The Second Brain Setup That Actually Works"><img src="assets/thumb-yt-Ynv_WYO_slw.jpg" alt="Understand-Anything vs Graphify: I Tested Both on My SaaS"><img src="assets/thumb-yt-v8rCHym0lXE.jpg" alt="Karpathy&#x27;s LLM Wiki + This Skill = Game Changer"><img src="assets/thumb-yt-LXl0Wx6qSs0.jpg" alt="Your Claude Knowledge Base Is Missing This Skill"></div></div>
+  <div class="pg" data-s="3" data-k="3"><p><span class="sn"><em>7</em></span><b>Claude Code skills</b><span class="vw">259K</span></p><div class="th"><img src="assets/thumb-yt-bFC1QGEQ2E8.jpg" alt="Claude Skills Explained: 4 Skills to 10x Your Coding Workflow"><img src="assets/thumb-yt-EsgUfrwsV5A.jpg" alt="Karpathy&#x27;s Skill Just Fixed Claude Code&#x27;s Biggest Problem"><img src="assets/thumb-yt-nN5R9DFYsXY.jpg" alt="Claude Code + Playwright CLI: Automate QA with Less Tokens"><img src="assets/thumb-yt-fV17ZkPBlAc.jpg" alt="This NotebookLM + Claude Code Workflow Is Insane"></div></div>
+  <div class="pg" data-s="4" data-k="4"><p><span class="sn"><em>8</em></span><b>Spec-driven dev</b><span class="vw">721K</span></p><div class="th"><img src="assets/thumb-yt-4wBVuj2an8E.jpg" alt="Pstack: How a Cursor Engineer Ships Code With AI"><img src="assets/thumb-yt-TX91PdBn_IA.jpg" alt="Claude Code + SUPERPOWERS = The End of Vibe Coding? (Full Tutorial)"><img src="assets/thumb-yt-8D8ewFBJfFM.jpg" alt="Matt Pocock&#x27;s Claude Code Skills Beat Superpowers Now"><img src="assets/thumb-gstack-2026-04-17.jpg" alt="This GStack Skill Saves Weeks of Development"></div></div>
+  <div class="pg" data-s="4" data-k="4"><p><span class="sn"><em>9</em></span><b>Software factory</b><span class="vw">84K</span></p><div class="th"><img src="assets/thumb-yt-aggJvNZxfKA.jpg" alt="I Built a Self-Improving Software Factory"><img src="assets/thumb-yt-nX_bGyIOFM4.jpg" alt="How I Make Claude Code Build Apps Autonomously"><img src="assets/thumb-yt-C6gSYhjflGU.jpg" alt="This Agentic OS Builds Entire Apps While You Sleep (Fable 5)"></div></div>
+</div>
+</div>
+<aside class="notes"><ul><li>"This is who we are and what we do: we build with AI, and here's the kind of content we make."</li></ul></aside>
+</section>
+<section class="slide" data-id="demo-meet-jarvis" data-ch="03" data-chn="Demo" data-title="Demo: meet Jarvis" data-sec="120">
+<div class="st s1"><div class="glow" aria-hidden="true"></div>
+<div class="orbglow" aria-hidden="true" style="left:250px;top:150px;width:780px;height:780px"></div>
+<div class="orb" style="left:430px;top:330px;width:420px;height:420px"><img src="assets/jarvis/jarvis-orb.gif" alt="Jarvis, a glowing orb of light that ripples as it speaks"></div>
+<div class="kick" style="top:430px;left:1150px;right:auto;text-align:left">Live demo</div>
+<h1 class="hq" style="top:480px;left:1140px;right:auto;width:640px;text-align:left;font-size:170px"><em>Demo</em></h1>
+</div>
+<aside class="notes"><ul><li>Switch to the Mac. Show Jarvis on the desktop.</li><li>Hold Ctrl+Option, ask it something about your screen. Let it answer out loud.</li><li>"So that's Jarvis. Now let's see how it works, one level deeper each time."</li></ul></aside>
+</section>
+
+<section class="slide" data-id="three-levels" data-ch="04" data-chn="Level 1 · Voice" data-title="Three levels" data-sec="25">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">The plan</span><h2 class="h2 sm">Three <em>levels</em></h2></div>
+<div class="lvc" data-s="1" style="left:110px"><i class="pb">1</i><span class="tc"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10v4M7.5 7v10M12 3v18M16.5 7v10M21 10v4"/></svg></span><b>Voice</b></div>
+<div class="lvc" data-s="2" style="left:700px"><i class="pb">2</i><span class="tc"><img src="assets/logos/gemini.svg" alt=""></span><b>Inside Gemini Live</b></div>
+<div class="lvc" data-s="3" style="left:1290px"><i class="pb acc">3</i><span class="tc"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16"/></svg></span><b>Code</b></div>
+</div>
+<aside class="notes"><ul><li>"Here's the plan. Three levels, each one a bit deeper."</li><li>"Level one: voice. The two ways to talk to AI."</li><li>(→) "Level two: inside Gemini Live. The open line, and the loop that runs it."</li><li>(→) "Level three: code. SDK versus ADK, and the one switch I built into Jarvis."</li></ul></aside>
+</section>
+<section class="slide" data-id="tts-reads-live-hears" data-ch="04" data-chn="Level 1 · Voice" data-title="TTS reads. Gemini Live hears." data-sec="50">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Level 1 · Two ways to talk to AI</span><h2 class="h2 sm">Most AI voice reads. <em>Gemini Live hears.</em></h2></div>
+<figure class="art" data-until="0" style="left:285px;top:230px;width:1350px;height:759px"><img class="scene-art" src="assets/art/tts-vs-live.png" alt="Left: a robot reads a script into a megaphone and ignores a waving person. Right: a person and a robot chat, sound flowing both ways" onerror="this.parentNode.classList.add('miss')"><figcaption class="cap">One reads. One listens.</figcaption></figure>
+<div data-s="1"><span class="kick" style="left:110px;top:262px;color:var(--mut)">Classic · <span class="rd" style="color:var(--bad)">one way</span></span>
+<div class="dn" style="left:110px;top:320px;width:250px;height:150px" aria-label="You"><svg class="ico" viewBox="0 0 24 24" width="80" height="80" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></div>
+<div class="dn" style="left:410px;top:320px;width:330px;height:150px"><b style="font-size:40px">Speech→text</b></div>
+<div class="dn" style="left:790px;top:320px;width:300px;height:150px" aria-label="AI model, Gemini"><img src="assets/logos/gemini.svg" alt="" style="width:84px;height:84px;display:block;margin:0 auto"></div>
+<div class="dn" style="left:1140px;top:320px;width:330px;height:150px"><b style="font-size:40px">Text→speech</b></div>
+<div class="dn" style="left:1520px;top:320px;width:290px;height:150px" aria-label="Sound"><svg class="ico" viewBox="0 0 24 24" width="80" height="80" aria-hidden="true"><path d="M3 10v4M7.5 7v10M12 3v18M16.5 7v10M21 10v4"/></svg></div>
+</div>
+<svg class="dg" viewBox="0 0 1920 1080" aria-label="Classic, one way: you, speech to text, AI model, text to speech, sound. Live, both ways: you and Gemini Live, voice in and out at the same time">
+  <g data-s="1"><path class="dg-edge ar" d="M366,395 L404,395"/><path class="dg-edge ar" d="M746,395 L784,395"/><path class="dg-edge ar" d="M1096,395 L1134,395"/><path class="dg-edge ar" d="M1476,395 L1514,395"/></g>
+  <g data-s="2"><path class="dg-edge ar" d="M520,670 L1340,670"/><text class="dg-plain" x="930" y="650" text-anchor="middle">you</text>
+  <path class="dg-edge nw ar" d="M1340,740 L520,740"/><text class="dg-plain" x="930" y="790" text-anchor="middle" style="fill:var(--acc)">it</text></g>
+</svg>
+<div data-s="2"><span class="kick" style="left:110px;top:570px;color:var(--mut)">Live · <span style="color:var(--acc)">both ways</span></span>
+<div class="dn" style="left:110px;top:620px;width:400px;height:170px" aria-label="You"><svg class="ico" viewBox="0 0 24 24" width="96" height="96" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></div>
+<div class="dn on" style="left:1350px;top:620px;width:460px;height:170px"><span class="lg"><img src="assets/logos/gemini.svg" alt=""></span><b>Gemini Live</b></div></div>
+<p class="tk" data-s="3">It hears <em>tone, pauses, energy</em>.</p>
+</div>
+<aside class="notes"><ul><li>"Most AI voice today reads. Look at the classic chain: three steps, all text in the middle."</li><li>"You talk. Speech-to-text turns your voice into words. The AI model thinks in text. Text-to-speech reads the answer out as sound."</li><li>"And it only goes one way. While it talks, it can't hear you."</li><li>(→) "Gemini Live is different. One model. Your voice goes in, its voice comes out. Both ways, at the same time."</li><li>(→) "And because it hears the audio itself, it hears your tone, your pauses, your energy. Not just the words."</li></ul></aside>
+</section>
+<section class="slide" data-id="two-architectures" data-ch="04" data-chn="Level 1 · Voice" data-title="Takes turns, or cut in anytime" data-sec="50">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Level 1 · How it feels</span><h2 class="h2 sm">Takes turns, or <em>cut in anytime</em></h2></div>
+<figure class="art" data-until="0" style="left:285px;top:230px;width:1350px;height:759px"><img class="scene-art" src="assets/art/relay-vs-one.png" alt="Left: three robots pass a baton in a relay. Right: one robot chats directly with a person" onerror="this.parentNode.classList.add('miss')"><figcaption class="cap">A relay, or one runner</figcaption></figure>
+
+<span class="kick" style="left:110px;top:278px;color:var(--mut);display:flex;align-items:center;gap:14px" data-s="1"><svg class="ico" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><rect x="6" y="7" width="12" height="15" rx="2.5"/><path d="M9 7V2M9 12h6M9 15h6M9 18h6"/></svg>Classic</span>
+<span class="kick" style="left:110px;top:558px;color:var(--mut);display:flex;align-items:center;gap:14px" data-s="2"><svg class="ico" style="color:var(--acc)" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path d="M5 3.5h3.5l2 5-2.5 1.6a11.5 11.5 0 0 0 5.4 5.4l1.6-2.5 5 2v3.5a2 2 0 0 1-2 2A17 17 0 0 1 3 5.5a2 2 0 0 1 2-2z"/></svg>Live</span>
+<svg class="dg" viewBox="0 0 1920 1080" aria-label="Classic: you talk, it thinks, then it talks while you wait. Live: you talk, it talks, you cut in and it stops">
+  <g data-s="1"><rect x="110" y="330" width="500" height="100" rx="14" class="dg-seg"/><text x="360" y="391" text-anchor="middle" class="dg-plain" style="font-size:36px;font-weight:600">You talk</text>
+  <rect x="620" y="330" width="270" height="100" rx="14" class="dg-seg bad"/><text x="755" y="391" text-anchor="middle" class="dg-plain" style="font-size:32px;fill:var(--bad)">thinking…</text>
+  <rect x="900" y="330" width="600" height="100" rx="14" class="dg-seg acc"/><text x="1200" y="391" text-anchor="middle" class="dg-plain" style="font-size:36px;font-weight:600">It talks</text>
+  <text x="1530" y="393" class="dg-hw mut">you wait</text></g>
+  <g data-s="2"><rect x="110" y="610" width="500" height="100" rx="14" class="dg-seg"/><text x="360" y="671" text-anchor="middle" class="dg-plain" style="font-size:36px;font-weight:600">You talk</text>
+  <rect x="620" y="610" width="380" height="100" rx="14" class="dg-seg acc"/><text x="810" y="671" text-anchor="middle" class="dg-plain" style="font-size:36px;font-weight:600">It talks</text>
+  <rect x="1010" y="610" width="440" height="100" rx="14" class="dg-seg good"/><text x="1230" y="671" text-anchor="middle" class="dg-plain" style="font-size:36px;font-weight:600;fill:var(--good)">You cut in</text>
+  <text x="1480" y="673" class="dg-hw acc">it stops</text></g>
+</svg>
+<p class="tk" data-s="3">Jarvis now does <em>both</em>.</p>
+</div>
+<aside class="notes"><ul><li>"So what does that feel like?"</li><li>"Classic takes turns. You talk, it turns your voice into text, thinks, then reads the answer out. And you wait until it's done."</li><li>(→) "Live: you talk, it answers fast, and you can cut in anytime. It just stops and listens, like a phone call."</li><li>(→) "And Jarvis now does both. There's a switch, I'll show you in a minute."</li></ul></aside>
+</section>
+<section class="slide" data-id="pros-cons-cascaded-vs-s2s" data-ch="04" data-chn="Level 1 · Voice" data-title="Pros and cons: cascaded vs speech-to-speech" data-sec="60">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">The trade-off</span><h2 class="h2 sm">Classic vs <em>Live</em></h2></div>
+<table class="cmp r6 chk">
+<thead><tr><th></th><th>Classic</th><th>Live</th></tr></thead>
+<tbody>
+<tr><th>Faster</th><td><span class="no" aria-label="no">–</span></td><td><span class="ok" aria-label="wins">✓</span></td></tr>
+<tr><th>Cut in anytime</th><td><span class="no" aria-label="no">–</span></td><td><span class="ok" aria-label="wins">✓</span></td></tr>
+<tr><th>Hears tone and pauses</th><td><span class="no" aria-label="no">–</span></td><td><span class="ok" aria-label="wins">✓</span></td></tr>
+<tr><th>Any model</th><td><span class="ok" aria-label="wins">✓</span></td><td><span class="no" aria-label="no">–</span></td></tr>
+</tbody></table>
+<p class="tk" data-s="1" style="top:830px">Live wins on feel. <em>Classic wins on control.</em></p>
+</div>
+<aside class="notes"><ul><li>"So which one is better? Honestly, it depends. The check is the winner."</li><li>"Faster: Live, it streams while it thinks. Cutting in: Live, you can interrupt it anytime. Hearing tone and pauses: Live, Classic only gets the words."</li><li>"Any model: Classic. Jarvis Classic runs on Gemini, Claude, GPT or a local model. Live is Gemini only."</li><li>(→) "So: Live wins on feel. Classic wins on control."</li></ul></aside>
+</section>
+<section class="slide" data-id="architecture-browser-backend-live" data-ch="05" data-chn="Level 2 · Inside Live" data-title="Architecture: browser ⇄ /ws ⇄ backend ⇄ Gemini Live" data-sec="50">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Level 2 · Inside Gemini Live</span><h2 class="h2 sm">Three pieces, <em>one open line</em></h2></div>
+<figure class="art" data-until="0" style="left:285px;top:230px;width:1350px;height:759px"><img class="scene-art" src="assets/art/open-line.png" alt="Two people at either end of a tin-can telephone string, sound travelling both ways at once" onerror="this.parentNode.classList.add('miss')"><figcaption class="cap">A line that stays open</figcaption></figure>
+<div data-s="1" class="dn v" style="left:110px;top:290px;width:380px;height:400px"><span class="lg" style="width:120px;height:120px;padding:18px"><img src="assets/logos/googlechrome.svg" alt=""></span><b style="font-size:52px">Browser</b></div>
+<div data-s="1" class="dn v" style="left:770px;top:290px;width:380px;height:400px"><span class="lg" style="width:120px;height:120px;padding:18px"><svg class="ico" viewBox="0 0 24 24" width="84" height="84" aria-hidden="true"><rect x="3" y="3.5" width="18" height="7" rx="2"/><rect x="3" y="13.5" width="18" height="7" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg></span><b style="font-size:52px">Your server</b></div>
+<div data-s="1" class="dn on v" style="left:1430px;top:290px;width:380px;height:400px"><span class="lg" style="width:120px;height:120px;padding:18px"><img src="assets/logos/gemini.svg" alt=""></span><b style="font-size:52px">Gemini Live</b></div>
+<svg class="dg" viewBox="0 0 1920 1080" aria-label="Browser, your server and Gemini Live, joined by two WebSocket links that stay open, audio flowing both ways">
+  <g data-s="2"><path class="dg-edge nw two" style="marker-start:url(#aha);marker-end:url(#aha);stroke-width:6" d="M506,490 L754,490"/><text class="dg-plain" x="630" y="452" text-anchor="middle" style="font-weight:600;font-size:34px">WebSocket</text><text class="dg-cap acc" x="630" y="544" text-anchor="middle" style="font-size:28px">stays open</text>
+  <path class="dg-edge nw two" style="marker-start:url(#aha);marker-end:url(#aha);stroke-width:6" d="M1166,490 L1414,490"/><text class="dg-plain" x="1290" y="452" text-anchor="middle" style="font-weight:600;font-size:34px">WebSocket</text><text class="dg-cap acc" x="1290" y="544" text-anchor="middle" style="font-size:28px">stays open</text></g>
+</svg>
+</div>
+<aside class="notes"><ul><li>"Level two. What's inside Gemini Live?"</li><li>"Think of it as a phone line that stays open. A normal web request asks once and hangs up. This one stays open."</li><li>(→) "Three pieces. The browser has the mic and speaker. Gemini Live, gemini-3.8-live, is the model in Google's cloud. And in the middle, your small server holding the line."</li><li>(→) "Both links are WebSockets. They stay open, and audio flows both ways the whole time. Your voice up at 16 kilohertz, its voice back at 24."</li><li>"So your server runs two jobs at the same time. Let me show you."</li></ul></aside>
+</section>
+<section class="slide" data-id="two-jobs-at-once" data-ch="05" data-chn="Level 2 · Inside Live" data-title="Two jobs at once: upstream and downstream" data-sec="50">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Level 2 · Inside your backend</span><h2 class="h2 sm">Two jobs <em>at once</em></h2></div>
+<div class="ed" data-s="1" style="left:260px;top:230px;width:1400px"><div class="bar"><i></i><i></i><i></i><span class="tab">live.py</span></div><pre>session = live.<span class="f">connect</span>(model)   <span class="c"># open the line once</span>
+
+<span class="c"># job 1: your mic → Gemini</span>
+<span class="k">while</span> call_open:
+    <span class="f">send</span>(mic_audio)
+
+<span class="c"># job 2: Gemini → your speaker</span>
+<span class="k">while</span> call_open:
+    msg = <span class="f">receive</span>()
+    <span class="k">if</span> msg.audio: <span class="f">play</span>(msg.audio)
+<span class="hx">    if msg.interrupted: stop()   <span class="c"># you talked, it stops</span></span></pre></div>
+</div>
+<aside class="notes"><ul><li>"Inside your server, two jobs run at the same time."</li><li>"Job one, forever: take your mic audio and send it up to Gemini. Mic audio goes up."</li><li>"Job two, forever: take whatever comes back down, Gemini's voice, and play it out your speaker."</li><li>"Look at the orange line. If the message says interrupted, stop. You talk, it stops. And job one already sent your words, because it never stopped sending."</li><li>"Neither job blocks the other. That's the trick."</li><li>It's one loop split in two, so sending never waits for playing. Both run until you hang up.</li><li>Gotcha: session.receive() ends after every turn, so keep looping while the call is open.</li></ul></aside>
+</section>
+<section class="slide" data-id="feels-alive" data-ch="05" data-chn="Level 2 · Inside Live" data-title="What makes it feel alive" data-sec="60">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">What makes it feel alive</span><h2 class="h2 sm">It listens, <em>stops and acts</em></h2></div>
+<figure class="art" data-s="1" style="left:110px;top:300px;width:540px;height:380px"><img class="scene-art" src="assets/art/vad-listen.png" alt="A robot with headphones cups its ear, holding a sign with a sound wave and a flat line" onerror="this.parentNode.classList.add('miss')"></figure>
+<div class="fbox box" style="left:110px;top:710px;width:540px;height:130px" data-s="1">Knows when you stop</div>
+<figure class="art" data-s="2" style="left:690px;top:300px;width:540px;height:380px"><img class="scene-art" src="assets/art/barge-in.png" alt="A person starts talking; a robot speaker stops and presses pause" onerror="this.parentNode.classList.add('miss')"></figure>
+<div class="fbox box" style="left:690px;top:710px;width:540px;height:130px" data-s="2">You can cut in</div>
+<figure class="art" data-s="3" style="left:1270px;top:300px;width:540px;height:380px"><img class="scene-art" src="assets/art/mira-dj.png" alt="A DJ robot plays music for a person" onerror="this.parentNode.classList.add('miss')"></figure>
+<div class="fbox box" style="left:1270px;top:710px;width:540px;height:130px" data-s="3">It uses tools</div>
+</div>
+<aside class="notes"><ul><li>"Three things make it feel alive."</li><li>"One. It knows when you stop. That's VAD, voice activity detection: it keeps asking, is this speech or silence? Keep streaming audio even when you're quiet so it catches the moment you start. It's built in."</li><li>(→) "Two. You can cut in. That's barge-in. Gemini notices on the server in about 200 milliseconds, but the trick is to stop the sound in the browser first, the moment the mic hears you. Stop locally, then let the model catch up."</li><li>(→) "Three. It uses tools. You say play some dream pop, the model decides to call play_playlist, and your code actually runs it. The model decides, your code acts."</li><li>(→) "Catch: while a tool runs, the model waits. Slow tool, silent agent. So fire the job and return right away."</li><li>Jargon for the curious: knowing when you stop is VAD (voice activity detection). Cutting in is barge-in. Using tools is tool calls.</li><li>Punchline (cut from slide): "Slow tool = silent agent."</li></ul></aside>
+</section>
+
+<section class="slide" data-id="sdk-vs-adk" data-ch="06" data-chn="Level 3 · Code" data-title="SDK vs ADK" data-sec="60">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Level 3 · Same model, same voice</span><h2 class="h2 sm">SDK vs <em>ADK</em></h2></div>
+<div class="ed" data-s="1" style="left:110px;top:235px;width:1700px"><div class="bar"><i></i><i></i><i></i><span class="tab">sdk.py</span><span class="tg2">you run the tool</span></div><pre style="font-size:36px;padding:22px 44px 26px">session = live.<span class="f">connect</span>(model, tools)
+msg = session.<span class="f">receive</span>()     <span class="c"># from Gemini</span>
+<span class="hx">if msg.tool_call:           <span class="c"># Gemini: "run open_app"</span>
+    result = <span class="f">open_app</span>(...)  <span class="c"># YOU run it</span>
+    session.<span class="f">send_tool_response</span>(result)</span></pre></div>
+<div class="ed" data-s="2" style="left:110px;top:665px;width:1700px"><div class="bar"><i></i><i></i><i></i><span class="tab">adk.py</span><span class="tg2">ADK runs the tool</span></div><pre style="font-size:36px;padding:22px 44px 26px">agent = <span class="f">Agent</span>(model, tools=[open_app])
+runner.<span class="f">run_live</span>(agent, queue)
+<span class="hx"><span class="c"># ADK runs it, sends result back</span></span></pre></div>
+</div>
+<aside class="notes"><ul><li>Flow (cut from the slide): you say "open Safari" → Gemini → tool_call: open_app → SDK: your code runs it / ADK: runs it for you.</li><li>"Level three. In code, you have two ways in. Same model, same voice."</li><li>"The SDK is a phone line to Gemini Live. You pass everything along yourself, and when it asks for a tool, you run it and send the answer back."</li><li>(→) "ADK, Google's Agent Development Kit, is the phone line plus an assistant. It runs the tools for you and keeps notes on the conversation."</li><li>"In code: with the SDK your receive loop has three extra lines: check for a tool call, run it, send the response. ADK removes those three lines."</li><li>(→) "So: building a new agent from scratch, especially in Python? Pick ADK. Jarvis uses the SDK because it already has its own agent loop, tools, memory and safety checks. It just needs the phone line."</li><li>SDK: you run what it asks for. ADK: it runs the tools for you.</li><li>Analogy: the SDK is a phone line, you run what it asks for. The ADK is a phone line plus an assistant, it runs the tools for you.</li><li>Who sends tool_call? Gemini does. You say "open Safari", Gemini decides to call open_app and sends a tool_call. With the SDK your code runs it and sends the result back. With the ADK, the ADK runs it for you.</li><li>Punchline (cut from slide): "New agent? ADK. Jarvis? SDK."</li></ul></aside>
+</section>
+
+<section class="slide" data-id="jarvis-one-switch" data-ch="06" data-chn="Level 3 · Code" data-title="Jarvis: one config, Classic and Live" data-sec="60">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Jarvis · settings.json</span><h2 class="h2 sm">One <em>config</em></h2></div>
+<div class="ed" data-s="1" style="left:110px;top:235px;width:830px"><div class="bar"><i></i><i></i><i></i><span class="tab">settings.json</span><span class="tg2">Classic</span></div><pre style="font-size:28px;padding:22px 40px 26px">{
+<span class="hx">  <span class="k">"voiceMode"</span>: <span class="v">"classic"</span>,</span><span class="hx">  <span class="k">"provider"</span>: <span class="v">"anthropic"</span>,</span><span class="hx">  <span class="k">"model"</span>: <span class="v">"claude-haiku-5-5"</span>,</span><span class="hx">  <span class="k">"tts"</span>: <span class="v">"fish"</span>,</span><span style="opacity:.4">  <span class="k">"liveModel"</span>: <span class="v">...</span>,</span>
+<span style="opacity:.4">  <span class="k">"liveVoice"</span>: <span class="v">...</span>,</span>
+<span style="opacity:.4">  <span class="k">"allowActions"</span>: <span class="v">true</span>,</span>
+<span style="opacity:.4">  <span class="k">"secondBrain"</span>: { <span class="k">"root"</span>: <span class="v">"~/EricOS"</span> },</span>
+<span style="opacity:.4">  ...</span>
+}</pre></div>
+<div class="ed" data-s="2" style="left:980px;top:235px;width:830px"><div class="bar"><i></i><i></i><i></i><span class="tab">settings.json</span><span class="tg2">Live</span></div><pre style="font-size:28px;padding:22px 40px 26px">{
+<span class="hx">  <span class="k">"voiceMode"</span>: <span class="v">"live"</span>,</span><span style="opacity:.4">  <span class="k">"provider"</span>: <span class="v">...</span>,</span>
+<span style="opacity:.4">  <span class="k">"model"</span>: <span class="v">...</span>,</span>
+<span style="opacity:.4">  <span class="k">"tts"</span>: <span class="v">...</span>,</span>
+<span class="hx">  <span class="k">"liveModel"</span>: <span class="v">"gemini-3.8-live"</span>,</span><span class="hx">  <span class="k">"liveVoice"</span>: <span class="v">"Charon"</span>,</span><span style="opacity:.4">  <span class="k">"allowActions"</span>: <span class="v">true</span>,</span>
+<span style="opacity:.4">  <span class="k">"secondBrain"</span>: { <span class="k">"root"</span>: <span class="v">"~/EricOS"</span> },</span>
+<span style="opacity:.4">  ...</span>
+}</pre></div>
+</div>
+<aside class="notes"><ul><li>Classic uses provider + model (the text brain), tts (fish | gemini | voicestudio) and speechLang. Live uses liveModel and liveVoice (null follows the look; JARVIS = Charon). Both share allowActions (gates file edits, commands, act_in_app and background agents) and secondBrain (its AGENTS.md rides in the system prompt, in Classic and Live).</li><li>"So here's what I did with Jarvis. One switch. It lives in Settings, on the Spoken replies page, under Voice mode: Classic or Live. Classic is the default."</li><li>"Classic = listen, think, speak, one sentence at a time. Live = a hands-free Gemini Live call, talk over it any time."</li><li>"Classic: I listen, think, then speak, one sentence at a time. Any model, about 33 built-in tools."</li><li>"Live is a hands-free Gemini Live call: talk over me any time."</li><li>(→) Flip it on stage. Ask it something long, then talk over it. "See? It stops."</li><li>Exact UI: Settings › Spoken replies › Voice mode. Choices "Classic" (default) and "Live".</li><li>Classic hint: "I listen, think, then speak, one sentence at a time." Live hint: "A hands-free Gemini Live call: talk over me any time."</li><li>Real file: the Jarvis Data folder, settings.json (live-mode branch). Keys from sidecar DEFAULTS: voiceMode (classic|live, default classic), liveModel (gemini-3.8-live), liveVoice (null follows the look; JARVIS look = Charon), allowActions ("Allow File Edits &amp; Commands"), secondBrain (root plus raw, context, research, projects, agents).</li></ul></aside>
+</section>
+
+<section class="slide" data-id="brain-and-hands" data-ch="07" data-chn="Brain, memory, hands" data-title="Brain, memory, hands" data-sec="90">
+<div class="st">
+<div class="hd" style="right:110px"><h2 class="h2 sm">Brain, memory, <em>hands</em></h2></div>
+<div class="bhc" data-s="1" style="left:110px"><div class="bhh"><b>Memory</b></div><div class="bht"><div class="bhf"><svg class="ico" viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="color:var(--acc)"><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>_context/</span></div><div class="bhf"><svg class="ico" viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="color:var(--acc)"><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>projects/</span></div><div class="bhf"><svg class="ico" viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="color:var(--acc)"><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>notes/</span></div><div class="bhf"><svg class="ico" viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="color:var(--acc)"><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>skills/</span></div></div></div>
+<div class="bhm" data-s="2" style="left:740px;width:440px"><img src="assets/logos/gemini.svg" alt=""><b style="white-space:nowrap;font-size:40px">Brain · Gemini Live</b></div>
+<div class="bhc" data-s="3" style="left:1250px"><div class="bhh"><b>Hands</b></div><div class="bhs"><svg class="ico" viewBox="0 0 24 24" width="150" height="150" aria-hidden="true" style="stroke-width:1.2"><path d="M5 3l14 7-6 2-2 6z" style="fill:var(--ink)"/></svg><div class="bhr"><span class="bha"><img src="assets/logos/googlechrome.svg" alt="Browser"></span><span class="bha"><svg class="ico" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true" style=""><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg></span><span class="bha"><svg class="ico" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true" style=""><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="bha"><svg class="ico" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true" style=""><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="bha"><svg class="ico" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true" style=""><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span></div></div></div>
+<svg class="dg" viewBox="0 0 1920 1080" aria-label="Your second brain, Gemini Live reads it, then acts on your computer">
+ <g data-s="2"><path class="dg-edge nw ar" style="stroke-width:6" d="M690,560 L790,560"/><text class="dg-plain" x="740" y="520" text-anchor="middle" style="font-size:34px;font-weight:600">reads</text></g>
+ <g data-s="3"><path class="dg-edge nw ar" style="stroke-width:6" d="M1130,560 L1230,560"/><text class="dg-plain" x="1180" y="520" text-anchor="middle" style="font-size:34px;font-weight:600">acts</text></g>
+</svg>
+</div>
+<aside class="notes"><ul><li>"OK. The brain is solved: Gemini Live listens, thinks and talks. Now the memory."</li><li>"The thing that makes an assistant actually useful is that it knows you."</li><li>(→) "That means giving the AI the right context about you: who you are, what you do, how you like things done."</li><li>(→) "So it can answer and act on your behalf, not like a stranger."</li><li>(→) "That's context engineering: the right context, at the right time."</li><li>The right context means about you, your work, your way. So it answers and does things your way.</li><li>"So where does that context live? In its memory: a second brain folder. It's just a folder."</li><li>"Here's what one looks like. AGENTS.md at the top: who I am, how I work. Jarvis reads that first."</li><li>"Then context about my business and audience, raw notes and transcripts as evidence, what I've learned, per-project rules, and skills, the how-tos it can follow."</li><li>(→) "Jarvis has a Second brain page in Settings. You point it at that folder. Who you are, what you do, how you work."</li><li>(→) "Your context, in files it can read."</li><li>Where to set it: Settings › Second brain.</li><li>"And now the hands. Tools are the AI's hands. Jarvis has about 33 built in."</li><li>"It can move the cursor and click inside your apps. That's act_in_app."</li><li>(→) "It can open your browser and your apps."</li><li>(→) "It takes screenshots, so it sees what you see."</li><li>(→) "It can draw right on your screen to point at things."</li><li>(→) "And new: press Control, Option, A, drag a box, and Jarvis sees just that area."</li><li>Tool names if asked: act_in_app (move and click), open (browser and apps). Repo: github.com/EricTechPro/jarvis.</li><li>Cut slide text: "AI that knows you", "The right context", "So it acts for you", "Context engineering = the right context, at the right time".</li><li>Cut second-brain tree: AGENTS.md (who I am, how I work, Jarvis reads this), _context/ (business, audience, goals, voice), _raw/ (notes, transcripts, emails), _research/ (what I've learned), projects/ (each project's rules), .agents/skills/ (how-tos). Chips: who you are, what you do, how you work. "A folder → Jarvis reads it." "Your context, in files it can read."</li><li>Cut tools list: move and click in apps, open the browser and apps, take screenshots, draw on the screen, crop what it sees (Ctrl + Option + A). ~33 tools built in.</li></ul></aside>
+</section>
+
+
+<section class="slide" data-id="qr-second-brain-playlist" data-ch="07" data-chn="Memory" data-title="QR: AI Knowledge Graph playlist" data-sec="20">
+<div class="st">
+<div class="hd" style="right:110px"><span class="kick">Watch the playlist</span><h2 class="h2 sm">Build your <em>second brain</em></h2></div>
+<div class="shot" style="left:110px;top:270px;width:1120px;height:560px"><div class="im" style="height:100%"><img src="assets/shot-playlist-knowledge-graph-clean.png" alt="Eric's AI Knowledge Graph playlist on YouTube: 7 videos on Graphify, second brains and Claude knowledge bases" style="display:block;width:100%;height:100%;object-fit:cover"></div></div>
+<div class="qr" style="position:absolute;right:110px;top:290px;width:520px"><div class="qi" style="width:380px;height:380px;padding:16px"><img src="assets/qr-ai-knowledge-graph.png" alt="QR code to Eric's AI Knowledge Graph playlist on YouTube"></div><span class="ql" style="margin-top:6px"><span class="lgc"><img src="assets/logo-youtube.png" alt=""></span><span>AI Knowledge Graph</span></span></div>
+</div>
+<aside class="notes"><ul><li>"If you want to build your own second brain, I have a whole playlist on it. AI Knowledge Graph."</li><li>Hold the QR a few seconds for phones. "Scan that, it walks you through it step by step."</li><li>Playlist link: youtube.com/playlist?list=PLm7xfhMOszqxZxUJ-2rbZFVe3xIwOkpUE</li></ul></aside>
+</section>
+
+<section class="slide" data-id="demo-jarvis-acts" data-ch="08" data-chn="Demo" data-title="Demo: Jarvis draws and acts" data-sec="90">
+<div class="st s1"><div class="glow" aria-hidden="true"></div>
+<div class="orbglow" aria-hidden="true" style="left:250px;top:150px;width:780px;height:780px"></div>
+<div class="orb" style="left:430px;top:330px;width:420px;height:420px"><img src="assets/jarvis/jarvis-orb.gif" alt="Jarvis, a glowing orb of light that ripples as it speaks"></div>
+<div class="kick" style="top:430px;left:1150px;right:auto;text-align:left">Live demo · it acts</div>
+<h1 class="hq" style="top:480px;left:1140px;right:auto;width:640px;text-align:left;font-size:170px"><em>Demo</em></h1>
+</div>
+<aside class="notes"><ul><li>Live demo: draws and acts.</li><li>Back to the Mac.</li><li>Ask Jarvis to point at something on screen: it draws on it.</li><li>Ask it to open the browser and do a small task: it acts.</li><li>Try the crop: Ctrl+Option+A (⌃⌥A), drag a box, ask about it.</li></ul></aside>
+</section>
+
+
+<section class="slide" data-id="recap-three-parts" data-ch="09" data-chn="Recap" data-title="Recap: brain, memory, hands" data-sec="30">
+<div class="st">
+<div class="hd"><span class="kick">Recap</span><h2 class="h2 sm">Brain, memory, <em>hands</em></h2></div>
+<div class="parts">
+ <div class="part box" data-s="1"><i class="pb lg2">1</i><span class="lg" style="width:120px;height:120px;padding:20px;font-size:64px"><img src="assets/logos/gemini.svg" alt=""></span><span class="pk">Brain</span><b>Gemini Live</b></div>
+ <div class="part box" data-s="2"><i class="pb lg2">2</i><span class="lg" style="width:120px;height:120px;padding:20px;font-size:64px;color:var(--acc)"><svg class="ico" viewBox="0 0 24 24" width="80" height="80" aria-hidden="true" style="color:var(--acc)"><path d="M3 6.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="pk">Memory</span><b>Second brain</b></div>
+ <div class="part box" data-s="3"><i class="pb lg2 acc">3</i><span class="lg" style="width:120px;height:120px;padding:20px;font-size:64px">🖐️</span><span class="pk">Hands</span><b>Tools</b></div>
+</div>
+</div>
+<aside class="notes"><ul><li>"So, three things."</li><li>"The brain: Gemini Live. One open line, and you can cut in anytime."</li><li>(→) "The memory: a second brain folder, so it knows you. That's context engineering."</li><li>(→) "The hands: tools. Click, open, draw on your screen."</li><li>"Put them together and you get your own Jarvis."</li><li>Recap details: Brain = Gemini Live, one open line, cut in anytime. Memory = the second brain folder, context engineering. Hands = tools. The ~33 tools click, open and draw.</li></ul></aside>
+</section>
+<section class="slide" data-id="repo-qr-jarvis" data-ch="10" data-chn="Close" data-title="QR: Jarvis repo" data-sec="20">
+<div class="st qx">
+<div class="hd"><span class="kick">The repo · open source</span><h2 class="h2 qxt">Scan to get <em>Jarvis</em></h2></div>
+<div class="qx-row">
+ <figure class="qx-orb"><div class="orbglow" aria-hidden="true"></div><div class="orb"><img src="assets/jarvis/jarvis-orb.gif" alt="Jarvis, a glowing orb of light that ripples as it speaks"></div><figcaption>Your own voice desktop agent</figcaption></figure>
+ <div class="qr"><div class="qi" style="width:500px;height:500px"><img src="assets/qr-jarvis.png" alt="QR code to github.com/EricTechPro/jarvis"></div><span class="ql"><span class="lgc"><img src="assets/logos/github.svg" alt=""></span><span>github.com/EricTechPro/jarvis</span></span></div>
+</div>
+</div>
+<aside class="notes"><ul><li>"Everything you saw today is open source. Scan that and you get Jarvis."</li><li>Hold the QR a few seconds for phones.</li><li>Link: https://github.com/EricTechPro/jarvis</li></ul></aside>
+</section>
+<section class="slide" data-id="free-cloud-credits" data-ch="10" data-chn="Close" data-title="Free Google Cloud credits (DevFest)" data-sec="30">
+<div class="st qx">
+<div class="hd"><span class="kick">DevFest Vancouver · for attendees</span><h2 class="h2 qxt">Free Google Cloud <em>credits</em></h2></div>
+<div class="qx-row" style="bottom:250px">
+ <div class="gcc" role="img" aria-label="Google Cloud credits card for DevFest Vancouver 2026"><i class="gcc-bar" aria-hidden="true"></i>
+  <div class="gcc-top"><img src="assets/logos/googlecloud.svg" alt=""><b>Google Cloud</b></div>
+  <div class="gcc-amt"><span>$</span>Credits</div>
+  <div class="gcc-ft"><b>Fri 27 Nov · 10 AM PT</b><span>DevFest Vancouver 2026</span></div>
+ </div>
+ <div class="qr"><div class="qi" style="width:440px;height:440px"><img src="assets/qr-devfest-credits.png" alt="QR code to g.dev/credits/devfest-vancouver-2026"></div><small style="white-space:nowrap">g.dev/credits/devfest-vancouver-2026</small></div>
+</div>
+<ol class="qx-steps">
+ <li><i class="pb lg2">1</i><b>Scan the QR</b></li>
+ <li><i class="pb lg2">2</i><b>Sign in with Gmail</b></li>
+ <li><i class="pb lg2">3</i><b>Claim the badge</b></li>
+ <li><i class="pb lg2">4</i><b>Create a project</b></li>
+</ol>
+</div>
+<aside class="notes"><ul><li>"One more thing. Everyone here at DevFest gets free Google Cloud credits, for today's codelabs or your own project."</li><li>Walk the room through it: phones out, scan the QR, sign in with a personal Gmail, claim the badge, then make a new project on the credits billing account. Pause until most phones are up.</li><li>"The claim window opens Friday 10 AM Pacific, and the credits expire after the event, so do it today."</li><li>Details cut from the slide: the claim window opens Fri 27 Nov, 10:00 AM Pacific, for up to 12 hours. Credits expire after the event. Step 2 means your personal Gmail, and join GDP. Step 3: verify on mobile. Step 4: a new Cloud project on the credits billing account.</li></ul></aside>
+</section>
+</div><!-- /stage -->
+
+<div class="npanel" id="npanel" aria-live="polite"></div>
+<div class="ov" id="ov" role="dialog" aria-label="Slide overview"></div>
+<div class="ovbar" id="ovbar"><span>Drag to reorder</span><button type="button" id="ov-reset" hidden>Reset order</button><button type="button" id="ov-save" class="pri" hidden>Save order</button></div>
+<div class="hud" id="hud"></div>
+<div class="ctl" id="ctl" role="toolbar" aria-label="Presenter controls">
+  <button type="button" class="ic" id="ctl-ov" title="Slide overview (O)" aria-label="Slide overview"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg></button>
+  <button type="button" class="tg" id="ctl-anim" title="Animations: step through builds (A)" aria-pressed="false"><i aria-hidden="true"></i>Animations</button>
+  <div class="seg" id="ctl-theme" role="group" aria-label="Theme (T cycles)"><button type="button" data-t="a" aria-pressed="false" title="Obsidian Luxe (dark)">Obsidian</button><button type="button" data-t="d" aria-pressed="false" title="Whiteboard Dark">Whiteboard</button><button type="button" data-t="e" aria-pressed="false" title="Paper Light (bright room)">Paper</button></div>
+  <span class="cn" id="ctl-n" aria-live="off"></span>
+</div>
+
+<script src="order.js"></script>
+<script>
+(function(){
+'use strict';
+var root=document.documentElement, stage=document.getElementById('stage');
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){return null;}}
+/* slide order: order.js (window.SLIDE_ORDER) reorders the sections before anything indexes them.
+   Unknown ids are ignored; slides missing from the list keep their HTML order at the end.
+   An unsaved grid drag sits in localStorage (sf-order-pending) until Save order writes order.js. */
+var htmlSlides=[].slice.call(stage.querySelectorAll(':scope > .slide'));
+var HTML_ORDER=htmlSlides.map(function(x){return x.dataset.id;});
+var ANCHOR=htmlSlides.length?htmlSlides[htmlSlides.length-1].nextSibling:null;
+function applyOrder(ids){var by={},out=[],seen={};htmlSlides.forEach(function(x){by[x.dataset.id]=x;});
+  (ids||[]).forEach(function(id){if(by[id]&&!seen[id]){seen[id]=1;out.push(by[id]);}});
+  htmlSlides.forEach(function(x){if(!seen[x.dataset.id])out.push(x);});
+  out.forEach(function(x){stage.insertBefore(x,ANCHOR);});return out;}
+var SAVED_ORDER=applyOrder(Array.isArray(window.SLIDE_ORDER)?window.SLIDE_ORDER:HTML_ORDER).map(function(x){return x.dataset.id;});
+var pendingOrder=null;try{pendingOrder=JSON.parse(store('gl-order-pending')||'null');}catch(e){}
+if(Array.isArray(pendingOrder))applyOrder(pendingOrder);
+var slides=[].slice.call(document.querySelectorAll('#stage > .slide'));
+var N=slides.length, cur=0, step=0;
+var rm=window.matchMedia?window.matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
+
+/* theme: A Obsidian Luxe -> D Whiteboard Dark -> E Paper Light (T cycles, switcher bottom right) */
+var THEMES=['a','d','e'],TNAME={a:'Obsidian Luxe (dark room)',d:'Whiteboard Dark',e:'Paper Light (bright room)'};
+var qs=new URLSearchParams(location.search);
+var theme=qs.get('theme')||store('gl-theme-paper')||'e';
+var ctlTheme=[].slice.call(document.querySelectorAll('#ctl-theme button'));
+function setTheme(t){if(THEMES.indexOf(t)<0)t='e';theme=t;root.classList.remove('t-a','t-d','t-e');root.classList.add('t-'+t);store('gl-theme-paper',t);
+  ctlTheme.forEach(function(b){b.setAttribute('aria-pressed',b.dataset.t===t);});}
+function cycleTheme(){setTheme(THEMES[(THEMES.indexOf(theme)+1)%THEMES.length]);toast('Theme · '+TNAME[theme]);}
+setTheme(theme);
+
+/* chrome: tracker + brand on every slide */
+slides.forEach(function(s,i){
+  var st=s.querySelector('.st');
+  if(s.dataset.ch){var t=document.createElement('div');t.className='trk';t.innerHTML='<b>'+s.dataset.ch+'</b> / '+s.dataset.chn;st.appendChild(t);}
+  var b=document.createElement('div');b.className='brand';b.innerHTML='<i class="av" aria-hidden="true"></i><span>Eric Tech</span>';st.appendChild(b);
+});
+
+/* ---------- the spine: one factory loop, six versions, same layout every time ----------
+   Top row runs left→right, bottom row right→left. Straight thin arrows box to box.
+   The only curve is the loop back (Bugs → Idea). Accent colour = new on this slide. */
+var SVGNS='http://www.w3.org/2000/svg';
+var CX=960,W=280,H=150,TY=400,BY=860;
+var NODES=[
+ {id:'idea',l:'Idea',x:260,y:TY,ic:null,cap:'',human:1,col:'Backlog'},
+ {id:'ticket',l:'Ticket',x:610,y:TY,ic:'logo-jira.png',ic2:'logo-linear.svg',cap:'Jira/Linear',human:1,col:'Ready'},
+ {id:'build',l:'Build',x:960,y:TY,ic:'logo-vscode.png',cap:'VS Code',human:1,col:'Build'},
+ {id:'test',l:'Test',x:1310,y:TY,ic:'logo-playwright.svg',cap:'Playwright',human:1,col:'QA'},
+ {id:'pr',l:'PR',x:1660,y:TY,ic:'logo-github.png',cap:'GitHub',col:'Review'},
+ {id:'ci',l:'CI',x:1660,y:BY,ic:'check',cap:'Actions',col:'Review'},
+ {id:'review',l:'Review',x:1310,y:BY,ic:'logo-github.png',cap:'GitHub',human:1,col:'Review'},
+ {id:'ship',l:'Ship',x:960,y:BY,ic:'logo-vercel.svg',cap:'Vercel/AWS',col:'Done'},
+ {id:'users',l:'Users',x:610,y:BY,ic:'logo-posthog.svg',cap:'PostHog',col:''},
+ {id:'bugs',l:'Bugs',x:260,y:BY,ic:'logo-sentry.svg',cap:'Sentry',human:1,col:'Backlog'}];
+var CENTER={1:['THE 2022 FACTORY','a full circle'],2:['NO PEOPLE IN THE LOOP','fully autonomous'],3:['PLAN FIRST','then build'],4:['THE CHECKER','never wrote the code'],5:['THE CIRCLE','closes itself'],6:['SUPER BOARD','one loop, one board']};
+function el(tag,attrs,parent,text){var e=document.createElementNS(SVGNS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+function head(x2,y2,ux,uy){var hl=20,s=Math.sin(.42),c=Math.cos(.42);
+  return ' M'+(x2-hl*(ux*c-uy*s)).toFixed(1)+','+(y2-hl*(uy*c+ux*s)).toFixed(1)+' L'+x2.toFixed(1)+','+y2.toFixed(1)+' L'+(x2-hl*(ux*c+uy*s)).toFixed(1)+','+(y2-hl*(uy*c-ux*s)).toFixed(1)+' Z';}
+function arrowPath(x1,y1,x2,y2){var dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy);return 'M'+x1.toFixed(1)+','+y1.toFixed(1)+' L'+x2.toFixed(1)+','+y2.toFixed(1)+head(x2,y2,dx/L,dy/L);}
+function logo(g,src,x,y,s){el('rect',{x:x,y:y,width:s,height:s,rx:12,'class':'dg-lgbg'},g);el('image',{href:'assets/'+src,x:x+6,y:y+6,width:s-12,height:s-12,preserveAspectRatio:'xMidYMid meet'},g);}
+function person(g,x,y){el('circle',{cx:x,cy:y,r:26,'class':'dg-hchip'},g);el('circle',{cx:x,cy:y-7,r:7,'class':'dg-hico'},g);el('path',{d:'M'+(x-12)+','+(y+14)+' a12,11 0 0 1 24,0 z','class':'dg-hico'},g);}
+function scribble(g,x,y){el('path',{d:'M'+(x-28)+','+(y-12)+' l54,-8 l-52,17 l54,-6 l-50,18','class':'dg-x'},g);}
+function stateOf(n,v,base){
+  /* Spine 2 only: every people box is an agent (fully autonomous). Later spines keep their own story, so base=true gives the pre-override state for their diff. */
+  if(v===2&&!base&&n.human)return {agent:true,sub:'AI agent',icon:'logo-clawd.svg',human:true,crossed:true};
+  var agent=(v>=2&&['build','test','review'].indexOf(n.id)>=0)||(v>=5&&n.id==='bugs');
+  var sub=agent?(n.id==='bugs'?'SUPER-COLLECT':(v>=4&&(n.id==='test'||n.id==='review'))?'CHECKER':'Claude Code'):n.cap;
+  return {agent:agent,sub:sub,icon:agent?'logo-clawd.svg':n.ic,human:!!n.human,crossed:agent&&!!n.human};}
+function sameState(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+function drawNode(p,n,st,nw,v){
+  var g=el('g',{},p),x0=n.x-W/2,y0=n.y-H/2,tx=n.x,anchor='middle';
+  el('rect',{x:x0,y:y0,width:W,height:H,rx:16,'class':(st.agent?'dg-agent':'dg-node')+(nw?' dg-nw':'')},g);
+  var recap=p.ownerSVGElement&&p.ownerSVGElement.dataset.recap;var sub=recap?'':st.sub;
+  if(st.icon==='check'){el('circle',{cx:x0+50,cy:n.y,r:30,fill:'var(--good)'},g);el('path',{d:'M'+(x0+36)+','+n.y+' l10,11 l19,-21',fill:'none',stroke:'#fff','stroke-width':6,'stroke-linecap':'round','stroke-linejoin':'round'},g);tx=x0+98;anchor='start';}
+  else if(st.agent){logo(g,st.icon,x0+14,n.y-28,56);tx=x0+82;anchor='start';}
+  else if(st.icon&&n.ic2){logo(g,st.icon,x0+16,n.y-60,56);logo(g,n.ic2,x0+16,n.y+4,56);tx=x0+86;anchor='start';}
+  else if(st.icon){logo(g,st.icon,x0+18,n.y-32,64);tx=x0+98;anchor='start';}
+  el('text',{x:tx,y:sub?n.y+6:n.y+17,'text-anchor':anchor,'class':'dg-txt'},g,n.l);
+  if(sub)el('text',{x:tx,y:n.y+46,'text-anchor':anchor,'class':st.agent?'dg-sub dg-sub-ic':'dg-cap'},g,sub);
+  if(st.human){var hx=x0+6,hy=y0-6;person(g,hx,hy);if(st.crossed)scribble(g,hx,hy);}
+  if(v>=6&&n.col&&!recap){var tw=n.col.length*17.2+36;var tg=el('g',{},g);el('rect',{x:n.x-tw/2,y:n.y+H/2+10,width:tw,height:44,rx:22,'class':'dg-col'},tg);el('text',{x:n.x,y:n.y+H/2+42,'text-anchor':'middle','class':'dg-col-t'},tg,n.col.toUpperCase());tg.setAttribute('data-tag','1');}
+  return g;}
+function drawSpine(svg){
+  var v=+svg.dataset.spine,steps=!svg.dataset.nobuild; svg.innerHTML='';
+  function S(e,k){if(steps&&k)e.setAttribute('data-s',k);return e;}
+  var gE=el('g',{},svg),gN=el('g',{},svg),gA=el('g',{},svg),N=NODES;
+  /* change order: which nodes are new in this version, and their build step */
+  var changed=[];if(v>1)N.forEach(function(n){if(!sameState(stateOf(n,v),stateOf(n,v-1,v>2)))changed.push(n.id);});
+  /* edges (straight) */
+  function edge(i){var a=N[i],b=N[i+1],d;
+    if(a.y===b.y){var s=a.x<b.x?1:-1;d=arrowPath(a.x+s*(W/2+10),a.y,b.x-s*(W/2+12),b.y);}
+    else d=arrowPath(a.x+100,a.y+H/2+10,b.x+100,b.y-H/2-12);
+    return el('path',{d:d,'class':'dg-edge'},gE);}
+  for(var i=0;i<N.length-1;i++){if(v>=3&&i===0)continue;var e=edge(i);if(v===1)S(e,i+2);}
+  /* the loop back: Bugs → Idea, the only curve */
+  var b0=N[9],i0=N[0],lx=b0.x-W/2-10,ix=i0.x-W/2-12;
+  var loop=el('g',{},gE);el('path',{d:'M'+lx+','+b0.y+' C52,'+b0.y+' 52,'+i0.y+' '+(ix-6)+','+i0.y,'class':'dg-loop'+(v===5?' nw':'')},loop);
+  el('path',{d:'M'+ix+','+i0.y+head(ix,i0.y,1,0),'class':'dg-edge'+(v===5?' nw':'')},loop);
+  if(v===1)S(loop,11);if(v===5)S(loop,2);
+  var ll=el('text',{x:80,y:v>=5?712:646,'class':'dg-hw '+(v===5?'acc':'mut')},gA,v>=5?'verified bugs → Backlog':'loop');
+  if(v===1)S(ll,11);if(v===5)S(ll,2);
+  /* plan-first detour (v3+) replaces Idea → Ticket */
+  if(v>=3){var gp=el('g',{},svg);S(gp,v===3?1:0);
+    var rc=!!svg.dataset.recap;
+    el('rect',{x:rc?150:190,y:rc?548:556,width:rc?680:560,height:rc?84:68,rx:rc?42:34,'class':'dg-pill'+(v===3?' dg-nw':'')},gp);
+    var pt=el('text',{x:rc?490:470,y:rc?603:600,'text-anchor':'middle','class':'dg-pill-t'},gp,'grill → to-spec → to-tickets');if(rc)pt.style.fontSize='38px';
+    el('path',{d:arrowPath(370,TY+H/2+8,370,548),'class':'dg-edge'+(v===3?' nw':'')},gp);
+    el('path',{d:arrowPath(530,550,530,TY+H/2+10),'class':'dg-edge'+(v===3?' nw':'')},gp);}
+  /* nodes: a changed node draws its old self underneath, the new self fades in on top */
+  N.forEach(function(n,k){var st=stateOf(n,v),ci=changed.indexOf(n.id);
+    if(ci>=0&&steps)drawNode(gN,n,stateOf(n,v-1,v>2),false,v-1);
+    var g=drawNode(gN,n,st,ci>=0,v);
+    if(v===1)S(g,k+1);else if(ci>=0)S(g,ci+1);});
+  if(v>=6)[].slice.call(gN.querySelectorAll('[data-tag]')).forEach(function(t){S(t,1);});
+  /* margin notes (handwritten, red = replaced) */
+  if(v===2)S(el('text',{x:1135,y:556,'text-anchor':'middle','class':'dg-hw'},gA,'people → agents'),changed.length+1);
+  if(!svg.dataset.nocenter){var c=CENTER[v];
+    el('text',{x:CX,y:662,'text-anchor':'middle','class':'dg-center k'},svg,c[0]);
+    var t=el('text',{x:CX,y:740,'text-anchor':'middle','class':'dg-center'},svg,c[1]);
+    if(v===1){var lg=el('g',{},svg);person(lg,1250,560);el('text',{x:1290,y:574,'class':'dg-hw mut'},lg,'= a person does it');}}
+}
+[].slice.call(document.querySelectorAll('svg[data-spine]')).forEach(drawSpine);
+
+var hooks={};
+hooks.spot=function(s,st,full){var w=s.querySelector('.yw'),on=!full&&st>0&&st<maxStep(s);w.classList.toggle('spot',on);[].slice.call(w.querySelectorAll('[data-k]')).forEach(function(e){e.classList.toggle('on',on&&+e.dataset.k===st);});};
+
+/* ---------- navigation + build steps ---------- */
+var build=false;
+function maxStep(s){if(s.dataset.steps)return +s.dataset.steps;var m=0;[].slice.call(s.querySelectorAll('[data-s]')).forEach(function(e){m=Math.max(m,+e.dataset.s);});return m;}
+function applyStep(){var s=slides[cur],full=!build;
+  [].slice.call(s.querySelectorAll('[data-s]')).forEach(function(e){e.classList.toggle('hid',build&&+e.dataset.s>step);});
+  [].slice.call(s.querySelectorAll('[data-until]')).forEach(function(e){e.classList.toggle('gone',step>+e.dataset.until);});
+  if(s.dataset.hook&&hooks[s.dataset.hook])hooks[s.dataset.hook](s,step,full);}
+function go(i,atEnd){i=Math.max(0,Math.min(N-1,i));slides[cur].classList.remove('active');cur=i;slides[cur].classList.add('active');
+  step=(build&&!atEnd)?0:maxStep(slides[cur]);applyStep();
+  if(location.hash!=='#s'+(cur+1))history.replaceState(null,'','#s'+(cur+1));renderNotes();ctlN.textContent=(cur+1)+' / '+N;}
+function next(){if(build&&step<maxStep(slides[cur])){step++;applyStep();return;}if(cur<N-1)go(cur+1);}
+function prev(){if(build&&step>0){step--;applyStep();return;}if(cur>0)go(cur-1,true);}
+function fromHash(){var m=/^#s?(\d+)/.exec(location.hash);return m?Math.max(0,Math.min(N-1,+m[1]-1)):0;}
+
+/* scale */
+var stageScale=1;
+function fit(){stageScale=Math.min(window.innerWidth/1920,window.innerHeight/1080);stage.style.setProperty('--scale',stageScale);}
+window.addEventListener('resize',fit);fit();
+
+/* HUD + notes */
+var hud=document.getElementById('hud'),hudT,ctlN=document.getElementById('ctl-n');
+function toast(t){hud.textContent=t;hud.classList.add('show');clearTimeout(hudT);hudT=setTimeout(function(){hud.classList.remove('show');},1600);}
+var np=document.getElementById('npanel');
+function renderNotes(){if(!np.classList.contains('show'))return;var s=slides[cur],n=s.querySelector('.notes');
+  var run=0,tot=0;slides.forEach(function(x,i){var v=+(x.dataset.sec||0);tot+=v;if(i<=cur)run+=v;});
+  function mm(t){return Math.floor(t/60)+':'+('0'+t%60).slice(-2);}
+  np.innerHTML='<h5>'+(cur+1)+' / '+N+' · '+(s.dataset.chn||'')+' · '+s.dataset.title+' · ⏱ ~'+(s.dataset.sec||0)+'s · '+mm(run)+' / '+mm(tot)+'</h5>'+(n?n.innerHTML:'')+(cur<N-1?'<p class="nx">Next: '+slides[cur+1].dataset.title+'</p>':'');}
+
+/* overview */
+var ov=document.getElementById('ov');
+function openOv(){ov.innerHTML='';slides.forEach(function(s,i){var c=document.createElement('div');c.className='ovc'+(i===cur?' cur':'');
+  var inner=document.createElement('div');inner.className='ovi';var cl=s.cloneNode(true);cl.classList.add('active');cl.querySelectorAll('.hid').forEach(function(e){e.classList.remove('hid');});cl.querySelectorAll('[id]').forEach(function(e){e.removeAttribute('id');});inner.appendChild(cl);c.appendChild(inner);
+  var nb=document.createElement('span');nb.className='num';nb.textContent=(i+1)+' · '+s.dataset.title;c.appendChild(nb);
+  c.addEventListener('click',function(e){e.stopPropagation();closeOv();go(i);});
+  c.draggable=true;c.dataset.i=i;
+  c.addEventListener('dragstart',function(e){dragFrom=i;c.classList.add('drag');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));}catch(err){}});
+  c.addEventListener('dragend',function(){c.classList.remove('drag');});
+  c.addEventListener('dragover',function(e){e.preventDefault();ov.querySelectorAll('.over').forEach(function(o){o.classList.remove('over');});c.classList.add('over');});
+  c.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();moveSlide(dragFrom,i);});
+  ov.appendChild(c);});
+  ov.classList.add('show');updOvBar();ctlOv.setAttribute('aria-pressed','true');requestAnimationFrame(function(){[].slice.call(ov.querySelectorAll('.ovc')).forEach(function(c){c.firstChild.style.transform='scale('+(c.clientWidth/1920)+')';});var cc=ov.querySelector('.cur');if(cc)cc.scrollIntoView({block:'center'});});}
+function closeOv(){ov.classList.remove('show');ov.innerHTML='';ctlOv.setAttribute('aria-pressed','false');updOvBar();}
+
+/* reorder in the grid: drag a thumbnail onto another; Save order writes order.js (File System Access API) */
+var dragFrom=-1,ovBar=document.getElementById('ovbar'),ovSave=document.getElementById('ov-save'),ovReset=document.getElementById('ov-reset');
+function curOrder(){return slides.map(function(x){return x.dataset.id;});}
+function same(a,b){return a.join('|')===b.join('|');}
+function dirty(){return !same(curOrder(),SAVED_ORDER);}
+function updOvBar(){var open=ov.classList.contains('show');ovBar.classList.toggle('show',open);ovSave.hidden=!dirty();ovReset.hidden=same(curOrder(),HTML_ORDER);}
+function setOrder(ids){var keep=slides[cur];slides=applyOrder(ids);cur=slides.indexOf(keep);
+  store('gl-order-pending',dirty()?JSON.stringify(curOrder()):null);go(cur);var y=ov.scrollTop;openOv();ov.scrollTop=y;}
+function moveSlide(a,b){if(a<0||a===b)return;var ids=curOrder(),id=ids.splice(a,1)[0];ids.splice(b,0,id);setOrder(ids);toast('Moved to '+(b+1)+(dirty()?' · unsaved, press Save order':''));}
+function orderFile(ids){return '/* Slide order for index.html. Saved from the grid overview (O → drag → Save order); edit by hand if you like. */\nwindow.SLIDE_ORDER = [\n'+ids.map(function(i){return '  "'+i+'"';}).join(',\n')+'\n];\n';}
+function idb(mode,fn){return new Promise(function(res,rej){var q=indexedDB.open('gemini-live-agents',1);q.onupgradeneeded=function(){q.result.createObjectStore('kv');};
+  q.onerror=function(){rej(q.error);};q.onsuccess=function(){var t=q.result.transaction('kv',mode),r=fn(t.objectStore('kv'));t.oncomplete=function(){res(r&&r.result);};t.onerror=function(){rej(t.error);};};});}
+function saved(ids,msg){SAVED_ORDER=ids;store('gl-order-pending',null);updOvBar();toast(msg);}
+function download(ids){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([orderFile(ids)],{type:'text/javascript'}));a.download='order.js';document.body.appendChild(a);a.click();a.remove();
+  saved(ids,'Downloaded order.js, move it into _slides/gemini-live-agents');}
+async function saveOrder(){var ids=curOrder();
+  if(!window.showDirectoryPicker){download(ids);return;}
+  try{var dir=null;try{dir=await idb('readonly',function(st){return st.get('dir');});}catch(e){}
+    if(dir&&(await dir.requestPermission({mode:'readwrite'}))!=='granted')dir=null;
+    if(!dir){dir=await window.showDirectoryPicker({id:'gemini-live-agents',mode:'readwrite'});
+      try{await dir.getFileHandle('index.html');}catch(e){toast('That folder has no index.html · pick the _slides/gemini-live-agents folder');return;}
+      try{await idb('readwrite',function(st){return st.put(dir,'dir');});}catch(e){}}
+    var w=await (await dir.getFileHandle('order.js',{create:true})).createWritable();await w.write(orderFile(ids));await w.close();
+    saved(ids,'Order saved to order.js');}
+  catch(e){if(e&&e.name==='AbortError'){toast('Save cancelled · order still unsaved');return;}download(ids);}}
+[ovSave,ovReset].forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();});});
+ovSave.addEventListener('click',function(e){e.stopPropagation();saveOrder();});
+ovReset.addEventListener('click',function(e){e.stopPropagation();setOrder(HTML_ORDER);toast(dirty()?'Back to the HTML order · unsaved, press Save order':'Back to the HTML order');});
+
+/* presenter controls (mouse): same actions as O and A; never keep focus, so arrows keep driving */
+var ctlOv=document.getElementById('ctl-ov'),ctlAnim=document.getElementById('ctl-anim');
+function toggleBuild(){build=!build;root.classList.toggle('build',build);ctlAnim.setAttribute('aria-pressed',build);step=build?0:maxStep(slides[cur]);applyStep();toast(build?'Build mode on · → steps through builds':'Build mode off · every slide complete');}
+ctlTheme.forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();});
+  b.addEventListener('click',function(e){e.stopPropagation();if(e.detail)this.blur();setTheme(this.dataset.t);toast('Theme · '+TNAME[theme]);});});
+[ctlOv,ctlAnim].forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();});});
+ctlOv.addEventListener('click',function(e){e.stopPropagation();this.blur();if(ov.classList.contains('show'))closeOv();else openOv();});
+ctlAnim.addEventListener('click',function(e){e.stopPropagation();this.blur();toggleBuild();});
+
+document.addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  var k=e.key;
+  if(ov.classList.contains('show')){if(k==='Escape'||k==='o'||k==='O'){closeOv();e.preventDefault();}return;}
+  if(e.target&&e.target.tagName==='BUTTON'&&(k===' '||k==='Enter'))return;
+  if(k==='ArrowRight'||k==='PageDown'||k===' '||k==='ArrowDown'){next();e.preventDefault();}
+  else if(k==='ArrowLeft'||k==='PageUp'||k==='ArrowUp'){prev();e.preventDefault();}
+  else if(k==='Home'){go(0);}else if(k==='End'){go(N-1);}
+  else if(k==='a'||k==='A'){toggleBuild();}
+  else if(k==='t'||k==='T'){cycleTheme();}
+  else if(k==='n'||k==='N'){np.classList.toggle('show');renderNotes();}
+  else if(k==='f'||k==='F'){try{var p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();if(p&&p.catch)p.catch(function(){toast('Fullscreen not allowed here');});}catch(err){toast('Fullscreen not allowed here');}}
+  else if(k==='o'||k==='O'){openOv();}
+});
+document.addEventListener('click',function(e){if(ov.classList.contains('show')||e.target.closest('button,a,.npanel,.ctl'))return;if(e.clientX>window.innerWidth*0.5)next();else prev();});
+// ponytail: one move per gesture; the lock swallows trackpad momentum. Raise 700ms if a flick still skips two.
+var wheelLock=0;
+document.addEventListener('wheel',function(e){if(ov.classList.contains('show')||e.target.closest('.npanel'))return;e.preventDefault();var now=Date.now();if(now<wheelLock||Math.abs(e.deltaY)<8)return;wheelLock=now+700;if(e.deltaY>0)next();else prev();},{passive:false});
+window.addEventListener('hashchange',function(){var i=fromHash();if(i!==cur)go(i);});
+
+if(qs.get('build')==='1'){build=true;root.classList.add('build');document.getElementById('ctl-anim').setAttribute('aria-pressed','true');}
+if(qs.has('shot'))root.classList.add('noui');
+go(fromHash());
+if(!qs.has('shot'))setTimeout(function(){toast(dirty()?'Unsaved slide order · O, then Save order':'← → slides · A builds · T theme · N notes · F full · O overview');},400);
+})();
+</script>
+</body>
+</html>

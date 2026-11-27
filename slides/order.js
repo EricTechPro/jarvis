@@ -1,0 +1,27 @@
+/* Slide order for index.html. Saved from the grid overview (O → drag → Save order); edit by hand if you like. */
+window.SLIDE_ORDER = [
+  "hero-who-used-live",
+  "live-what-it-does",
+  "live-the-catch",
+  "build-your-own",
+  "title-build-voice-agents",
+  "who-this-guy-microsoft",
+  "youtube-channel-90-4k",
+  "youtube-system-design-all",
+  "demo-meet-jarvis",
+  "three-levels",
+  "tts-reads-live-hears",
+  "two-architectures",
+  "pros-cons-cascaded-vs-s2s",
+  "architecture-browser-backend-live",
+  "two-jobs-at-once",
+  "feels-alive",
+  "sdk-vs-adk",
+  "jarvis-one-switch",
+  "brain-and-hands",
+  "qr-second-brain-playlist",
+  "demo-jarvis-acts",
+  "recap-three-parts",
+  "repo-qr-jarvis",
+  "free-cloud-credits"
+];
