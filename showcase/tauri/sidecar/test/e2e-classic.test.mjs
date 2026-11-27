@@ -39,7 +39,7 @@ if (a[0] === 'windows') o = { ok: true, windows: [{ id: 7, app: 'Chrome', title:
 if (a[0] === 'find-text') o = { ok: true, matches: canvas ? [] : [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
 if (a[0] === 'locate') o = { ok: true, window: win };
 if (a[0] === 'front') o = { ok: true, app: win.app, title: win.title };
-if (a[0] === 'capture') { fs.writeFileSync(a[1], 'x'); o = { ok: true, file: a[1], window: win, pixels: [800, 600] }; }
+if (a[0] === 'capture') { fs.writeFileSync(a[1], 'x'); o = { ok: true, file: a[1], window: win, pixels: fs.existsSync(${JSON.stringify(canvasFile)} + '.skew') ? [800, 100] : [800, 600] }; }
 console.log(JSON.stringify(o));
 `);
 process.env.JARVIS_HANDS = handsFake;
@@ -306,6 +306,19 @@ if (HANDS_OK) await cp('CP-11e v0.2.9 replay: a click_at on a used-up screenshot
   assert.deepEqual(c.map((x) => x.ok), [false, false, true, true], JSON.stringify(c.map((x) => text(x.result).slice(0, 80))));
   assert.match(c[1].result, /Take a new screenshot/);
   assert.notEqual(c[3].result, STUCK_MESSAGE);
+  // Only what a fresh look fixes is free: a screenshot that never lines up with its window (it repeats with every new
+  // one) and an id gone stale on a page that keeps changing count as failures.
+  made.nextTurn?.();
+  fs.writeFileSync(canvasFile + '.skew', '');
+  await play([['take_screenshot', { target: 'front' }]]);
+  const skew = await tool('act_in_app').execute(at, { toolCallId: 'pre3' }).then(() => null, (e) => e);
+  fs.rmSync(canvasFile + '.skew');
+  assert.match(skew?.message ?? '', /doesn't line up/);
+  assert.notEqual(skew.ranNothing, true, 'an unmapped screenshot is not free');
+  await play([['read_window', { target: 'front' }]]);
+  const stale = await tool('act_in_app').execute({ target: 'front', steps: [{ do: 'click', id: 5 }] }, { toolCallId: 'pre4' }).then(() => null, (e) => e);
+  assert.match(stale?.message ?? '', /id is out of date/);
+  assert.notEqual(stale.ranNothing, true, 'a stale id is not free');
 });
 if (!HANDS_OK) console.log('e2e-classic: screen steps skipped (macOS and Windows only)');
 

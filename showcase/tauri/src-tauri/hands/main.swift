@@ -485,6 +485,15 @@ func mayType(editable: Bool, focusRole: String?, clickedSpot: Bool) -> Bool {
     editable || (clickedSpot && (focusRole == nil || ["AXWindow", "AXApplication"].contains(focusRole!)))
 }
 
+/// A value shown inside quotes in an error, with its own double quotes made single: the sidecar's log takes out
+/// everything between quotes (loopguard.mjs errorText), and a quote inside one ("5' 11" tall") ended that early.
+func qt(_ v: Any?) -> String { (v.map { "\($0)" } ?? "").replacingOccurrences(of: "\"", with: "'") }
+
+/// Whether a click_at waits before the step after it: keys and typing do. A canvas page (Google Docs) moves its caret
+/// and focus a moment after the click, and keys sent at once went to where the caret was (the answer landed on the
+/// question's line, not the one below).
+func pauseAfterClick(next: String?) -> Bool { next == "key" || next == "type" }
+
 /// Only zero-width characters (and spaces): what a web document's hidden input holds. Google Docs types through a
 /// focused "Document content" text area that shows "\u{200B}\u{200B}" before and after typing; the text is on its canvas.
 func onlyInvisible(_ s: String) -> Bool {
@@ -1520,6 +1529,11 @@ case "--self-test":
     check("an empty field that stays empty after typing still stops", !typingTook(before: "", now: "", text: "Eric Tech"))
     check("a field that kept its old text still stops", !typingTook(before: "old search", now: "old search", text: "new"))
     check("a field that shows the typing counts", typingTook(before: "", now: "Eric Tech", text: "Eric Tech"))
+    // Review of #33: the pause before keys after a click_at was only for the OCR fallback's click; the model's own
+    // click_at on a Google Doc then "key down" lost the key the same way.
+    check("keys right after a click_at wait for the page", pauseAfterClick(next: "key") && pauseAfterClick(next: "type"))
+    check("other steps after a click_at don't", !pauseAfterClick(next: "click_text") && !pauseAfterClick(next: nil) && !pauseAfterClick(next: "wait"))
+    check("a quote inside an error's quoted value is made single", qt("5' 11\" tall") == "5' 11' tall" && qt(nil) == "")
     // Regression: click_text "Speed" (a tab CapCut hides from accessibility) clicked a clip named "MTLSVideoP:speed.mp4".
     check("a word inside a file name isn't a word match", matchScore("mtlsvideop:speed.mp4", "speed") == 2)
     check("so click_text won't click it", !clickMatch(["match": ["exact", "word", "partial"][matchScore("mtlsvideop:speed.mp4", "speed")]]))
@@ -1865,12 +1879,12 @@ case "act":
             guard let (e, info) = el(s) else { out(["ok": false, "error": "Step \(i + 1): no control with id \(s["id"] ?? "?"). Call read_window again.", "done": done]) }
             emitStep(i, what, e, label: (info["label"] as? String) ?? "", text: what == "set" ? s["text"] as? String : nil)
             if (what == "click" || what == "press_button"), risky((info["label"] as? String) ?? ""), (s["confirmed"] as? Bool) != true {
-                out(["ok": false, "error": "Stopped before clicking \"\(info["label"] ?? "")\": it could delete, pay, send or sign out, and the user hasn't said yes to that. Tell them, and let them click it themselves.", "done": done])
+                out(["ok": false, "error": "Stopped before clicking \"\(qt(info["label"] ?? ""))\": it could delete, pay, send or sign out, and the user hasn't said yes to that. Tell them, and let them click it themselves.", "done": done])
             }
             if what == "set", let text = s["text"] as? String {
                 // Native fields take the value directly; web page fields need real keystrokes or the page never sees it.
                 if !typeInto(app, e, text).ok {
-                    out(["ok": false, "error": "Step \(i + 1): couldn't put the cursor in \"\(info["label"] ?? "that field")\", so nothing was typed.", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): couldn't put the cursor in \"\(qt(info["label"] ?? "that field"))\", so nothing was typed.", "done": done])
                 }
                 done.append("set \(info["label"] ?? "field \(info["id"]!)")")
             } else if what == "focus" {
@@ -1905,7 +1919,7 @@ case "act":
             } else if let near = s["near"] as? String, !near.isEmpty {
                 // Many matches (a "Reply" under every post): the one that goes with the near text.
                 guard let a = anchorFrame(app, w, near) else {
-                    out(["ok": false, "error": "Step \(i + 1): no text \"\(near)\" on this page to find \"\(q)\" near.", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): no text \"\(qt(near))\" on this page to find \"\(qt(q))\" near.", "done": done])
                 }
                 let all = findTextEls(app, w, q, hidden: true, limit: 200).filter { clickMatch($0.1) }
                 let best = all.first?.1["match"] as? String
@@ -1928,14 +1942,14 @@ case "act":
                 }
             }
             guard !q.isEmpty, let (e, info) = hit else {
-                out(["ok": false, "error": "Step \(i + 1): no visible text \"\(s["text"] ?? "")\" in \(w.app). Check the exact words with a screenshot or read_window.", "done": done])
+                out(["ok": false, "error": "Step \(i + 1): no visible text \"\(qt(s["text"] ?? ""))\" in \(w.app). Check the exact words with a screenshot or read_window.", "done": done])
             }
             if risky((info["text"] as? String) ?? q), (s["confirmed"] as? Bool) != true {
-                out(["ok": false, "error": "Stopped before clicking \"\(info["text"] ?? q)\": it could delete, pay, send or sign out, and the user hasn't said yes to that. Tell them, and let them click it themselves.", "done": done])
+                out(["ok": false, "error": "Stopped before clicking \"\(qt(info["text"] ?? q))\": it could delete, pay, send or sign out, and the user hasn't said yes to that. Tell them, and let them click it themselves.", "done": done])
             }
             emitStep(i, "click_text", e, label: (info["text"] as? String) ?? q)
             if !pressText(e) {
-                guard let f = frame(e) else { out(["ok": false, "error": "Step \(i + 1): couldn't click \"\(q)\".", "done": done]) }
+                guard let f = frame(e) else { out(["ok": false, "error": "Step \(i + 1): couldn't click \"\(qt(q))\".", "done": done]) }
                 let p = CGPoint(x: f.midX, y: f.midY)
                 if let under = windows().first(where: { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h).contains(p) }), let name = handsOff(under.pid) {
                     out(["ok": false, "error": "Blocked for safety: that spot is on \(name), and I never click in it.", "done": done])
@@ -1962,7 +1976,7 @@ case "act":
                 Thread.sleep(forTimeInterval: 0.12)
                 let now = str(into, kAXValueAttribute) ?? before
                 if !typingTook(before: before, now: now, text: text) {
-                    out(["ok": false, "error": "Step \(i + 1): typed, but the text field still shows \"\(now.prefix(80))\", so I stopped before the next step. Use {do:'fill', field, text} instead, or the open tool for a web address or a site's search results page.", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): typed, but the text field still shows \"\(qt(now.prefix(80)))\", so I stopped before the next step. Use {do:'fill', field, text} instead, or the open tool for a web address or a site's search results page.", "done": done])
                 }
             }
             let canvas = into.flatMap { str($0, kAXValueAttribute) }.map(onlyInvisible) ?? false
@@ -1978,14 +1992,14 @@ case "act":
             var nearField: (AXUIElement, [String: Any])?
             if let near = s["near"] as? String, !near.isEmpty {
                 guard let a = anchorFrame(app, w, near) else {
-                    out(["ok": false, "error": "Step \(i + 1): no text \"\(near)\" on this page to find the field near.", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): no text \"\(qt(near))\" on this page to find the field near.", "done": done])
                 }
                 let q = fold(name)
                 let fields = walk(app, w, limit: 400).filter { c in FIELD_ROLES.contains(axRole(c.0)) && (q.isEmpty || [(c.1["label"] as? String) ?? "", str(c.0, "AXPlaceholderValue") ?? ""].map(fold).contains { $0.contains(q) }) }
                 nearField = nearestAfter(a, fields)
             }
             guard let (e, info) = nearField ?? el(s) ?? fieldFor(app, w, controls, name, roles: FIELD_ROLES) else {
-                out(["ok": false, "error": "Step \(i + 1): no text field called \"\(name)\" here. Check its label with read_window.", "done": done])
+                out(["ok": false, "error": "Step \(i + 1): no text field called \"\(qt(name))\" here. Check its label with read_window.", "done": done])
             }
             let label = (info["label"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? name
             emitStep(i, "fill", e, label: label, text: text)
@@ -2001,7 +2015,7 @@ case "act":
             var r = inBackground && isDate ? withRealCursor { typeInto(app, e, text) } ?? busy : typeInto(app, e, text)
             if inBackground, !userBusy, !took(r) { r = withRealCursor { typeInto(app, e, text) } ?? busy }
             if userBusy || wrongFront != nil { break }
-            if !r.ok { out(["ok": false, "error": "Step \(i + 1): couldn't put the cursor in \"\(label)\", so nothing was typed.", "done": done]) }
+            if !r.ok { out(["ok": false, "error": "Step \(i + 1): couldn't put the cursor in \"\(qt(label))\", so nothing was typed.", "done": done]) }
             let shows = r.shows.trimmingCharacters(in: .whitespacesAndNewlines)
             // Password fields show dots: the right number of them is a match. (They're secure fields, so the check
             // below never runs on them; this note is why.)
@@ -2014,9 +2028,9 @@ case "act":
                 var settable: DarwinBoolean = true
                 AXUIElementIsAttributeSettable(e, kAXValueAttribute as CFString, &settable)
                 if shows.isEmpty, !settable.boolValue || ((attr(e, "AXReadOnly") as? Bool) == true) {
-                    out(["ok": false, "error": "Step \(i + 1): \"\(label)\" can't be typed in; it opens a picker. Use click_text on it, then on the month arrows (e.g. 'Next Month') and the day (its label reads like 'Choose Monday, November 16th, 2026').", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): \"\(qt(label))\" can't be typed in; it opens a picker. Use click_text on it, then on the month arrows (e.g. 'Next Month') and the day (its label reads like 'Choose Monday, November 16th, 2026').", "done": done])
                 }
-                out(["ok": false, "error": "Step \(i + 1): typed into \"\(label)\" but it shows \"\(shows.prefix(80))\". If a cookie banner or pop-up covers the page, close it first (click_text its button), then fill again; otherwise check the field with read_window.", "done": done])
+                out(["ok": false, "error": "Step \(i + 1): typed into \"\(qt(label))\" but it shows \"\(qt(shows.prefix(80)))\". If a cookie banner or pop-up covers the page, close it first (click_text its button), then fill again; otherwise check the field with read_window.", "done": done])
             }
             done.append("\(label) = \"\(axRole(e) == "AXSecureTextField" ? "••••" : String(shows.prefix(60)))\"")
             controls = walk(app, w)
@@ -2031,12 +2045,12 @@ case "act":
             let pageDrops = controls.filter { ["AXPopUpButton", "AXComboBox"].contains(axRole($0.0)) && ($0.1["offscreen"] as? Bool) != true && inWebPage($0.0) }
             let only = pageDrops.count == 1 ? pageDrops.first : nil
             guard !option.isEmpty, let (e, info) = el(s) ?? fieldFor(app, w, controls, name, roles: DROP_ROLES) ?? only else {
-                out(["ok": false, "error": "Step \(i + 1): no dropdown called \"\(name)\" here, or no option given. Check with read_window.", "done": done])
+                out(["ok": false, "error": "Step \(i + 1): no dropdown called \"\(qt(name))\" here, or no option given. Check with read_window.", "done": done])
             }
             let label = (info["label"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? name
             emitStep(i, "choose", e, label: label, text: option)
             if risky(option), (s["confirmed"] as? Bool) != true {
-                out(["ok": false, "error": "Stopped before choosing \"\(option)\": it could delete, pay, send or sign out, and the user hasn't said yes to that.", "done": done])
+                out(["ok": false, "error": "Stopped before choosing \"\(qt(option))\": it could delete, pay, send or sign out, and the user hasn't said yes to that.", "done": done])
             }
             activate(e)
             Thread.sleep(forTimeInterval: 0.35)
@@ -2058,7 +2072,7 @@ case "act":
                 } else {
                     _ = pressKey("escape")
                     if let why = wrongFront { out(["ok": false, "error": "Step \(i + 1): \(why)", "done": done]) }
-                    out(["ok": false, "error": "Step \(i + 1): opened \"\(label)\" but no option \"\(option)\" showed up. Take a screenshot to see the choices.", "done": done])
+                    out(["ok": false, "error": "Step \(i + 1): opened \"\(qt(label))\" but no option \"\(qt(option))\" showed up. Take a screenshot to see the choices.", "done": done])
                 }
             }
             Thread.sleep(forTimeInterval: 0.45)
@@ -2144,9 +2158,7 @@ case "act":
             // "real": that exact spot with the real cursor (words read off a canvas, like a Google Doc's page): a click
             // without it presses the element there, which on a canvas isn't the spot.
             if (s["real"] as? Bool) == true, inBackground { _ = withRealCursor { click(p) } } else { click(p) }
-            // A canvas page (Google Docs) moves its caret and focus a moment after the click: keys sent at once went
-            // to where the caret was, so the answer landed on the question's line instead of the one below.
-            if (s["real"] as? Bool) == true { Thread.sleep(forTimeInterval: 0.3) }
+            if pauseAfterClick(next: i + 1 < steps.count ? steps[i + 1]["do"] as? String : nil) { Thread.sleep(forTimeInterval: 0.3) }
             done.append("clicked at \(Int(x)),\(Int(y))")
             clickedSpot = true
         case "wait":

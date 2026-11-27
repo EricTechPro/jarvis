@@ -15,6 +15,9 @@ export const LOOP_MESSAGE = `nothing changed after ${LOOP_LIMIT} tries: stop, ta
 // Eric's Live call tried one goal (tick Public, then Save) 12 ways in one turn; raise these if real work gets cut off.
 export const GOAL_LIMIT = 2;
 export const FAIL_LIMIT = 3;
+// ponytail: checks that ran nothing (a stale screenshot) that are free per request before they count as failures, so
+// take_screenshot then a stale click_at can't alternate forever. Eric's v0.2.9 Live call needed 2 in one turn.
+export const RAN_NOTHING_FREE = 3;
 export const STUCK_MESSAGE = "these app steps keep failing: stop, take_screenshot once to see what's actually on screen, then either hand it to the operator (send_agent with type operator and a complete brief) or tell the user what's blocking it. No more act_in_app this request.";
 // A goal: act_in_app's first click, by its text or id, so rewordings of one attempt count as one. Clicks by screenshot
 // pixels (click_at) are one goal, AT, wherever they land.
@@ -69,12 +72,22 @@ const reasonOf = (msg) => REASONS.find(([re]) => re.test(msg))?.[1] ?? 'error';
 // The tools whose error wording is Jarvis's own, with what came off the screen or from the model always in quotes.
 // Not run_command or the web tools: their errors carry command output and page text.
 const SCREEN_TOOLS = new Set(['act_in_app', 'read_window', 'take_screenshot', 'list_windows', 'draw']);
-/** A failure's words, safe for the log: quoted parts, web addresses, emails and paths out; at most 200 characters. */
+/** A failure's words, safe for the log, at most 200 characters. Out: everything from a message's first quote to its
+ *  last (quoted text can hold quotes of its own, 5' 11" tall), and all after a quote left open; the user's name before
+ *  "said no"; a window target, password lengths and key names; web addresses, domains, emails and paths. */
 export const errorText = (msg) => String(msg)
-  .replace(/"[^"]*"|“[^”]*”|'[^'\s][^']*?'(?=[\s.,:;)]|$)/g, '"…"')
+  .replace(/[“”]/g, '"')
+  .replace(/"[\s\S]*"|"[^"]*$/, '"…"')
+  .replace(/'[^'\s][^']*?'(?=[\s.,:;)]|$)/g, "'…'")
+  .replace(/^[^,.:"]*? said no\b/, '… said no')
+  .replace(/(No matching window is open for )[^.]+\./, '$1….')
+  .replace(/(the password field shows )[^.]*\./, '$1…')
+  .replace(/(unknown (?:key|action) ).*$/, '$1…')
   .replace(/\b[a-z][\w+.-]*:\/\/\S+/gi, '[url]')
   .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
+  .replace(/\b[A-Za-z]:\\\S+/g, '[path]')
   .replace(/(^|[\s(])~?\/[^\s,;)]+/g, '$1[path]')
+  .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi, '[domain]')
   .replace(/\s+/g, ' ').trim().slice(0, 200);
 // Escape (closing a menu or popup that came up) is never what got stuck: a plan of just that, and waits, always runs.
 const harmless = (args) => Array.isArray(args?.steps) && args.steps.length > 0 && args.steps.some((x) => x?.do === 'key')
@@ -86,7 +99,7 @@ const harmless = (args) => Array.isArray(args?.steps) && args.steps.length > 0 &
  *  whole job is one request. */
 export function guardTools(tools, { log = () => {}, request = () => 0, goals = false } = {}) {
   let last = null; // the latest call that ran in this request: { key, sig, same, req }
-  let fails = { req: null, n: 0, by: new Map() }; // failed act_in_app calls this request, in all and by goal
+  let fails = { req: null, n: 0, by: new Map(), free: 0 }; // failed act_in_app calls this request, in all and by goal
   const lastSig = new Map(); // tool name → its latest result's digest
   for (const t of tools) {
     const run = t.execute;
@@ -99,7 +112,7 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
         throw new Error(LOOP_MESSAGE);
       }
       const goal = goals ? goalOf(t.name, args) : null;
-      if (fails.req !== req) fails = { req, n: 0, by: new Map(), pixels: 0 };
+      if (fails.req !== req) fails = { req, n: 0, by: new Map(), pixels: 0, free: 0 };
       const mine = fails; // counted into the request this call started in, even if it ends in a later one
       // FAIL_LIMIT spent on words or ids still leaves clicking by pixels GOAL_LIMIT tries in all (worked or not: a
       // click_at rarely fails): a canvas page (Google Docs) has no words for click_text to find, and a click_at from a
@@ -124,8 +137,8 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
         log('tool_outcome', { id, name: t.name, ok: !err, changed: err || prev == null ? null : sig !== prev, same, ms: Date.now() - t0, ...(err ? { reason: reasonOf(msg), ...(SCREEN_TOOLS.has(t.name) ? { error: errorText(msg) } : {}) } : {}) });
       }
       // A goal that worked starts over (every page of a wizard ends in "Next": one goal, many pages). A check that
-      // stopped the call before anything ran (ranNothing: the screenshot was out of date) isn't a try at it.
-      if (goals && t.name === 'act_in_app' && !ctx?.signal?.aborted && !err?.ranNothing) { if (err) { mine.n++; if (goal) mine.by.set(goal, (mine.by.get(goal) ?? 0) + 1); } else if (goal) mine.by.delete(goal); }
+      // stopped the call before anything ran (ranNothing: the screenshot was out of date) isn't a try at it, for the first RAN_NOTHING_FREE in a request.
+      if (goals && t.name === 'act_in_app' && !ctx?.signal?.aborted && !(err?.ranNothing && mine.free++ < RAN_NOTHING_FREE)) { if (err) { mine.n++; if (goal) mine.by.set(goal, (mine.by.get(goal) ?? 0) + 1); } else if (goal) mine.by.delete(goal); }
       if (err) throw err;
       return raw;
     };

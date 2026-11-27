@@ -270,12 +270,14 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
   // Risky clicks the user allowed this request, as "app|kind": one Allow covers that kind in that app until the next request.
   // rememberAllow false (the operator agent: its whole job, up to 30 minutes, is one request) asks for each plan.
   let allowedClicks = { turn: -1, keys: new Set() };
-  // Stops a plan before any of it ran (a screenshot or read_window list that's out of date): ranNothing tells the loop
-  // guard it wasn't a try (loopguard.mjs), so the look it asks for doesn't cost the plan one of its tries.
+  // Stops a plan before any of it ran, for something one fresh look fixes (no screenshot, or one that's out of date or
+  // of a window that moved; a read_window list from before): ranNothing tells the loop guard it wasn't a try
+  // (loopguard.mjs, a few per request). Not a screenshot that never lines up with its window, nor a stale id: a new
+  // look gives the same again.
   const beforeRunning = (msg) => Object.assign(new Error(msg), { ranNothing: true });
   async function shotPoint(x, y) {
     const problem = shotProblem(lastShot, turn);
-    if (problem) throw beforeRunning(problem);
+    if (problem) throw lastShot?.unmapped ? new Error(problem) : beforeRunning(problem);
     if (lastShot.win != null) {
       const now = await hands('locate', `window:${lastShot.win}`).catch(() => null);
       if (!sameBounds(now?.window?.bounds, lastShot.bounds)) throw beforeRunning('That window moved or closed since the screenshot. Take a new screenshot first.');
@@ -290,7 +292,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
     if (problem) throw beforeRunning(problem);
     return (id) => {
       const c = rematch(lastRead.controls[id - 1], fresh.controls, id);
-      if (!c) throw beforeRunning(STALE_ID);
+      if (!c) throw new Error(STALE_ID);
       return c;
     };
   }
@@ -529,7 +531,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
       // "What is my name?" on the line "1. What is my name?": a whole line (bar its list number) beats words inside one.
       const line = (h) => String(h.text ?? '').trim().replace(/^(\d+[.)]|[-•*])\s+/, '').toLowerCase();
       if (hits.length > 1) { const whole = hits.filter((h) => [q, bare].map((x) => x.toLowerCase()).includes(line(h))); if (whole.length) hits = whole; }
-      if (hits.length > 1) throw new Error(`Step ${i + 1}: "${q}" appears ${hits.length} times on screen, so I didn't guess which. Take a screenshot and use click_at on the one you mean.`);
+      if (hits.length > 1) throw new Error(`Step ${i + 1}: "${q.replace(/"/g, "'")}" appears ${hits.length} times on screen, so I didn't guess which. Take a screenshot and use click_at on the one you mean.`);
       const b = hits[0]?.bounds;
       if (!Array.isArray(b) || b.length !== 4 || !b.every(Number.isFinite)) throw err;
       const words = String(hits[0].text ?? q).trim() || q;
@@ -582,8 +584,8 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
           const o = await readOne();
           if (o) return o;
           if (k >= (retry ? 4 : 0)) {
-            const near = (res.matches ?? []).slice(0, 3).map((x) => `"${x.text.replace(/\s+/g, ' ').slice(0, 50)}"`).join(', ');
-            throw new Error(`No button, label or heading reads "${find}"${near ? ` (it only appears inside longer text: ${near})` : ''}. Use the exact words shown on screen; if you don't know them, take a screenshot first.`);
+            const near = (res.matches ?? []).slice(0, 3).map((x) => `"${x.text.replace(/\s+/g, ' ').replace(/"/g, "'").slice(0, 50)}"`).join(', ');
+            throw new Error(`No button, label or heading reads "${String(find).replace(/"/g, "'")}"${near ? ` (it only appears inside longer text: ${near})` : ''}. Use the exact words shown on screen; if you don't know them, take a screenshot first.`);
           }
           await new Promise((r) => setTimeout(r, 400));
         }

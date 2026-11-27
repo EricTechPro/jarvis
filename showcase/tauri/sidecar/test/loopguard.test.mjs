@@ -326,4 +326,41 @@ assert.equal(LOOP_LIMIT, 3);
   assert.equal(await go([{ do: 'click_text', text: 'd' }]), 'stuck', 'and app steps stay refused');
 }
 
+// Review of #33: quotes inside the quoted text (a field showing 5' 11" tall) must not let the rest out, and the other
+// spots where the user's own words sit unquoted are taken out too.
+{
+  const { errorText } = await import('../loopguard.mjs');
+  const leaks = [
+    ['Step 3: typed, but the text field still shows "5\' 11" tall secretword", so I stopped before the next step.', /^Step 3: typed, but the text field still shows "…"/],
+    ['Step 1: no visible text "a "quoted" secretword" in Chrome.', /^Step 1: no visible text "…"/],
+    ['Step 1: "say "hi" secretword" appears 2 times on screen, so I didn\'t guess which.', /^Step 1: "…"/],
+    ['No button, label or heading reads "x" (it only appears inside longer text: "secretword one", "two"). Use the exact words shown on screen.', /^No button, label or heading reads "…"/],
+    ['Step 2: only a "dangling secretword quote', /^Step 2: only a "…"$/],
+    ['Blocked for safety: C:\\Users\\secretword\\file.txt is off limits.', /\[path\] is off limits/],
+    ['Could not open secretword.example.com in time.', /Could not open \[domain\] in time/],
+    ['No matching window is open for secretword.', /^No matching window is open for …\.$/],
+    ['No matching window is open.', /^No matching window is open\.$/],
+    ['Step 2: the password field shows 7 characters, not 9. Fill it again.', /^Step 2: the password field shows … Fill it again\.$/],
+    ['Step 1: unknown key secretword', /^Step 1: unknown key …$/],
+    ['Secretword said no, so I didn\'t click "x" (nothing after it ran either).', /^… said no, so I didn't click "…"/],
+  ];
+  for (const [msg, want] of leaks) {
+    const out = errorText(msg);
+    assert.match(out, want, `${msg} -> ${out}`);
+    assert.ok(!/secretword|7 characters/i.test(out), `${msg} -> ${out}`);
+  }
+}
+
+// Review of #33: a check that ran nothing is free only a few times a request (take_screenshot then a stale click_at,
+// over and over, would otherwise never stop): after RAN_NOTHING_FREE of them, they count like any failure.
+{
+  const { RAN_NOTHING_FREE } = await import('../loopguard.mjs');
+  assert.equal(RAN_NOTHING_FREE, 3);
+  const [act] = guardTools([{ name: 'act_in_app', execute: async () => { throw Object.assign(new Error('Take a new screenshot.'), { ranNothing: true }); } }], { request: () => 1, goals: true });
+  const go = (x) => act.execute({ target: 'front', steps: [{ do: 'click_at', x, y: 1 }] }, {}).then(() => 'ok', (e) => (e.message === STUCK_MESSAGE ? 'stuck' : 'failed'));
+  const got = [];
+  for (let i = 0; i < 6; i++) got.push(await go(i));
+  assert.deepEqual(got, ['failed', 'failed', 'failed', 'failed', 'failed', 'stuck'], 'three free, then two count toward the click_at goal');
+}
+
 console.log('loop guard tests: passed');
