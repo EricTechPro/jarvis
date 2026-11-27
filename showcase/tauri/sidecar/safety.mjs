@@ -257,6 +257,31 @@ function looksOnly(name, args, joined, prog) {
   return !sub || sub.test(joined.trim());
 }
 
+// The folders a changing command may change everything under, even without naming what's inside: find's start
+// folders (-delete, -exec), the repo for git's tree-wide subcommands, where tar and unzip extract, the destination of
+// a recursive copy, the paths of a recursive rm or chmod. cwd: the folder it runs in.
+const GIT_TREE = /^(checkout|restore|clean|stash|reset|switch|pull|merge|rebase|apply|am|cherry-pick|revert|read-tree|checkout-index|rm|mv|worktree|filter-branch|update-index)\b/;
+function repoOf(dir) {
+  for (let d = dir; ; d = path.dirname(d)) {
+    if (fs.existsSync(nodePath.join(d, '.git'))) return d;
+    if (path.dirname(d) === d) return null;
+  }
+}
+function treeTargets(name, args, pathArgs, joined, cwd, home) {
+  const plain = pathArgs.filter((a) => !a.startsWith('-')), opt = (re) => { const i = args.findIndex((a) => re.test(a)); return i < 0 ? null : (args[i].includes('=') ? args[i].split('=')[1] : pathArgs[i + 1]); };
+  if (name === 'find') { const i = args.findIndex((a) => /^[-(!]/.test(a)); const t = pathArgs.slice(0, i < 0 ? args.length : i); return t.length ? t : [cwd]; }
+  if (name === 'git') {
+    const c = args[0] === '-C' ? norm(pathArgs[1] ?? '.', home) : cwd, sub = (args[0] === '-C' ? args.slice(2) : args).join(' ');
+    const repo = GIT_TREE.test(sub) ? repoOf(norm(c, home)) : null;
+    return repo ? [repo] : [];
+  }
+  if (name === 'tar') return /^-?[a-zA-Z]*x[a-zA-Z]*$/.test(args[0] ?? '') || args.some((a) => /^-[a-zA-Z]*x[a-zA-Z]*$/.test(a) || a === '--extract' || a === '--get') ? [opt(/^(-C|--directory(=.*)?)$/) ?? cwd] : [];
+  if (name === 'unzip') return [opt(/^-d$/) ?? cwd];
+  if (['cp', 'rsync', 'ditto'].includes(name)) return name === 'ditto' || /(^|\s)-[a-zA-Z]*[rRa]|--recursive|--archive|--delete/.test(joined) ? plain.slice(-1) : [];
+  if (/(^|\s)-[a-zA-Z]*[rR]|--recursive/.test(joined)) return plain.length ? plain : [cwd];
+  return [];
+}
+
 function checkSimple(text, pipeIn, home, cwd = home, opts = {}) {
   const ws = words(text);
   const prog = program(ws), args = prog.args;
@@ -275,6 +300,8 @@ function checkSimple(text, pipeIn, home, cwd = home, opts = {}) {
     const plain = pathArgs.filter((a) => !a.startsWith('-')), named = ['cp', 'ditto', 'rsync', 'ln', 'install'].includes(name) ? plain.slice(-1) : plain;
     const hits = (a) => (/[*?[]/.test(a) ? (globHits(a, home, cwd) ?? [a]) : [a]).some((x) => inReadOnly(x.replace(/^\$\{?HOME\}?(?=\/|$)/, '~'), home, ro));
     if (named.some(hits) && !looksOnly(name, args, joined, prog)) return verdict(BLOCK, READ_ONLY_REASON);
+    // Nor a whole tree that holds one: commands start in the second brain, the folder above _raw.
+    if (!looksOnly(name, args, joined, prog) && treeTargets(name, args, pathArgs, joined, cwd, home).some((t) => ro.some((d) => inReadOnly(d, home, [t])))) return verdict(BLOCK, READ_ONLY_REASON);
   }
   if (name === 'diskutil' && /\b(erase\w*|partition\w*|zero\w*|secureErase|reformat|apfs\s+(delete|erase)\w*|unmount\w*|eject)\b/i.test(joined)) return verdict(BLOCK, '`diskutil` would erase or change a disk.');
   if (name === 'dd' && /\bof=/.test(joined)) return verdict(BLOCK, '`dd` writing to a file or disk can wipe it.');
@@ -410,6 +437,8 @@ export function classifyCommand(cmd, home, { exists, cwd: start = null, own = nu
   let cwd = start ? norm(start, home) : home;
   for (const p of parts) {
     let v = checkSimple(p.text, p.pipeIn, home, cwd ?? home, { own, readOnly });
+    // Where it runs can't be told (cd into a wildcard or a variable): with read-only folders, nothing that changes.
+    if (cwd == null && readOnly?.length && v.level !== SAFE) return verdict(BLOCK, `${READ_ONLY_REASON} I can't tell which folder that runs in, so I won't change anything there.`);
     if (cwd == null && v.level === SAFE) v = verdict(ASK, "I can't tell which folder that runs in.");
     // In a read-only folder only the looking commands run: anything that may change things is refused there.
     if (v.level !== BLOCK && v.level !== SAFE && cwd != null && inReadOnly(cwd, home, readOnly)) return verdict(BLOCK, READ_ONLY_REASON);

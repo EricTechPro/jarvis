@@ -574,3 +574,35 @@ console.log('safety loophole tests: passed');
   if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
   console.log('safety (read-only folder) tests: passed');
 }
+
+// Commands start in the second brain (run_command), the folder that holds _raw: a command that changes a whole tree
+// there (or a repo, or the folder it extracts into) would reach _raw without naming it, and with Allow prompts
+// skipped an ASK runs by itself. Those are refused; so is any changing command whose folder can't be told.
+{
+  const T = fs.realpathSync(fs.mkdtempSync(nodePath.join(os.tmpdir(), 'jarvis-rawtree-')));
+  try {
+    const H = nodePath.join(T, 'home'), B = nodePath.join(H, 'Brain'), RAW = nodePath.join(B, '_raw'), CTX = nodePath.join(B, '_context');
+    fs.mkdirSync(RAW, { recursive: true }); fs.mkdirSync(CTX); fs.mkdirSync(nodePath.join(B, '.git'));
+    fs.mkdirSync(nodePath.join(H, 'Other', '.git'), { recursive: true });
+    const at = (cwd) => (s) => classifyCommand(s, H, { exists: fs.existsSync, readOnly: [RAW], cwd });
+    cases('tree-wide in the brain', at(B), [
+      ['find . -delete', BLOCK], ["find . -name '*.md' -delete", BLOCK], ['find -delete', BLOCK], ['find . -exec rm {} +', BLOCK],
+      ['find _context -name "*.tmp" -delete', ASK], ["find . -name '*.md'", SAFE],
+      ['git checkout -- .', BLOCK], ['git restore .', BLOCK], ['git clean -fdx', BLOCK], ['git stash', BLOCK], ['git reset --hard', BLOCK],
+      ['git status', SAFE], ['git log --oneline', SAFE],
+      ['tar xf notes.tar', BLOCK], ['tar -xzf notes.tgz', BLOCK], ['tar -xf a.tar -C _context', ASK], ['unzip a.zip', BLOCK], ['tar -czf out.tgz x.md', ASK],
+      ['rsync -a --delete ~/Backup/ ./', BLOCK], ['rsync -a ~/Backup/ .', BLOCK], ['rsync -a _context/ ~/Backup/', ASK],
+      [`rm -rf ${B}`, BLOCK], ['rm -r ../Brain', BLOCK], ['chmod -R 644 .', BLOCK], ['cp -r ~/Old/. .', BLOCK],
+      ['cd _ra* && rm x', BLOCK], ['cd $DIR && rm x', BLOCK], ['cd $DIR && ls', ASK],
+      ['rm notes.md', ASK], ['rm -r _context/old', ASK], ['grep -rn deal .', SAFE],
+    ]);
+    // From a subfolder: the repo is still the brain's, and .. still holds _raw.
+    cases('tree-wide from a subfolder', at(CTX), [['git reset --hard', BLOCK], ['git checkout -- ..', BLOCK], ['find .. -delete', BLOCK], ['find . -delete', ASK], ['tar xf a.tar', ASK]]);
+    // Another repo, or no read-only folders at all: as before.
+    cases('elsewhere', at(nodePath.join(H, 'Other')), [['git reset --hard', ASK], ['git clean -fdx', ASK], ['find . -delete', ASK]]);
+    assert.equal(classifyCommand('git reset --hard', H, { cwd: B }).level, ASK, 'no read-only folders: as before');
+    assert.equal(classifyCommand('cd $DIR && rm x', H, { cwd: B }).level, ASK, 'no read-only folders: unknown folder still asks');
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+  if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
+  console.log('safety (read-only tree) tests: passed');
+}
