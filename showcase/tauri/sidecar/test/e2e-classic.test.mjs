@@ -19,15 +19,23 @@ process.env.JARVIS_BG = '1';
 const HANDS_OK = ['darwin', 'win32'].includes(process.platform);
 
 // The fake hands helper (a .mjs runs on this Node): logs every call, and answers like the real one for one window.
+// texts.json: the window's text lines (a doc to fill in). canvas.json: a page drawn in a canvas (Google Docs): its
+// lines are only in the pixels, so accessibility (find-text, act's click_text) finds none of them and only ocr-find
+// reads them; with canvas.json.noocr beside it, the pixels can't be read either (v0.2.8 had no ocr-find at all).
 const handsLog = path.join(tmp, 'hands.jsonl'), handsFake = path.join(tmp, 'hands.mjs');
+const textsFile = path.join(tmp, 'texts.json'), canvasFile = path.join(tmp, 'canvas.json');
 fs.writeFileSync(handsFake, `import fs from 'node:fs'; const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(handsLog)}, JSON.stringify(a) + '\\n');
 const win = { id: 7, app: 'Chrome', title: 'Cards', bounds: [0, 0, 800, 600] };
+const texts = fs.existsSync(${JSON.stringify(textsFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(textsFile)}, 'utf8')) : ['Info cards'];
+const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(canvasFile)}, 'utf8')) : null;
 let o = { ok: true, window: win };
-if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts: ['Info cards'] };
-if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ id: 1, role: 'button', label: 'Video +', bounds: [10, 10, 80, 24] }, { id: 2, role: 'link', label: 'Upload', bounds: [10, 50, 80, 24] }], texts: ['Info cards'] };
+if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts };
+if (a[0] === 'act' && canvas) { const p = JSON.parse(a[1]), k = p.steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + p.steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.', done: p.steps.slice(0, k).map((s) => 'pressed ' + s.key) }; }
+if (a[0] === 'ocr-find') o = { ok: true, matches: fs.existsSync(${JSON.stringify(canvasFile)} + '.noocr') ? [] : (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
+if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ id: 1, role: 'button', label: 'Video +', bounds: [10, 10, 80, 24] }, { id: 2, role: 'link', label: 'Upload', bounds: [10, 50, 80, 24] }], texts };
 if (a[0] === 'windows') o = { ok: true, windows: [{ id: 7, app: 'Chrome', title: 'Cards', frontApp: true }, { id: 9, app: 'Notes', title: '' }] };
-if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
+if (a[0] === 'find-text') o = { ok: true, matches: canvas ? [] : [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
 if (a[0] === 'locate') o = { ok: true, window: win };
 if (a[0] === 'front') o = { ok: true, app: win.app, title: win.title };
 if (a[0] === 'capture') { fs.writeFileSync(a[1], 'x'); o = { ok: true, file: a[1], window: win, pixels: [800, 600] }; }
@@ -47,7 +55,7 @@ const OPEN_OK = process.platform !== 'win32';
 const opened = () => (fs.existsSync(openLog) ? fs.readFileSync(openLog, 'utf8').trim().split('\n').filter(Boolean) : []);
 
 const { createTools } = await import('../tools.mjs');
-const { guardTools, LOOP_MESSAGE } = await import('../loopguard.mjs');
+const { guardTools, LOOP_MESSAGE, STUCK_MESSAGE } = await import('../loopguard.mjs');
 
 // The second brain: a folder with notes and a read-only _raw/ evidence folder.
 const brain = path.join(tmp, 'Brain');
@@ -165,6 +173,109 @@ if (HANDS_OK) await cp('CP-7 loop guard: 4th identical no-change scroll refused;
   // A different step also breaks the run.
   const other = await play([['act_in_app', { target: 'front', steps: [{ do: 'click', id: 1 }] }], scroll]);
   assert.deepEqual(other.map((x) => x.ok), [true, true], 'a different step lets the scroll run again');
+});
+// 2b. Eric's "fill this in from what you know about me" on a Google Doc: three questions, each with a "-" line under it.
+// The answers are in the second brain (index first, then the note it points to) and today's date is in the prompt.
+const QUESTIONS = ['1. What is my name?', '2. What is my YouTube Channel Name?', "3. What's today's date?"];
+const DOC = QUESTIONS.flatMap((q) => [q, '-']);
+const TODAY = new Date().toLocaleDateString('en-CA'); // the date line sidekick.mjs puts in the prompt
+// A separate tool set, wired like sidekick.mjs (the loop guard with goals on, one request), for the permission and
+// v0.2.8 replays: its own Allow switch, screenshot and loop-guard state.
+const freshTools = ({ actions = true, goals = false } = {}) => {
+  const t = createTools({ allowActions: () => actions, ask: async () => true, ui: () => {}, openUrl: noop, onCommitments: noop, showList: noop, fmtWhen: String, commitmentsText: () => '', userName: 'Eric', workdir: tmp, fileDir: () => brain, readOnly: () => [path.join(brain, '_raw')] });
+  const g = guardTools(t.tools, { goals, request: () => 1 });
+  return async (calls) => {
+    const out = [];
+    for (const [name, args] of calls) {
+      try { out.push({ name, ok: true, result: await g.find((x) => x.name === name).execute(args, { toolCallId: `f${++callN}`, signal: new AbortController().signal }) }); }
+      catch (e) { out.push({ name, ok: false, result: e.message }); }
+    }
+    return out;
+  };
+};
+const actsNow = () => handsCalls().filter((c) => c[0] === 'act').map((c) => JSON.parse(c[1]));
+if (HANDS_OK) {
+  fs.writeFileSync(path.join(brain, '_context', 'index.md'), '# Index\nJarvis ships v0.2.6 with the loop guard.\n- [[youtube]]: _context/youtube.md, Eric and his channel\n');
+  fs.writeFileSync(path.join(brain, '_context', 'youtube.md'), '# YouTube\nOwner: Eric Tech\nChannel name: Eric Tech | AI Builder\nChannel: https://www.youtube.com/@EricTech\n');
+}
+
+if (HANDS_OK) await cp('CP-11 fill-in from the second brain: read_window, the index, the note, then act_in_app types each answer under its question', async () => {
+  made.nextTurn?.();
+  fs.writeFileSync(handsLog, ''); fs.writeFileSync(textsFile, JSON.stringify(DOC));
+  const look = await play([['read_window', { target: 'front' }], ['read_file', { path: '_context/index.md' }]]);
+  for (const x of look) assert.ok(x.ok, `${x.name}: ${text(x.result)}`);
+  for (const q of QUESTIONS) assert.ok(look[0].result.includes(q), `read_window shows "${q}"`);
+  assert.match(look[1].result, /_context\/youtube\.md/, 'the index points at the note');
+  const [note] = await play([['read_file', { path: '_context/youtube.md' }]]);
+  const name = note.result.match(/Owner: (.+)/)[1], channel = note.result.match(/Channel name: (.+)/)[1];
+  const answers = [name, channel, TODAY];
+  // One question per call: click its words, the "-" line under it, its end, the answer.
+  const r = await play(QUESTIONS.map((q, i) => ['act_in_app', { target: 'front', steps: [{ do: 'click_text', text: q.replace(/^\d+\. /, '') }, { do: 'key', key: 'down' }, { do: 'key', key: 'end' }, { do: 'type', text: ` ${answers[i]}` }] }]));
+  for (const x of r) assert.ok(x.ok, text(x.result));
+  for (const x of r) assert.match(x.result, /^In Chrome: click_text, key, key, type\./);
+  const a = actsNow();
+  assert.deepEqual(a.map((x) => x.steps.find((st) => st.do === 'type').text), [' Eric Tech', ' Eric Tech | AI Builder', ` ${TODAY}`], 'each value typed');
+  assert.deepEqual(a.map((x) => x.steps[0].text), ['What is my name?', 'What is my YouTube Channel Name?', "What's today's date?"], 'each at its own question');
+  assert.ok(a.every((x) => x.steps[1].key === 'down' && x.steps[2].key === 'end'), 'on the "-" line under it');
+  fs.rmSync(textsFile);
+});
+
+if (HANDS_OK) await cp('CP-11b fill-in on a canvas doc: click_text finds nothing, the words read off the screen give a real-cursor click_at', async () => {
+  made.nextTurn?.();
+  fs.writeFileSync(handsLog, ''); fs.writeFileSync(canvasFile, JSON.stringify(DOC));
+  const [found] = await play([['act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }, { do: 'key', key: 'down' }, { do: 'key', key: 'end' }, { do: 'type', text: ' Eric Tech' }] }]]);
+  assert.ok(found.ok, text(found.result));
+  assert.match(found.result, /^In Chrome: clicked "What is my name\?" \(read off the screen\), key, key, type\./);
+  assert.ok(handsCalls().some((c) => c[0] === 'ocr-find' && c[2] === 'What is my name?'), 'the window is read for the words');
+  const a = actsNow();
+  assert.deepEqual(a.map((x) => x.steps.map((st) => st.do)), [['click_text', 'key', 'key', 'type'], ['click_at', 'key', 'key', 'type']], 'the plan, then its rest from a click on the words');
+  assert.deepEqual([a[1].steps[0].x, a[1].steps[0].y, a[1].steps[0].global, a[1].steps[0].real], [200, 159, true, true], 'the middle of the words, in screen points, with the real cursor');
+  assert.deepEqual([a[1].steps[1].key, a[1].steps[2].key, a[1].steps[3].text], ['down', 'end', ' Eric Tech']);
+  // "What is my name?" is inside no other line, but "date" would be: the whole question line wins.
+  fs.writeFileSync(handsLog, '');
+  const [d] = await play([['act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: "What's today's date?" }, { do: 'key', key: 'down' }, { do: 'type', text: ` ${TODAY}` }] }]]);
+  assert.ok(d.ok, text(d.result));
+  assert.deepEqual([actsNow()[1].steps[0].y, actsNow()[1].steps[2].text], [150 + 20 * 4 + 9, ` ${TODAY}`], 'clicked the third question, typed the date');
+  fs.rmSync(canvasFile);
+});
+
+if (HANDS_OK) await cp('CP-11c permissions: with Allow File Edits off the brain is still read, act_in_app is refused with the Allow message; on, it types', async () => {
+  fs.writeFileSync(handsLog, ''); fs.writeFileSync(textsFile, JSON.stringify(DOC));
+  const fill = ['act_in_app', { target: 'front', steps: [{ do: 'click_text', text: 'What is my name?' }, { do: 'key', key: 'down' }, { do: 'type', text: ' Eric Tech' }] }];
+  const off = await freshTools({ actions: false })([
+    ['read_file', { path: '_context/index.md' }], ['read_file', { path: '_context/youtube.md' }], ['search_files', { pattern: 'Owner', dir: '_context' }], ['list_files', { dir: '_context' }], ['read_window', { target: 'front' }], fill,
+  ]);
+  assert.deepEqual(off.map((x) => x.ok), [true, true, true, true, true, false], JSON.stringify(off.map((x) => text(x.result).slice(0, 80))));
+  assert.match(off[1].result, /Owner: Eric Tech/, 'the brain is read with actions off');
+  assert.match(off[2].result, /youtube\.md:2:Owner: Eric Tech/, 'and searched');
+  assert.match(off[5].result, /turn on "Allow File Edits & Commands"/, 'typing is what the switch stops, and the model is told which switch');
+  assert.equal(actsNow().length, 0, 'nothing reached the hands helper');
+  const on = await freshTools({ actions: true })([fill]);
+  assert.ok(on[0].ok, text(on[0].result));
+  assert.deepEqual(actsNow().map((x) => x.steps.at(-1).text), [' Eric Tech'], 'with it on, it types');
+  fs.rmSync(textsFile);
+});
+
+if (HANDS_OK) await cp('CP-11d v0.2.8 replay: click_text no_visible_text x3 then click_at on the canvas doc, guarded as sidekick.mjs wires it', async () => {
+  // The log's sequence, against the same canvas doc and a goals-on loop guard (one request).
+  const tries = ['What is my name?', '1. What is my name?', 'What is my name'].map((t) => ['act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: t }, { do: 'key', key: 'down' }, { do: 'type', text: ' Eric Tech' }] }]);
+  const pixels = ['act_in_app', { target: 'browser', steps: [{ do: 'click_at', x: 200, y: 179 }, { do: 'key', key: 'end' }, { do: 'type', text: ' Eric Tech' }] }];
+  fs.writeFileSync(canvasFile, JSON.stringify(DOC));
+  // Now: each click_text is found by reading the screen, so nothing fails, and the click_at runs too.
+  fs.writeFileSync(handsLog, '');
+  const now = await freshTools({ goals: true })([...tries, ['take_screenshot', { target: 'browser' }], pixels]);
+  assert.deepEqual(now.map((x) => x.ok), [true, true, true, true, true], JSON.stringify(now.map((x) => text(x.result).slice(0, 100))));
+  for (const x of now.slice(0, 3)) assert.match(x.result, /\(read off the screen\)/);
+  assert.ok(!now.some((x) => [LOOP_MESSAGE, STUCK_MESSAGE].includes(text(x.result))), 'never stuck');
+  assert.deepEqual(actsNow().filter((x) => x.steps[0].do === 'click_at').map((x) => x.steps.at(-1).text), [' Eric Tech', ' Eric Tech', ' Eric Tech', ' Eric Tech'], 'every plan typed its answer');
+  // Even when the screen can't be read either (no OCR, as in v0.2.8): the 3 failures stop click_text, not click_at.
+  fs.writeFileSync(canvasFile + '.noocr', ''); fs.writeFileSync(handsLog, '');
+  const blind = await freshTools({ goals: true })([...tries, ['take_screenshot', { target: 'browser' }], pixels, tries[0]]);
+  assert.deepEqual(blind.map((x) => x.ok), [false, false, false, true, true, false], JSON.stringify(blind.map((x) => text(x.result).slice(0, 100))));
+  for (const x of blind.slice(0, 3)) assert.match(x.result, /no visible text/);
+  assert.match(blind[4].result, /^In Chrome: click_at, key, type\./, 'the click by pixels runs after 3 failures');
+  assert.equal(blind[5].result, STUCK_MESSAGE, 'another click_text is what gets stopped');
+  fs.rmSync(canvasFile + '.noocr'); fs.rmSync(canvasFile);
 });
 if (!HANDS_OK) console.log('e2e-classic: screen steps skipped (macOS and Windows only)');
 

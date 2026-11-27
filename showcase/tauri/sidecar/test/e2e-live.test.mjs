@@ -24,7 +24,7 @@ const HANDS = ['darwin', 'win32'].includes(process.platform);
 // when it exists, so a test can make the screen "change".
 const callLog = path.join(tmp, 'calls.jsonl'), handsFake = path.join(tmp, 'hands.mjs'), titleFile = path.join(tmp, 'title.txt'), textsFile = path.join(tmp, 'texts.json');
 // canvas.json: a page drawn in a canvas (Google Docs): its lines are only in the pixels, so accessibility (find-text,
-// act's click_text) finds none of them and only ocr-find reads them.
+// act's click_text) finds none of them and only ocr-find reads them; with canvas.json.noocr, not even that (v0.2.8).
 const canvasFile = path.join(tmp, 'canvas.json');
 fs.writeFileSync(handsFake, `import fs from 'node:fs'; const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(callLog)}, JSON.stringify(a) + '\\n');
@@ -36,7 +36,7 @@ if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do
 const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(canvasFile)}, 'utf8')) : null;
 if (a[0] === 'act' && canvas) { const p = JSON.parse(a[1]), k = p.steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + p.steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.', done: p.steps.slice(0, k).map((s) => 'pressed ' + s.key) };
   else if (fs.existsSync(${JSON.stringify(canvasFile)} + '.gone')) o = { ok: false, error: 'No matching window is open.' }; }
-if (a[0] === 'ocr-find') o = { ok: true, matches: (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
+if (a[0] === 'ocr-find') o = { ok: true, matches: fs.existsSync(${JSON.stringify(canvasFile)} + '.noocr') ? [] : (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
 if (a[0] === 'find-text' && canvas) o = { ok: true, matches: [] };
 else if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
 if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ role: 'button', label: 'Save' }], texts, note: '' };
@@ -54,7 +54,7 @@ globalThis.fetch = async (url) => { fetched.push(String(url?.url ?? url)); retur
 const { createTools } = await import('../tools.mjs');
 const { createLiveBrain } = await import('../livebrain.mjs');
 const { createLiveCall } = await import('../livecall.mjs');
-const { guardTools, LOOP_MESSAGE } = await import('../loopguard.mjs');
+const { guardTools, LOOP_MESSAGE, STUCK_MESSAGE } = await import('../loopguard.mjs');
 const { agentsRoot, createAgents, newsDesk } = await import('../agents.mjs');
 const { checkOpen, checkRead, checkWrite } = await import('../safety.mjs');
 const { setVoiceMode, voiceModeOf } = await import('../voicemode.mjs');
@@ -124,9 +124,8 @@ const s = () => sessions.at(-1);
 const openCall = async () => { const before = sessions.length; await liveCall.toggle(); await until(() => sessions.length === before + 1); return s(); };
 let n = 0;
 // One tool call from "Gemini"; resolves with the response Jarvis sent back for it.
-const call = async (name, args, ms) => {
+const call = async (name, args, ms, sess = s()) => {
   const id = `c${++n}`;
-  const sess = s();
   sess.server({ toolCall: { functionCalls: [{ id, name, args }] } });
   const find = () => sess.sent.flatMap((m) => m.tool?.functionResponses ?? []).find((r) => r.id === id);
   await until(find, ms);
@@ -356,6 +355,74 @@ if (HANDS) {
     fs.writeFileSync(canvasFile, JSON.stringify(['1. What is my name?', '-', '4. What is my name?']));
     assert.match((await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }] })).error ?? '', /appears 2 times/);
     fs.rmSync(canvasFile);
+  });
+
+  // Eric's doc, his three questions; the answers come from the brain.
+  const DOC = ['1. What is my name?', '-', '2. What is my YouTube Channel Name?', '-', "3. What's today's date?", '-'];
+  await cp('CP-11c permissions: with Allow File Edits off the brain is still read, act_in_app is refused with the Allow message; on, it types', async () => {
+    fs.writeFileSync(callLog, ''); fs.writeFileSync(textsFile, JSON.stringify(DOC));
+    const fill = { target: 'front', steps: [{ do: 'click_text', text: 'What is my name?' }, { do: 'key', key: 'down' }, { do: 'type', text: ' Eric Tech' }] };
+    actionsOn = false;
+    try {
+      const idx = await call('read_file', { path: '_context/index.md' });
+      const note = await call('read_file', { path: '_context/youtube.md' });
+      const found = await call('search_files', { pattern: 'Owner', dir: '_context' });
+      const rw = await call('read_window', { target: 'front' });
+      for (const r of [idx, note, found, rw]) assert.equal(r.error, undefined, r.error);
+      assert.match(idx.output, /_context\/youtube\.md/);
+      assert.match(note.output, /Owner: Eric Tech/, 'the brain is read with actions off');
+      assert.match(found.output, /youtube\.md:2:Owner: Eric Tech/, 'and searched');
+      assert.match(rw.output, /What is my name\?/);
+      const off = await call('act_in_app', fill);
+      assert.match(off.error ?? '', /turn on "Allow File Edits & Commands"/, 'typing is what the switch stops, and the model is told which switch');
+      assert.equal(acts().length, 0, 'nothing reached the hands helper');
+    } finally { actionsOn = true; }
+    const on = await call('act_in_app', fill);
+    assert.equal(on.error, undefined, on.error);
+    assert.deepEqual(acts().map((x) => x.steps.at(-1).text), [' Eric Tech'], 'with it on, it types');
+    fs.rmSync(textsFile);
+  });
+
+  await cp('CP-11d v0.2.8 replay: click_text no_visible_text x3 then click_at on the canvas doc, guarded as sidekick.mjs wires it', async () => {
+    // A second call on its own tools, guarded with goals on as sidekick.mjs does (one turn), so the stuck rule is live.
+    const goalTools = () => {
+      const t = createTools({ allowActions: () => true, ask: async () => true, openUrl: noop, onCommitments: noop, showList: noop, fmtWhen: String, commitmentsText: () => '', userName: 'Eric', ui: () => {}, fileDir: () => brainDir, readOnly: () => [path.join(brainDir, '_raw')], skipAllow: () => true });
+      return guardTools(t.tools, { goals: true, request: () => 1 });
+    };
+    const callOn = async (gt) => {
+      const lc = createLiveCall({ makeBrain: async (emit) => createLiveBrain({ emit, connect, key: 'k', tools: gt, system: () => 'You are Jarvis.' }), ui: () => {}, send: () => {}, ask: async () => null, toClassic: () => {}, inkStarted: () => {} });
+      const before = sessions.length;
+      await lc.toggle();
+      await until(() => sessions.length === before + 1);
+      return { lc, sess: sessions.pop() }; // off the list, so s() stays the main call
+    };
+    const tries = ['What is my name?', '1. What is my name?', 'What is my name'].map((t) => ({ target: 'browser', steps: [{ do: 'click_text', text: t }, { do: 'key', key: 'down' }, { do: 'type', text: ' Eric Tech' }] }));
+    const pixels = { target: 'browser', steps: [{ do: 'click_at', x: 200, y: 179 }, { do: 'key', key: 'end' }, { do: 'type', text: ' Eric Tech' }] };
+    const run = async (sess, plans) => {
+      const out = [];
+      for (const [name, args] of plans) out.push(await call(name, args, undefined, sess));
+      return out;
+    };
+    fs.writeFileSync(canvasFile, JSON.stringify(DOC));
+    // Now: each click_text is found by reading the screen, so nothing fails, and the click_at runs too.
+    fs.writeFileSync(callLog, '');
+    const a = await callOn(goalTools());
+    const now = await run(a.sess, [...tries.map((p) => ['act_in_app', p]), ['take_screenshot', { target: 'browser' }], ['act_in_app', pixels]]);
+    assert.deepEqual(now.map((r) => r.error), [undefined, undefined, undefined, undefined, undefined], JSON.stringify(now));
+    for (const r of now.slice(0, 3)) assert.match(r.output, /\(read off the screen\)/);
+    assert.deepEqual(acts().filter((x) => x.steps[0].do === 'click_at').map((x) => x.steps.at(-1).text), [' Eric Tech', ' Eric Tech', ' Eric Tech', ' Eric Tech'], 'every plan typed its answer');
+    a.lc.hangUp('esc');
+    // Even when the screen can't be read either (no OCR, as in v0.2.8): the 3 failures stop click_text, not click_at.
+    fs.writeFileSync(canvasFile + '.noocr', ''); fs.writeFileSync(callLog, '');
+    const b = await callOn(goalTools());
+    const blind = await run(b.sess, [...tries.map((p) => ['act_in_app', p]), ['take_screenshot', { target: 'browser' }], ['act_in_app', pixels], ['act_in_app', tries[0]]]);
+    for (const r of blind.slice(0, 3)) assert.match(r.error ?? '', /no visible text/);
+    assert.equal(blind[3].error, undefined, blind[3].error);
+    assert.equal(blind[4].error, undefined, `the click by pixels runs after 3 failures: ${blind[4].error}`);
+    assert.match(blind[4].output, /^In Chrome: click_at, key, type\./);
+    assert.equal(blind[5].error, STUCK_MESSAGE, 'another click_text is what gets stopped');
+    b.lc.hangUp('esc');
+    fs.rmSync(canvasFile + '.noocr'); fs.rmSync(canvasFile);
   });
 } else console.log('e2e live: hands paths (CP-5, CP-6 act_in_app, CP-7, CP-11) skipped (macOS and Windows only)');
 
