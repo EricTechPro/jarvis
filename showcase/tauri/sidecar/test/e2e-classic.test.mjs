@@ -32,6 +32,7 @@ const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.read
 let o = { ok: true, window: win };
 if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ id: 1, role: 'button', label: 'Video +' }], texts };
 if (a[0] === 'act' && canvas) { const p = JSON.parse(a[1]), k = p.steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + p.steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.', done: p.steps.slice(0, k).map((s) => 'pressed ' + s.key) }; }
+if (a[0] === 'act' && fs.existsSync(${JSON.stringify(canvasFile)} + '.actfail')) { o = { ok: false, error: fs.readFileSync(${JSON.stringify(canvasFile)} + '.actfail', 'utf8'), done: [] }; fs.rmSync(${JSON.stringify(canvasFile)} + '.actfail'); }
 if (a[0] === 'ocr-find') o = { ok: true, matches: fs.existsSync(${JSON.stringify(canvasFile)} + '.noocr') ? [] : (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
 if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ id: 1, role: 'button', label: 'Video +', bounds: [10, 10, 80, 24] }, { id: 2, role: 'link', label: 'Upload', bounds: [10, 50, 80, 24] }], texts };
 if (a[0] === 'windows') o = { ok: true, windows: [{ id: 7, app: 'Chrome', title: 'Cards', frontApp: true }, { id: 9, app: 'Notes', title: '' }] };
@@ -295,6 +296,16 @@ if (HANDS_OK) await cp('CP-11e v0.2.9 replay: a click_at on a used-up screenshot
   // click_at still gets both of its tries.
   const g = await freshTools({ goals: true })([['act_in_app', at], ['act_in_app', at], ['take_screenshot', { target: 'front' }], ['act_in_app', at]]);
   assert.deepEqual(g.map((x) => x.ok), [false, false, true, true], JSON.stringify(g.map((x) => text(x.result).slice(0, 80))));
+  // The Classic run (02:43:07-02:43:25): a plan typing into the Doc failed once for real (the helper's type check),
+  // the next click_at hit the used-up screenshot, and the click_at after a fresh screenshot was refused as stuck.
+  const plan = { target: 'browser', steps: [{ do: 'click_at', x: 455, y: 285 }, { do: 'key', key: 'cmd+right' }, { do: 'type', text: ' Eric Tech' }] };
+  const play2 = freshTools({ goals: true });
+  await play2([['take_screenshot', { target: 'browser' }]]);
+  fs.writeFileSync(canvasFile + '.actfail', 'Step 3: typed, but the text field still shows "\u200b\u200b", so I stopped before the next step.');
+  const c = await play2([['act_in_app', plan], ['act_in_app', plan], ['take_screenshot', { target: 'browser' }], ['act_in_app', plan]]);
+  assert.deepEqual(c.map((x) => x.ok), [false, false, true, true], JSON.stringify(c.map((x) => text(x.result).slice(0, 80))));
+  assert.match(c[1].result, /Take a new screenshot/);
+  assert.notEqual(c[3].result, STUCK_MESSAGE);
 });
 if (!HANDS_OK) console.log('e2e-classic: screen steps skipped (macOS and Windows only)');
 

@@ -485,6 +485,19 @@ func mayType(editable: Bool, focusRole: String?, clickedSpot: Bool) -> Bool {
     editable || (clickedSpot && (focusRole == nil || ["AXWindow", "AXApplication"].contains(focusRole!)))
 }
 
+/// Only zero-width characters (and spaces): what a web document's hidden input holds. Google Docs types through a
+/// focused "Document content" text area that shows "\u{200B}\u{200B}" before and after typing; the text is on its canvas.
+func onlyInvisible(_ s: String) -> Bool {
+    let zw: Set<Unicode.Scalar> = ["\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}", "\u{FEFF}"]
+    return s.unicodeScalars.contains { zw.contains($0) } && s.unicodeScalars.allSatisfy { zw.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0) }
+}
+/// Whether typing reached the field, from its value before and after: it changed, or shows the text, or it's a web
+/// document's hidden input (nothing to read back there; the result shows on screen). A real field that still shows
+/// what it held (an app that dropped keys sent in the background) is a stop: a following Return would submit that.
+func typingTook(before: String, now: String, text: String) -> Bool {
+    now != before || fold(now).contains(fold(text).prefix(40)) || (onlyInvisible(before) && onlyInvisible(now))
+}
+
 /// Puts the cursor in a field, replaces its text and reads back what it shows. Never types unless the field
 /// really has focus, so text can't land in some other field or set off page shortcuts.
 func typeInto(_ app: AXUIElement, _ e: AXUIElement, _ text: String) -> (ok: Bool, shows: String) {
@@ -1501,6 +1514,12 @@ case "--self-test":
     check("no typing in such an app without a click first", !mayType(editable: false, focusRole: "AXWindow", clickedSpot: false))
     check("no typing on a web page outside a field, even after a click", !mayType(editable: false, focusRole: "AXWebArea", clickedSpot: true))
     check("typing in a real text field", mayType(editable: true, focusRole: "AXTextField", clickedSpot: false))
+    // Regression (v0.2.9, Classic and Live, 2026-11-27): Google Docs types through a focused hidden "Document content"
+    // text area that only ever holds zero-width spaces, so "the field still shows \u{200B}\u{200B}" stopped every fill.
+    check("typing into a web document's hidden input counts", typingTook(before: "\u{200B}\u{200B}", now: "\u{200B}\u{200B}", text: "Eric Tech"))
+    check("an empty field that stays empty after typing still stops", !typingTook(before: "", now: "", text: "Eric Tech"))
+    check("a field that kept its old text still stops", !typingTook(before: "old search", now: "old search", text: "new"))
+    check("a field that shows the typing counts", typingTook(before: "", now: "Eric Tech", text: "Eric Tech"))
     // Regression: click_text "Speed" (a tab CapCut hides from accessibility) clicked a clip named "MTLSVideoP:speed.mp4".
     check("a word inside a file name isn't a word match", matchScore("mtlsvideop:speed.mp4", "speed") == 2)
     check("so click_text won't click it", !clickMatch(["match": ["exact", "word", "partial"][matchScore("mtlsvideop:speed.mp4", "speed")]]))
@@ -1942,11 +1961,12 @@ case "act":
             if let into, let before, !text.isEmpty, axRole(into) != "AXSecureTextField", str(into, kAXSubroleAttribute) != "AXSecureTextField" {
                 Thread.sleep(forTimeInterval: 0.12)
                 let now = str(into, kAXValueAttribute) ?? before
-                if now == before, !fold(now).contains(fold(text).prefix(40)) {
+                if !typingTook(before: before, now: now, text: text) {
                     out(["ok": false, "error": "Step \(i + 1): typed, but the text field still shows \"\(now.prefix(80))\", so I stopped before the next step. Use {do:'fill', field, text} instead, or the open tool for a web address or a site's search results page.", "done": done])
                 }
             }
-            done.append(hidden ? "typed text (the app doesn't show its fields, so check the result on screen)" : "typed text")
+            let canvas = into.flatMap { str($0, kAXValueAttribute) }.map(onlyInvisible) ?? false
+            done.append(hidden ? "typed text (the app doesn't show its fields, so check the result on screen)" : canvas ? "typed text (a page drawn without readable text, so check the result on screen)" : "typed text")
         case "fill":
             // A form field by its label, placeholder or id: put the cursor in it, replace its text, check it took.
             let text = s["text"] as? String ?? ""
@@ -2124,6 +2144,9 @@ case "act":
             // "real": that exact spot with the real cursor (words read off a canvas, like a Google Doc's page): a click
             // without it presses the element there, which on a canvas isn't the spot.
             if (s["real"] as? Bool) == true, inBackground { _ = withRealCursor { click(p) } } else { click(p) }
+            // A canvas page (Google Docs) moves its caret and focus a moment after the click: keys sent at once went
+            // to where the caret was, so the answer landed on the question's line instead of the one below.
+            if (s["real"] as? Bool) == true { Thread.sleep(forTimeInterval: 0.3) }
             done.append("clicked at \(Int(x)),\(Int(y))")
             clickedSpot = true
         case "wait":

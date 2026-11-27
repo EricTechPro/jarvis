@@ -158,5 +158,11 @@ assert.match(side, /Filling something in from what you know about \$\{userName\}
 // found, and never wipe the doc.
 assert.match(side, /Filling something in[^\n]*the line below its question[^\n]*click_text on the question, key down, key end, then type the value[^\n]*take_screenshot once and click_at[^\n]*Never select all or delete/, 'answers on the line below, pixels as a fallback');
 assert.match(side, /Filling in a few fields from what you know about them is the exception: do it yourself/, 'Live fills in itself');
+// v0.2.9 (Live and Classic, 2026-11-27): it clicked a bare "-" (every dash on the page matches), pressed control+a on
+// a Mac, and wrote the name as found in one note while the business card names him differently. Click the question,
+// never the dash; cmd on a Mac; the exact value as found, the business card's name when notes differ.
+assert.match(side, /Filling something in[^\n]*never click_text a single character like "-"[^\n]*click the question, then key down/, 'no click on a dash');
+assert.match(side, /Filling something in[^\n]*the exact value as you found it, never shortened or made up[^\n]*business context card/, 'exact values, the card first');
+assert.match(side, /On a Mac, shortcuts use cmd \(cmd\+a, cmd\+right\), never control/, 'cmd on a Mac');
 console.log('prompt: fill-in ok');
 
