@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.2.11",
+      "date": "2026-11-27",
+      "items": [
+        { "kind": "fixed", "title": "Reply boxes found by name", "text": "A field shown as \"Add a reply…\" now matches when I'm asked for \"Add a reply...\"." }
+      ]
+    },
+    {
       "version": "0.2.10",
       "date": "2026-11-27",
       "items": [

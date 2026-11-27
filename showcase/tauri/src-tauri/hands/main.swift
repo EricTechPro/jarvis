@@ -423,7 +423,8 @@ let FIELD_ROLES: Set<String> = ["AXTextField", "AXTextArea", "AXSearchField", "A
 let DROP_ROLES: Set<String> = ["AXPopUpButton", "AXComboBox", "AXMenuButton", "AXTextField", "AXButton"]
 func axRole(_ e: AXUIElement) -> String { str(e, kAXRoleAttribute) ?? "" }
 func fold(_ s: String) -> String {
-    s.lowercased().replacingOccurrences(of: "*", with: "").replacingOccurrences(of: ":", with: "")
+    // "…" (one character) on the page and "..." typed from a screenshot are the same words.
+    s.lowercased().replacingOccurrences(of: "\u{2026}", with: "...").replacingOccurrences(of: "*", with: "").replacingOccurrences(of: ":", with: "")
         .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
 }
 /// A checkbox or radio label that click_text's words name: the whole label, or its start as a whole word (a YouTube

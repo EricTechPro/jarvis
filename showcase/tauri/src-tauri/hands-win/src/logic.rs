@@ -233,7 +233,8 @@ pub fn may_type(editable: bool, focus_ct: Option<i32>, clicked_spot: bool) -> bo
 // ---------- text ----------
 
 pub fn fold(s: &str) -> String {
-    s.to_lowercase().replace(['*', ':'], "").split_whitespace().collect::<Vec<_>>().join(" ")
+    // "…" (one character) on the page and "..." typed from a screenshot are the same words.
+    s.to_lowercase().replace('\u{2026}', "...").replace(['*', ':'], "").split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn is_word(c: char) -> bool {
@@ -800,6 +801,7 @@ pub fn self_test() -> Vec<(&'static str, bool)> {
         ("an OCR phrase spans its words", ocr_matches(&line, "open now") == vec![Rect::new(150.0, 0.0, 80.0, 12.0)]),
         ("one character is cut from its word, case and all", ocr_matches(&line, "O") == vec![Rect::new(150.0, 0.0, 10.0, 12.0)]),
         ("the item below the anchor wins", nearest_after(&Rect::new(0.0, 100.0, 50.0, 10.0), &[Rect::new(0.0, 50.0, 20.0, 10.0), Rect::new(0.0, 130.0, 20.0, 10.0), Rect::new(0.0, 300.0, 20.0, 10.0)]) == Some(1)),
+        ("a label's … matches three typed dots", fold("Add a reply…") == fold("Add a reply...") && fold("Add a reply…").contains(&fold("Add a reply..."))),
         ("long scrolled-off text keeps its start and end", offscreen_text((0..50).map(|i| (i as f64, format!("line number {i}"))).collect(), 100).last().map(String::as_str) == Some("line number 49")),
     ]
 }
