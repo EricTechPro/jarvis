@@ -277,6 +277,25 @@ if (HANDS_OK) await cp('CP-11d v0.2.8 replay: click_text no_visible_text x3 then
   assert.equal(blind[5].result, STUCK_MESSAGE, 'another click_text is what gets stopped');
   fs.rmSync(canvasFile + '.noocr'); fs.rmSync(canvasFile);
 });
+if (HANDS_OK) await cp('CP-11e v0.2.9 replay: a click_at on a used-up screenshot fails before anything runs, marked so the loop guard does not count it', async () => {
+  made.nextTurn?.();
+  fs.writeFileSync(handsLog, '');
+  const at = { target: 'front', steps: [{ do: 'click_at', x: 300, y: 100 }, { do: 'type', text: 'hello' }] };
+  const r = await play([['take_screenshot', { target: 'front' }], ['act_in_app', at]]);
+  assert.ok(r[1].ok, text(r[1].result));
+  const err = await tool('act_in_app').execute(at, { toolCallId: 'pre1' }).then(() => null, (e) => e);
+  assert.match(err?.message ?? '', /Take a new screenshot/);
+  assert.equal(err.ranNothing, true, 'nothing ran: marked for the loop guard');
+  assert.equal(actsNow().length, 1, 'only the first plan reached the hands helper');
+  made.nextTurn?.();
+  const old = await tool('act_in_app').execute(at, { toolCallId: 'pre2' }).then(() => null, (e) => e);
+  assert.match(old?.message ?? '', /Look again first/);
+  assert.equal(old.ranNothing, true);
+  // Guarded with goals (as sidekick.mjs wires the chat and Live): two such checks, then a fresh screenshot, and the
+  // click_at still gets both of its tries.
+  const g = await freshTools({ goals: true })([['act_in_app', at], ['act_in_app', at], ['take_screenshot', { target: 'front' }], ['act_in_app', at]]);
+  assert.deepEqual(g.map((x) => x.ok), [false, false, true, true], JSON.stringify(g.map((x) => text(x.result).slice(0, 80))));
+});
 if (!HANDS_OK) console.log('e2e-classic: screen steps skipped (macOS and Windows only)');
 
 // 3. Opening a tab: a link opens in the browser, a bare address is a link, and typing an address into the browser bar

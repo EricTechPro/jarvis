@@ -1,7 +1,8 @@
 // Every tool call's outcome, and a stop for loops: Classic, Live and the operator agent run the same tools, so their
 // execute is wrapped here once. Each call logs a 'tool_outcome' line (ok or not, whether its result differs from that
 // tool's last one, how many identical calls in a row saw nothing change, a short reason): counts only, never what the
-// screen showed or what was typed. The change signal is the tool's own result (act_in_app's text ends with the window's
+// screen showed or what was typed. A screen tool's failure also logs its own words (errorText), with everything quoted
+// in them (screen text, what was typed), web addresses, emails and paths taken out. The change signal is the tool's own result (act_in_app's text ends with the window's
 // title and controls as they are after the steps; a screenshot's picture), so nothing extra is captured for it.
 import { createHash } from 'node:crypto';
 
@@ -58,10 +59,26 @@ const REASONS = [
   [/No matching window/i, 'no_window'],
   [/no visible text|no text "/, 'no_visible_text'],
   [/no control with id|id is out of date|No control \d+/, 'stale_id'],
+  [/appears \d+ times on screen/, 'ambiguous'],
+  [/typed, but the text field still shows|cursor isn't in a text field/, 'not_typed'],
+  [/Take a (new )?screenshot( first)?[.,]|Look again first|Call read_window on this window first/, 'needs_look'],
   [/is in front instead of|came to the front|Couldn't bring/, 'wrong_app'],
   [/no text field called|no dropdown called/, 'no_field'],
 ];
 const reasonOf = (msg) => REASONS.find(([re]) => re.test(msg))?.[1] ?? 'error';
+// The tools whose error wording is Jarvis's own, with what came off the screen or from the model always in quotes.
+// Not run_command or the web tools: their errors carry command output and page text.
+const SCREEN_TOOLS = new Set(['act_in_app', 'read_window', 'take_screenshot', 'list_windows', 'draw']);
+/** A failure's words, safe for the log: quoted parts, web addresses, emails and paths out; at most 200 characters. */
+export const errorText = (msg) => String(msg)
+  .replace(/"[^"]*"|“[^”]*”|'[^'\s][^']*?'(?=[\s.,:;)]|$)/g, '"…"')
+  .replace(/\b[a-z][\w+.-]*:\/\/\S+/gi, '[url]')
+  .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
+  .replace(/(^|[\s(])~?\/[^\s,;)]+/g, '$1[path]')
+  .replace(/\s+/g, ' ').trim().slice(0, 200);
+// Escape (closing a menu or popup that came up) is never what got stuck: a plan of just that, and waits, always runs.
+const harmless = (args) => Array.isArray(args?.steps) && args.steps.length > 0 && args.steps.some((x) => x?.do === 'key')
+  && args.steps.every((x) => x?.do === 'wait' || (x?.do === 'key' && /^(escape|esc)$/i.test(String(x.key ?? '').trim())));
 
 /** Wraps each tool's execute in place (tools added later aren't wrapped) and returns the same array. request: the
  *  current request's number (a Classic message or a Live turn); the repeat count starts over with each new one.
@@ -88,7 +105,7 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
       // click_at rarely fails): a canvas page (Google Docs) has no words for click_text to find, and a click_at from a
       // fresh screenshot is a different way in. Never one that selects all or deletes: stuck is no time to wipe a page.
       const stuck = fails.n >= FAIL_LIMIT;
-      if (goals && t.name === 'act_in_app' && ((stuck && (goal !== AT || fails.pixels >= GOAL_LIMIT || wipes(args))) || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
+      if (goals && t.name === 'act_in_app' && !harmless(args) && ((stuck && (goal !== AT || fails.pixels >= GOAL_LIMIT || wipes(args))) || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
         log('tool_outcome', { id, name: t.name, ok: false, reason: 'loop_guard', fails: fails.n });
         throw new Error(STUCK_MESSAGE);
       }
@@ -103,10 +120,12 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
         const same = !blind && last?.key === key && last.sig === sig ? last.same + 1 : 1;
         last = { key, sig, same, req };
         if (!err && !blind) lastSig.set(t.name, sig);
-        log('tool_outcome', { id, name: t.name, ok: !err, changed: err || prev == null ? null : sig !== prev, same, ms: Date.now() - t0, ...(err ? { reason: reasonOf(String(err?.message ?? err)) } : {}) });
+        const msg = String(err?.message ?? err);
+        log('tool_outcome', { id, name: t.name, ok: !err, changed: err || prev == null ? null : sig !== prev, same, ms: Date.now() - t0, ...(err ? { reason: reasonOf(msg), ...(SCREEN_TOOLS.has(t.name) ? { error: errorText(msg) } : {}) } : {}) });
       }
-      // A goal that worked starts over (every page of a wizard ends in "Next": one goal, many pages).
-      if (goals && t.name === 'act_in_app' && !ctx?.signal?.aborted) { if (err) { mine.n++; if (goal) mine.by.set(goal, (mine.by.get(goal) ?? 0) + 1); } else if (goal) mine.by.delete(goal); }
+      // A goal that worked starts over (every page of a wizard ends in "Next": one goal, many pages). A check that
+      // stopped the call before anything ran (ranNothing: the screenshot was out of date) isn't a try at it.
+      if (goals && t.name === 'act_in_app' && !ctx?.signal?.aborted && !err?.ranNothing) { if (err) { mine.n++; if (goal) mine.by.set(goal, (mine.by.get(goal) ?? 0) + 1); } else if (goal) mine.by.delete(goal); }
       if (err) throw err;
       return raw;
     };

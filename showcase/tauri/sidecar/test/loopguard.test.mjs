@@ -140,24 +140,29 @@ assert.equal(LOOP_LIMIT, 3);
   const cases = [
     ['Step 1: no visible text "Public secret" in Google Chrome. Check the exact words with a screenshot or read_window.', 'no_visible_text'],
     ['Step 2: no text "Visibility secret" on this page to find "Public" near.', 'no_visible_text'],
-    ['No matching window is open for secret.', 'no_window'],
+    ['No matching window is open for Notes.', 'no_window'],
     ['Accessibility is off for Jarvis, so I can\'t read or control other apps yet.', 'permission'],
     ['Jarvis needs Accessibility permission to control other apps.', 'permission'],
     ['Window capture failed. Jarvis may need Screen Recording permission.', 'permission'],
     ['timed out', 'timeout'],
-    ['Blocked for safety: that spot is on secret, and I never click in it.', 'blocked'],
+    ['Blocked for safety: that spot is on 1Password, and I never click in it.', 'blocked'],
     ['Stopped before clicking "Delete secret": it could delete, pay, send or sign out, and the user hasn\'t said yes to that.', 'needs_yes'],
     ['Step 1: no control with id 7. Call read_window again.', 'stale_id'],
     ['The page changed since read_window, so that id is out of date. Call read_window again and use the new ids.', 'stale_id'],
     ['Step 1: Safari is in front instead of Google Chrome, so I stopped before typing into the wrong app.', 'wrong_app'],
     ['Step 1: no text field called "secret" here. Check its label with read_window.', 'no_field'],
     ['Ken said no, so I didn\'t click "secret" (nothing after it ran either).', 'declined'],
-    ['Something nobody planned for: secret', 'error'],
+    ['Step 1: "secret" appears 3 times on screen, so I didn\'t guess which. Take a screenshot and use click_at on the one you mean.', 'ambiguous'],
+    ['Step 4: typed, but the text field still shows "secret", so I stopped before the next step.', 'not_typed'],
+    ['Step 2: the cursor isn\'t in a text field, so typing would go nowhere.', 'not_typed'],
+    ['Something was clicked or opened since that screenshot, so it may be out of date. Take a new screenshot.', 'needs_look'],
+    ['Take a screenshot first, then give x, y in its pixels.', 'needs_look'],
+    ['Something nobody planned for: "secret"', 'error'],
   ];
   for (const [i, [msg]] of cases.entries()) { state.fail = msg; await call('act_in_app', { target: 'front', steps: [{ do: 'click_text', text: `t${i}` }] }, `e${i}`).catch(() => {}); }
   const out = lines.filter((l) => l.kind === 'tool_outcome' && l.ok === false);
   assert.deepEqual(out.map((l) => l.reason), cases.map(([, code]) => code));
-  assert.ok(!JSON.stringify(lines).includes('secret'), 'no screen or user text is logged');
+  assert.ok(!JSON.stringify(lines).includes('secret'), 'no screen or user text is logged (app names are)');
 }
 
 // By goal (Eric's Live call, 2026-11-26): 12 act_in_app calls in one turn chasing one goal (tick Public, then Save),
@@ -268,6 +273,57 @@ assert.equal(LOOP_LIMIT, 3);
   for (const k of ['cmd+a', 'Command + A', 'delete', 'backspace']) assert.equal(await go4([{ do: 'click_at', x: 1, y: 1 }, { do: 'key', key: k }, { do: 'type', text: 'x' }]), 'stuck', `no ${k} once stuck`);
   // Before stuck, a click that works still starts its goal over.
   assert.equal(await act2.execute({ target: 'front', steps: at(1, 1) }, {}), 'done.\nNow showing: Doc');
+}
+
+// v0.2.9 Live log (2026-11-27): reason "error" said nothing, so each failure's own words are logged too, with
+// anything quoted (screen text, what was typed), web addresses, emails and paths taken out, at most 200 characters.
+{
+  const { state, call, lines } = setup();
+  state.fail = 'Step 1: "What is my name?" appears 2 times on screen, so I didn\'t guess which. Take a screenshot and use click_at on the one you mean. See https://docs.google.com/x for eric@example.com in /Users/eric/Doc.txt ' + 'x'.repeat(300);
+  await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }] }, 'r1').catch(() => {});
+  const out = lines.at(-1);
+  assert.equal(out.reason, 'ambiguous');
+  assert.match(out.error, /^Step 1: "…" appears 2 times on screen, so I didn't guess which\./);
+  assert.ok(out.error.length <= 200, `${out.error.length} chars`);
+  for (const w of ['What is my name', 'docs.google', 'eric@', '/Users/eric']) assert.ok(!JSON.stringify(lines).includes(w), `${w} is not logged`);
+  // A tool that isn't a screen tool (run_command's errors hold command output) logs only the code.
+  const [cmd] = guardTools([{ name: 'run_command', execute: async () => { throw new Error('ls: private-folder: No such file'); } }], { log: (k, d) => lines.push(d) });
+  await cmd.execute({ command: 'ls' }, {}).catch(() => {});
+  assert.equal(lines.at(-1).error, undefined);
+}
+
+// v0.2.9 Live log (02:37:05-02:37:12): a click_at whose screenshot was used up failed in 0 ms without running
+// ("Take a new screenshot"), the model took one, the click_at failed for real, and the guard refused the next click_at
+// as the pixels' second failure. A check that ran nothing isn't a try: it doesn't count toward the limits.
+{
+  const lines = [];
+  let fail = null;
+  const [act] = guardTools([{ name: 'act_in_app', execute: async () => { if (fail) throw fail; return 'done.\nNow showing: Doc'; } }], { log: (k, d) => lines.push(d), request: () => 1, goals: true });
+  const go = (steps) => act.execute({ target: 'front', steps }, {}).then(() => 'ok', (e) => (e.message === STUCK_MESSAGE ? 'stuck' : 'failed'));
+  const at = (x, y) => [{ do: 'click_at', x, y }, { do: 'type', text: 'hello' }];
+  fail = Object.assign(new Error('Something was clicked or opened since that screenshot, so it may be out of date. Take a new screenshot.'), { ranNothing: true });
+  assert.equal(await go(at(300, 100)), 'failed');
+  assert.equal(lines.at(-1).reason, 'needs_look');
+  fail = new Error('Step 2: typed, but the text field still shows "", so I stopped before the next step.');
+  assert.equal(await go(at(300, 100)), 'failed');
+  fail = null;
+  assert.equal(await go(at(405, 193)), 'ok', 'one real failure of the pixels: the next click_at runs');
+  // Checks that ran nothing don't add up to stuck either.
+  const [act2] = guardTools([{ name: 'act_in_app', execute: async () => { throw Object.assign(new Error('Take a screenshot first, then give x, y in its pixels.'), { ranNothing: true }); } }], { request: () => 1, goals: true });
+  for (let i = 0; i < 5; i++) await assert.rejects(act2.execute({ target: 'front', steps: [{ do: 'click_text', text: `t${i}` }] }, {}), /Take a screenshot first/);
+}
+
+// v0.2.9 Live log (02:38:21): three failed fills, then a plain Escape (closing whatever popped up) was refused as
+// stuck. A plan of only harmless keys (escape) changes nothing anyone wanted: it always runs.
+{
+  const ran = [];
+  const [act] = guardTools([{ name: 'act_in_app', execute: async (args) => { ran.push(args.steps[0].do); if (args.steps[0].do === 'click_text') throw new Error('Step 1: no visible text "x" in Chrome.'); return 'done.\nNow showing: Doc'; } }], { request: () => 1, goals: true });
+  const go = (steps) => act.execute({ target: 'browser', steps }, {}).then(() => 'ok', (e) => (e.message === STUCK_MESSAGE ? 'stuck' : 'failed'));
+  for (const t of ['a', 'b', 'c']) await go([{ do: 'click_text', text: t }]);
+  assert.equal(await go([{ do: 'key', key: 'escape' }]), 'ok', 'escape runs once stuck');
+  assert.equal(await go([{ do: 'key', key: 'Esc' }, { do: 'wait', seconds: 1 }]), 'ok', 'esc and a wait too');
+  assert.equal(await go([{ do: 'key', key: 'escape' }, { do: 'key', key: 'return' }]), 'stuck', 'not with another key');
+  assert.equal(await go([{ do: 'click_text', text: 'd' }]), 'stuck', 'and app steps stay refused');
 }
 
 console.log('loop guard tests: passed');

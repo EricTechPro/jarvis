@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.2.10",
+      "date": "2026-11-27",
+      "items": [
+        { "kind": "fixed", "title": "Fewer wasted retries in apps", "text": "A stale screenshot no longer uses up my tries, and Escape always works when I'm stuck." }
+      ]
+    },
+    {
       "version": "0.2.9",
       "date": "2026-11-27",
       "items": [
