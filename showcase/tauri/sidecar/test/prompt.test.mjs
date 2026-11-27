@@ -153,6 +153,10 @@ console.log('prompt (own code) tests: passed');
 // memory then the second brain with the file tools, fill each yourself and check it, ask only for what's missing.
 assert.match(side, /Filling something in from what you know about \$\{userName\}[^\n]*read_window[^\n]*the memory section[^\n]*second brain with read_file and search_files[^\n]*not run_command[^\n]*without asking about each field[^\n]*click_text on the label, key end, then type[^\n]*one field per act_in_app call[^\n]*check[^\n]*ask only for the fields you couldn't find/, 'the fill-in rule');
 // A call does a fill-in itself (an operator would not know the values), and checks from act_in_app's result.
+// Eric's Google Doc (v0.2.8): each answer goes on the "-" line under its question, the page is a canvas, and once
+// stuck it tried select all, delete and retype the whole doc. Down a line for those, pixels when the words aren't
+// found, and never wipe the doc.
+assert.match(side, /Filling something in[^\n]*the line below its question[^\n]*click_text on the question, key down, key end, then type the value[^\n]*take_screenshot once and click_at[^\n]*Never select all or delete/, 'answers on the line below, pixels as a fallback');
 assert.match(side, /Filling in a few fields from what you know about them is the exception: do it yourself/, 'Live fills in itself');
 console.log('prompt: fill-in ok');
 

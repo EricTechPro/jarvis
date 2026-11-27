@@ -15,10 +15,12 @@ export const LOOP_MESSAGE = `nothing changed after ${LOOP_LIMIT} tries: stop, ta
 export const GOAL_LIMIT = 2;
 export const FAIL_LIMIT = 3;
 export const STUCK_MESSAGE = "these app steps keep failing: stop, take_screenshot once to see what's actually on screen, then either hand it to the operator (send_agent with type operator and a complete brief) or tell the user what's blocking it. No more act_in_app this request.";
-// A goal: act_in_app's first click, by its text or id, so rewordings of one attempt count as one.
+// A goal: act_in_app's first click, by its text or id, so rewordings of one attempt count as one. Clicks by screenshot
+// pixels (click_at) are one goal, AT, wherever they land.
+const AT = 'act_in_app|@pixels';
 const goalOf = (name, args) => {
-  const s = name === 'act_in_app' && Array.isArray(args?.steps) ? args.steps.find((x) => x?.do === 'click' || x?.do === 'click_text') : null;
-  return s ? `${name}|${String(s.text ?? s.id ?? '').trim().toLowerCase()}` : null;
+  const s = name === 'act_in_app' && Array.isArray(args?.steps) ? args.steps.find((x) => x?.do === 'click' || x?.do === 'click_text' || x?.do === 'click_at') : null;
+  return !s ? null : s.do === 'click_at' ? AT : `${name}|${String(s.text ?? s.id ?? '').trim().toLowerCase()}`;
 };
 
 const sorted = (v) => (Array.isArray(v) ? v.map(sorted)
@@ -79,7 +81,9 @@ export function guardTools(tools, { log = () => {}, request = () => 0, goals = f
       const goal = goals ? goalOf(t.name, args) : null;
       if (fails.req !== req) fails = { req, n: 0, by: new Map() };
       const mine = fails; // counted into the request this call started in, even if it ends in a later one
-      if (goals && t.name === 'act_in_app' && (fails.n >= FAIL_LIMIT || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
+      // FAIL_LIMIT spent on words or ids still leaves clicking by pixels its own GOAL_LIMIT tries: a canvas page (Google
+      // Docs) has no words for click_text to find, and a click_at from a fresh screenshot is a different way in.
+      if (goals && t.name === 'act_in_app' && ((fails.n >= FAIL_LIMIT && goal !== AT) || (goal && (fails.by.get(goal) ?? 0) >= GOAL_LIMIT))) {
         log('tool_outcome', { id, name: t.name, ok: false, reason: 'loop_guard', fails: fails.n });
         throw new Error(STUCK_MESSAGE);
       }

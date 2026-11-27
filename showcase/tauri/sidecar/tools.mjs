@@ -504,6 +504,31 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
   const CHANGING = new Set(['click', 'click_text', 'press_button', 'key', 'click_at', 'choose']);
   const agentChangesScreen = () => { if (windowBound() && !ink.active) screenChanged('agent'); };
   const toClipboard = (text) => copyText(text, askShell);
+  // Words read off a window's pixels (ocr-find): text in canvases and images too, which accessibility never sees.
+  // Exact boxes in screen points; [] when it isn't there (or the helper can't read it).
+  const ocrFind = async (where, find) => (await hands('ocr-find', where, String(find), 'all').catch(() => null))?.matches ?? [];
+  // Runs an act plan. A click_text the helper found no such text for (a page drawn in a canvas, like Google Docs,
+  // has none in accessibility) is looked for in the window's pixels instead: one match, and the rest of the plan
+  // runs from a click on the middle of those words. Several matches are never guessed between.
+  async function runAct(plan) {
+    try { return await hands('act', JSON.stringify(plan)); } catch (err) {
+      const i = +(/^Step (\d+): no visible text "/.exec(String(err?.message ?? err))?.[1] ?? 0) - 1;
+      const s = plan.steps[i];
+      if (s?.do !== 'click_text' || s.near || !String(s.text ?? '').trim()) throw err;
+      const where = plan.window != null ? `window:${plan.window}` : plan.app ? `app:${plan.app}` : 'front';
+      const q = String(s.text).trim(), bare = q.replace(/[\s.:?!,;]+$/, '');
+      let hits = await ocrFind(where, q);
+      if (!hits.length && bare && bare !== q) hits = await ocrFind(where, bare); // reading can drop a trailing "?" or ":"
+      // "What is my name?" on the line "1. What is my name?": a whole line (bar its list number) beats words inside one.
+      const line = (h) => String(h.text ?? '').trim().replace(/^(\d+[.)]|[-•*])\s+/, '').toLowerCase();
+      if (hits.length > 1) { const whole = hits.filter((h) => [q, bare].map((x) => x.toLowerCase()).includes(line(h))); if (whole.length) hits = whole; }
+      if (hits.length > 1) throw new Error(`Step ${i + 1}: "${q}" appears ${hits.length} times on screen, so I didn't guess which. Take a screenshot and use click_at on the one you mean.`);
+      const b = hits[0]?.bounds;
+      if (!Array.isArray(b) || b.length !== 4 || !b.every(Number.isFinite)) throw err;
+      const res = await hands('act', JSON.stringify({ ...plan, steps: [{ do: 'click_at', x: b[0] + b[2] / 2, y: b[1] + b[3] / 2, global: true }, ...plan.steps.slice(i + 1)] }));
+      return { ...res, done: [...plan.steps.slice(0, i).map((x) => x.do), `clicked "${q}" (read off the screen)`, ...(res.done ?? []).slice(1)] };
+    }
+  }
   // How each kind of place is found. retry: just after a click, when a menu or dialog may still be opening.
   function lookups(spec, retry) {
     let live = null, shotOk = null, controls = null, fitQueue = null, wins = null;
@@ -522,7 +547,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
         // The window the latest screenshot showed, when there's one from this request: the front app can change
         // between looking and drawing.
         const where = lastShot?.turn === turn && lastShot.win != null ? `window:${lastShot.win}` : spec;
-        return (await hands('ocr-find', where, String(find), 'all').catch(() => null))?.matches ?? [];
+        return ocrFind(where, find);
       },
       async findText(find) {
         if (!HANDS) throw new Error('Finding words on screen needs the Jarvis app; take a screenshot and give x, y instead.');
@@ -629,7 +654,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
         const steps = src.text != null ? [{ do: 'fill', field: src.text, text: m.text }]
           : src.id != null ? [{ do: 'click', id: m.at.live }, { do: 'type', text: m.text }]
             : [{ do: 'click_at', x: m.at.rect[0] + m.at.rect[2] / 2, y: m.at.rect[1] + m.at.rect[3] / 2, global: true }, { do: 'type', text: m.text }];
-        await hands('act', JSON.stringify({ steps, ...app }));
+        await runAct({ steps, ...app });
         if (lastShot) lastShot.used = true;
       }
     }
@@ -868,7 +893,7 @@ export function createTools({ allowActions, ui, ask, openUrl, onCommitments, foc
             delete s.label;
           }
           const plan = { steps: mapped, ...(t === 'front' ? {} : t.startsWith('window:') ? { window: +t.slice(7) } : { app: t }) };
-          const act = () => hands('act', JSON.stringify(plan));
+          const act = () => runAct(plan);
           let res;
           try {
             try { res = await act(); }

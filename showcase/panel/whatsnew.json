@@ -1,6 +1,13 @@
 {
   "updates": [
     {
+      "version": "0.2.9",
+      "date": "2026-11-27",
+      "items": [
+        { "kind": "fixed", "title": "Typing into Google Docs", "text": "Asked to fill in a Google Doc, I find its questions and type your answers where they go." }
+      ]
+    },
+    {
       "version": "0.2.8",
       "date": "2026-11-26",
       "items": [

@@ -23,6 +23,9 @@ const HANDS = ['darwin', 'win32'].includes(process.platform);
 // A fake hands helper (same shape as test/hands.test.mjs): logs every call; the window's title comes from title.txt
 // when it exists, so a test can make the screen "change".
 const callLog = path.join(tmp, 'calls.jsonl'), handsFake = path.join(tmp, 'hands.mjs'), titleFile = path.join(tmp, 'title.txt'), textsFile = path.join(tmp, 'texts.json');
+// canvas.json: a page drawn in a canvas (Google Docs): its lines are only in the pixels, so accessibility (find-text,
+// act's click_text) finds none of them and only ocr-find reads them.
+const canvasFile = path.join(tmp, 'canvas.json');
 fs.writeFileSync(handsFake, `import fs from 'node:fs'; const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(callLog)}, JSON.stringify(a) + '\\n');
 const title = fs.existsSync(${JSON.stringify(titleFile)}) ? fs.readFileSync(${JSON.stringify(titleFile)}, 'utf8') : 'Cards';
@@ -30,7 +33,11 @@ const texts = fs.existsSync(${JSON.stringify(textsFile)}) ? JSON.parse(fs.readFi
 const win = { id: 7, app: 'Chrome', title, bounds: [0, 0, 800, 600] };
 let o = { ok: true, window: win };
 if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ role: 'button', label: 'Video +' }], texts: fs.existsSync(${JSON.stringify(textsFile)}) ? texts : [] };
-if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
+const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(canvasFile)}, 'utf8')) : null;
+if (a[0] === 'act' && canvas) { const k = JSON.parse(a[1]).steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + JSON.parse(a[1]).steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.' }; }
+if (a[0] === 'ocr-find') o = { ok: true, matches: (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
+if (a[0] === 'find-text' && canvas) o = { ok: true, matches: [] };
+else if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
 if (a[0] === 'ui') o = { ok: true, window: win, controls: [{ role: 'button', label: 'Save' }], texts, note: '' };
 if (a[0] === 'front') o = { ok: true, app: win.app, title: win.title };
 if (a[0] === 'capture') { fs.writeFileSync(a[1], 'x'); o = { ok: true, file: a[1], window: win, pixels: [800, 600] }; }
@@ -308,6 +315,24 @@ if (HANDS) {
     assert.deepEqual(typed, [' Eric Tech', ' https://www.youtube.com/@EricTech'], 'each value typed into its line');
     assert.deepEqual(acts().map((x) => x.steps[0].text), ['Name:', 'Channel URL:']);
     fs.rmSync(textsFile);
+  });
+
+  // Eric's Google Doc (v0.2.8): "1. What is my name?" with a "-" line under it. Docs draws its page in a canvas, so
+  // click_text found no such text three times and the loop guard then refused the click_at he tried next.
+  await cp('CP-11b fill-in on a canvas doc: click_text falls back to the words read off the screen', async () => {
+    fs.writeFileSync(callLog, '');
+    fs.writeFileSync(canvasFile, JSON.stringify(['1. What is my name?', '-', '2. What is my YouTube Channel Name?', '-']));
+    await call('read_window', { target: 'front' });
+    const r = await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }, { do: 'key', key: 'down' }, { do: 'key', key: 'end' }, { do: 'type', text: 'Eric Tech' }] });
+    assert.equal(r.error, undefined, r.error);
+    assert.ok(handsCalls().some((c) => c[0] === 'ocr-find' && c[2] === 'What is my name?'), 'the window is read for the words');
+    const last = acts().at(-1);
+    assert.deepEqual(last.steps.map((st) => st.do), ['click_at', 'key', 'key', 'type'], 'the rest of the plan runs from a click on the words');
+    assert.deepEqual([last.steps[0].x, last.steps[0].y, last.steps[0].global], [200, 159, true], 'the middle of the words, in screen points');
+    // A question that appears twice is not guessed at.
+    fs.writeFileSync(canvasFile, JSON.stringify(['1. What is my name?', '-', '4. What is my name?']));
+    assert.match((await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }] })).error ?? '', /appears 2 times/);
+    fs.rmSync(canvasFile);
   });
 } else console.log('e2e live: hands paths (CP-5, CP-6 act_in_app, CP-7, CP-11) skipped (macOS and Windows only)');
 

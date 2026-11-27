@@ -236,4 +236,31 @@ assert.equal(LOOP_LIMIT, 3);
   gates[3](new Error('timed out')); await c;
 }
 
+// Eric's Google Doc (v0.2.8 Live): click_text on the question failed three times (the page is a canvas), then a
+// click_at from a fresh screenshot, a different way to reach it, was refused before it ran. Clicking by screenshot
+// pixels gets its own two tries once the text tries are spent; words keep their limit, and so do the pixels.
+{
+  let ok = false; const ran = [];
+  const [act, shot] = guardTools([
+    { name: 'act_in_app', execute: async (args) => { ran.push(args.steps[0].do); if (!ok) throw new Error('Step 1: no visible text "What is my name?" in Google Chrome.'); return 'In Chrome: done.\nNow showing: Doc'; } },
+    { name: 'take_screenshot', execute: async () => 'Screenshot.' },
+  ], { request: () => 1, goals: true });
+  const go = (steps) => act.execute({ target: 'browser', steps }, {}).then(() => 'ok', (e) => e.message);
+  const ct = (text) => [{ do: 'click_text', text }, { do: 'key', key: 'down' }, { do: 'type', text: 'Eric Tech' }];
+  const at = (x, y) => [{ do: 'click_at', x, y }, { do: 'key', key: 'down' }, { do: 'type', text: 'Eric Tech' }];
+  await go(ct('What is my name?')); await shot.execute({}, {}); await go(ct('What is my name?')); await go(ct('1. What is my name?'));
+  await shot.execute({}, {});
+  assert.notEqual(await go(at(405, 170)), STUCK_MESSAGE, 'the click_at after the text tries runs');
+  assert.equal(ran.at(-1), 'click_at');
+  assert.notEqual(await go(at(405, 172)), STUCK_MESSAGE, 'a second spot runs too');
+  assert.equal(await go(at(405, 174)), STUCK_MESSAGE, 'a third failed spot is refused');
+  assert.equal(await go(ct('Untitled document')), STUCK_MESSAGE, 'and words stay refused');
+  // One that works starts the pixels over, as a goal that worked always does.
+  const [act2] = guardTools([{ name: 'act_in_app', execute: async (args) => { if (args.fail) throw new Error('Step 1: no visible text "x" in Chrome.'); return 'done.\nNow showing: Doc'; } }], { request: () => 1, goals: true });
+  const go2 = (steps, fail) => act2.execute({ target: 'front', steps, ...(fail ? { fail } : {}) }, {}).then(() => 'ok', (e) => e.message);
+  for (const t of ['a', 'b', 'c']) await go2(ct(t), true);
+  await go2(at(1, 1), true); assert.equal(await go2(at(1, 2)), 'ok');
+  assert.equal(await go2(at(1, 3), true), 'Step 1: no visible text "x" in Chrome.', 'after a click that worked, a new spot gets its tries again');
+}
+
 console.log('loop guard tests: passed');
