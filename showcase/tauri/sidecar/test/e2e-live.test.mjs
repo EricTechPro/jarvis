@@ -34,7 +34,8 @@ const win = { id: 7, app: 'Chrome', title, bounds: [0, 0, 800, 600] };
 let o = { ok: true, window: win };
 if (a[0] === 'act') o = { ok: true, done: JSON.parse(a[1]).steps.map((s) => s.do), window: win, controls: [{ role: 'button', label: 'Video +' }], texts: fs.existsSync(${JSON.stringify(textsFile)}) ? texts : [] };
 const canvas = fs.existsSync(${JSON.stringify(canvasFile)}) ? JSON.parse(fs.readFileSync(${JSON.stringify(canvasFile)}, 'utf8')) : null;
-if (a[0] === 'act' && canvas) { const k = JSON.parse(a[1]).steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + JSON.parse(a[1]).steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.' }; }
+if (a[0] === 'act' && canvas) { const p = JSON.parse(a[1]), k = p.steps.findIndex((s) => s.do === 'click_text'); if (k >= 0) o = { ok: false, error: 'Step ' + (k + 1) + ': no visible text "' + p.steps[k].text + '" in Chrome. Check the exact words with a screenshot or read_window.', done: p.steps.slice(0, k).map((s) => 'pressed ' + s.key) };
+  else if (fs.existsSync(${JSON.stringify(canvasFile)} + '.gone')) o = { ok: false, error: 'No matching window is open.' }; }
 if (a[0] === 'ocr-find') o = { ok: true, matches: (canvas ?? []).map((line, i) => ({ text: line, role: 'text', bounds: [100, 150 + 20 * i, 200, 18] })).filter((m) => m.text.toLowerCase().includes(a[2].toLowerCase())) };
 if (a[0] === 'find-text' && canvas) o = { ok: true, matches: [] };
 else if (a[0] === 'find-text') o = { ok: true, matches: [{ text: a[2], match: 'exact', role: 'button', bounds: [100, 100, 80, 24], window: win }] };
@@ -70,18 +71,20 @@ fs.writeFileSync(path.join(brainDir, '_context', 'youtube.md'), '# YouTube\nOwne
 const overlay = [], callUi = [], sends = [], outcomes = [], events = [], lists = [];
 const noop = async () => {};
 let actionsOn = true;
+// null: Allow prompts are skipped (Eric's setting); otherwise every Allow prompt gets this answer.
+let allowAnswer = null; const allowAsked = [];
 let liveCall = null;
 // Wired the way sidekick.mjs wires it: while a call is open, draw's lines are said by her and its overlay segments
 // are held by the call until her voice for them starts.
 const made = createTools({
-  allowActions: () => actionsOn, ask: async () => true, openUrl: noop, onCommitments: noop, showList: async () => { lists.push('shown'); }, fmtWhen: String, commitmentsText: () => '', userName: 'Eric',
+  allowActions: () => actionsOn, ask: async (q) => { allowAsked.push(q?.placeholder); return allowAnswer ?? true; }, openUrl: noop, onCommitments: noop, showList: async () => { lists.push('shown'); }, fmtWhen: String, commitmentsText: () => '', userName: 'Eric',
   speak: (line) => (liveCall?.open ? liveCall.say(line) : false),
   ui: (m) => {
     if (liveCall?.holdDraw(m)) return;
     overlay.push(m);
     if (m.e?.type === 'draw') setImmediate(() => made.ink.started(m.e.id, m.e.seg)); // the overlay starts a segment at once
   },
-  fileDir: () => brainDir, readOnly: () => [path.join(brainDir, '_raw')], skipAllow: () => true,
+  fileDir: () => brainDir, readOnly: () => [path.join(brainDir, '_raw')], skipAllow: () => allowAnswer == null,
 });
 let onEnd = null;
 const mgr = createAgents({
@@ -329,6 +332,26 @@ if (HANDS) {
     const last = acts().at(-1);
     assert.deepEqual(last.steps.map((st) => st.do), ['click_at', 'key', 'key', 'type'], 'the rest of the plan runs from a click on the words');
     assert.deepEqual([last.steps[0].x, last.steps[0].y, last.steps[0].global], [200, 159, true], 'the middle of the words, in screen points');
+    assert.equal(last.steps[0].real, true, 'with the real cursor: a click without it presses an element, not that spot on the canvas');
+    // Steps before it ran once, in the helper's own words.
+    fs.writeFileSync(callLog, '');
+    const esc = await call('act_in_app', { target: 'browser', steps: [{ do: 'key', key: 'escape' }, { do: 'click_text', text: 'What is my name?' }, { do: 'type', text: 'x' }] });
+    assert.match(esc.output, /^In Chrome: pressed escape, clicked "What is my name\?" \(read off the screen\), type\./);
+    assert.deepEqual(acts().map((x) => x.steps.map((st) => st.do)), [['key', 'click_text', 'type'], ['click_at', 'type']]);
+    // The window closing under the rerun doesn't run the steps before it again.
+    fs.writeFileSync(callLog, ''); fs.writeFileSync(canvasFile + '.gone', '');
+    assert.match((await call('act_in_app', { target: 'browser', steps: [{ do: 'key', key: 'escape' }, { do: 'click_text', text: 'What is my name?' }] })).error ?? '', /No matching window/);
+    assert.equal(acts().length, 2, 'the plan, then its rest; never the plan again');
+    fs.rmSync(canvasFile + '.gone');
+    // Words read off the screen that could delete, pay, send or sign out ask first, as the helper does for a click_text.
+    fs.writeFileSync(canvasFile, JSON.stringify(['Delete draft', 'Keep editing']));
+    fs.writeFileSync(callLog, ''); allowAnswer = "Don't allow";
+    assert.match((await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'draft' }] })).error ?? '', /Eric said no, so I didn't click "Delete draft"/);
+    assert.equal(acts().length, 1, 'nothing clicked');
+    allowAnswer = 'Allow';
+    assert.equal((await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'draft' }] })).error, undefined);
+    assert.match(allowAsked.at(-1), /Click "Delete draft"/);
+    allowAnswer = null;
     // A question that appears twice is not guessed at.
     fs.writeFileSync(canvasFile, JSON.stringify(['1. What is my name?', '-', '4. What is my name?']));
     assert.match((await call('act_in_app', { target: 'browser', steps: [{ do: 'click_text', text: 'What is my name?' }] })).error ?? '', /appears 2 times/);

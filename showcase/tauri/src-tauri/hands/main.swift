@@ -2119,8 +2119,12 @@ case "act":
             // Points relative to the window's top-left, or global screen points when "global" is set.
             guard let x = s["x"] as? Double, let y = s["y"] as? Double else { out(["ok": false, "error": "Step \(i + 1): click_at needs x and y", "done": done]) }
             let global = s["global"] as? Bool ?? false
-            emitStep(i, "click_at", nil, at: global ? CGPoint(x: x, y: y) : CGPoint(x: w.x + x, y: w.y + y))
-            click(global ? CGPoint(x: x, y: y) : CGPoint(x: w.x + x, y: w.y + y)); done.append("clicked at \(Int(x)),\(Int(y))")
+            let p = global ? CGPoint(x: x, y: y) : CGPoint(x: w.x + x, y: w.y + y)
+            emitStep(i, "click_at", nil, at: p)
+            // "real": that exact spot with the real cursor (words read off a canvas, like a Google Doc's page): a click
+            // without it presses the element there, which on a canvas isn't the spot.
+            if (s["real"] as? Bool) == true, inBackground { _ = withRealCursor { click(p) } } else { click(p) }
+            done.append("clicked at \(Int(x)),\(Int(y))")
             clickedSpot = true
         case "wait":
             let secs = min(5, (s["seconds"] as? Double) ?? 0.5)
